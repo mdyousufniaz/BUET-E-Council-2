@@ -84,7 +84,6 @@ export default function PublicMeetingView() {
   const agendas = agendasRes?.data || [];
   
   let rawPresentees = presenteesRes?.data || [];
-  let presidentPresentee: any = null;
 
   // Grouped Arrays
   let adminGroup: any[] = [];
@@ -94,22 +93,16 @@ export default function PublicMeetingView() {
   let othersGroup: any[] = [];
 
   if (rawPresentees.length > 0) {
-    // 1. Extract President (উপাচার্য but not উপ-উপাচার্য)
-    presidentPresentee = rawPresentees.find((p: any) => 
-      (p.designation || '').includes('উপাচার্য') && !(p.designation || '').includes('উপ-উপাচার্য')
-    );
-
     let filteredPresentees = rawPresentees;
-    if (presidentPresentee) {
-      filteredPresentees = filteredPresentees.filter((p: any) => p.id !== presidentPresentee.id);
-    }
 
     // 2. Process and Group
     filteredPresentees.forEach((p: any) => {
       // Handle members without a name
       if (!p.name || p.name.trim() === '') {
         const office = p.office_name || '';
-        p.name = office.split(',')[0].trim() || 'Unknown';
+        const parts = office.split(',');
+        p.name = parts[0].trim() || 'Unknown';
+        p.office_name = parts.slice(1).join(',').trim();
         othersGroup.push(p);
         return; // Early return, they go to 'others'
       }
@@ -118,11 +111,16 @@ export default function PublicMeetingView() {
       const office = (p.office_name || '').toLowerCase();
 
       // Determine categorization
+      const isVC = (des.includes('উপাচার্য') || office.includes('উপাচার্য')) && !(des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য'));
       const isProVC = des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য');
       const isDean = office.includes('ডিন') || office.includes('dean') || des.includes('ডিন') || des.includes('dean');
       const isHead = des.includes('head') || des.includes('বিভাগীয় প্রধান') || des.includes('বিভাগীয় প্রধান');
 
-      if (isProVC) {
+      if (isVC) {
+        p.department_name = 'সভাপতি';
+        p.office_name = '';
+        adminGroup.unshift(p);
+      } else if (isProVC) {
         adminGroup.push(p);
       } else if (isDean) {
         deansGroup.push(p);
@@ -189,29 +187,9 @@ export default function PublicMeetingView() {
               </section>
             )}
 
-            {meeting.status === 'past' && (rawPresentees.length > 0 || presidentPresentee) && (
+            {meeting.status === 'past' && rawPresentees.length > 0 && (
               <>
-                {(presidentPresentee || meeting.president) && (
-                  <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">সভাপতি</h2>
-                    {presidentPresentee ? (
-                      <div className="p-4 bg-muted/50 rounded-lg border border-border md:w-1/2">
-                        <div className="font-medium text-foreground">{presidentPresentee.name}</div>
-                        <div className="text-sm text-muted-foreground">{presidentPresentee.designation}</div>
-                        {(presidentPresentee.department_name || presidentPresentee.office_name) && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {presidentPresentee.department_name || presidentPresentee.office_name}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">{meeting.president}</p>
-                    )}
-                  </section>
-                )}
-                
-                {rawPresentees.length > 0 && (
-                  <section className="space-y-6">
+                <section className="space-y-6">
                     <h2 className="text-xl font-semibold mb-4 text-primary border-b border-border pb-2">উপস্থিত সদস্যবৃন্দ</h2>
                     
                     {adminGroup.length > 0 && (
@@ -260,7 +238,6 @@ export default function PublicMeetingView() {
                     )}
 
                   </section>
-                )}
               </>
             )}
 
