@@ -15,30 +15,30 @@ function AgendaItem({ agenda, meetingStatus }: { agenda: any, meetingStatus: str
       <h3 className="font-semibold text-lg mb-4 text-foreground">
         প্রস্তাব নং: {agenda.agenda_serial}
       </h3>
-      <div 
+      <div
         className="prose prose-sm dark:prose-invert max-w-none mb-4 text-muted-foreground"
         dangerouslySetInnerHTML={{ __html: agenda.content }}
       />
-      
+
       {meetingStatus === 'past' && agenda.resolution && (
         <div className="mt-4 pt-4 border-t border-border">
           <h4 className="font-semibold mb-2 text-foreground">সিদ্ধান্ত:</h4>
-          <div 
+          <div
             className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
             dangerouslySetInnerHTML={{ __html: agenda.resolution }}
           />
         </div>
       )}
-      
+
       {annexures.length > 0 && (
         <div className="mt-4 pt-4 border-t border-border">
           <h4 className="font-semibold mb-2 text-foreground text-sm">সংযোজনী (Annexures):</h4>
           <ul className="space-y-2 mt-2">
             {annexures.map((annexure: any) => (
               <li key={annexure.id}>
-                <a 
-                  href={annexure.url || '#'} 
-                  target="_blank" 
+                <a
+                  href={annexure.url || '#'}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-primary hover:underline flex items-center gap-2"
                 >
@@ -56,13 +56,13 @@ function AgendaItem({ agenda, meetingStatus }: { agenda: any, meetingStatus: str
 
 export default function PublicMeetingView() {
   const params = useParams();
-  
+
   // Fetch the meeting details
   const { data: meetingRes, error: meetingError } = useSWR(`/meetings/${params.id}`, fetcher);
-  
+
   // Fetch agendas
   const { data: agendasRes } = useSWR(meetingRes ? `/agendas?meeting_id=${params.id}` : null, fetcher);
-  
+
   // Fetch presentees if meeting is past
   const { data: presenteesRes } = useSWR(meetingRes?.data?.status === 'past' ? `/meetings/${params.id}/presentees` : null, fetcher);
 
@@ -72,7 +72,7 @@ export default function PublicMeetingView() {
       <div className="p-8 text-destructive font-medium mx-auto max-w-7xl">Error loading meeting data.</div>
     </div>
   );
-  
+
   if (!meetingRes) return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -82,7 +82,7 @@ export default function PublicMeetingView() {
 
   const meeting = meetingRes.data;
   const agendas = agendasRes?.data || [];
-  
+
   let rawPresentees = presenteesRes?.data || [];
 
   // Grouped Arrays
@@ -161,7 +161,7 @@ export default function PublicMeetingView() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      
+
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
         <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="border-b border-border pb-6 mb-6">
@@ -180,7 +180,7 @@ export default function PublicMeetingView() {
           <div className="space-y-8">
             {meeting.description && (
               <section>
-                <div 
+                <div
                   className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: meeting.description }}
                 />
@@ -190,54 +190,54 @@ export default function PublicMeetingView() {
             {meeting.status === 'past' && rawPresentees.length > 0 && (
               <>
                 <section className="space-y-6">
-                    <h2 className="text-xl font-semibold mb-4 text-primary border-b border-border pb-2">উপস্থিত সদস্যবৃন্দ</h2>
-                    
-                    {adminGroup.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-medium mb-3 text-muted-foreground">প্রশাসন</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {adminGroup.map(renderPresenteeCard)}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {deansGroup.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল ডিন</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {deansGroup.map(renderPresenteeCard)}
-                        </div>
-                      </div>
-                    )}
+                  <h2 className="text-xl font-semibold mb-4 text-primary border-b border-border pb-2">উপস্থিত সদস্যবৃন্দ</h2>
 
-                    {headsGroup.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল বিভাগীয় প্রধান</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {headsGroup.map(renderPresenteeCard)}
-                        </div>
+                  {adminGroup.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-3 text-muted-foreground">প্রশাসন</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {adminGroup.map(renderPresenteeCard)}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {Object.entries(departmentGroups).map(([deptName, members]) => (
-                      <div key={deptName}>
-                        <h3 className="text-lg font-medium mb-3 text-muted-foreground">{deptName}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {members.map(renderPresenteeCard)}
-                        </div>
+                  {deansGroup.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল ডিন</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {deansGroup.map(renderPresenteeCard)}
                       </div>
-                    ))}
+                    </div>
+                  )}
 
-                    {othersGroup.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-medium mb-3 text-muted-foreground">অন্যান্য সদস্য</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {othersGroup.map(renderPresenteeCard)}
-                        </div>
+                  {headsGroup.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল বিভাগীয় প্রধান</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {headsGroup.map(renderPresenteeCard)}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  </section>
+                  {Object.entries(departmentGroups).map(([deptName, members]) => (
+                    <div key={deptName}>
+                      <h3 className="text-lg font-medium mb-3 text-muted-foreground">{deptName}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {members.map(renderPresenteeCard)}
+                      </div>
+                    </div>
+                  ))}
+
+                  {othersGroup.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-3 text-muted-foreground">অন্যান্য সদস্য</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {othersGroup.map(renderPresenteeCard)}
+                      </div>
+                    </div>
+                  )}
+
+                </section>
               </>
             )}
 
@@ -250,11 +250,10 @@ export default function PublicMeetingView() {
                 </div>
               </section>
             )}
-            
+
             {meeting.conclusion && (
               <section>
-                <h2 className="text-xl font-semibold mb-4 text-primary">Conclusion</h2>
-                <div 
+                <div
                   className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: meeting.conclusion }}
                 />
