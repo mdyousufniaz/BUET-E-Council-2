@@ -6,12 +6,15 @@ import api, { fetcher } from "../../lib/api";
 import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
 import DataTable from "../DataTable";
+import TakeAttendanceView from "./TakeAttendanceView";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'custom'>('search');
+  const [isTakingAttendance, setIsTakingAttendance] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const { confirm, ConfirmModal } = useConfirm();
 
   // This would fetch actual invitees for this meeting
@@ -68,6 +71,31 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
     });
   };
 
+  const handleSaveAttendance = async (presentIds: string[]) => {
+    setIsSavingAttendance(true);
+    try {
+      await api.put(`/meetings/${meeting.id}/attendance`, { present_invitee_ids: presentIds });
+      toast.success("Attendance saved successfully");
+      setIsTakingAttendance(false);
+      mutateInvitees();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save attendance");
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  if (isTakingAttendance) {
+    return (
+      <TakeAttendanceView 
+        invitees={invitees} 
+        onSave={handleSaveAttendance} 
+        onCancel={() => setIsTakingAttendance(false)}
+        isSaving={isSavingAttendance}
+      />
+    );
+  }
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       <ConfirmModal />
@@ -75,7 +103,10 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
         <h2 className="text-2xl font-bold capitalize">{type}</h2>
 
         <div className="flex items-center gap-4">
-          <button className="border border-primary text-primary px-4 py-2 text-sm font-medium rounded-md hover:bg-primary/5 transition-colors">
+          <button 
+            onClick={() => setIsTakingAttendance(true)}
+            className="border border-primary text-primary px-4 py-2 text-sm font-medium rounded-md hover:bg-primary/5 transition-colors"
+          >
             Take Attendance
           </button>
           <div className="flex gap-2">

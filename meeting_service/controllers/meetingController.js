@@ -171,7 +171,7 @@ const getInvitees = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query(`
-            SELECT i.*, d.name_bangla as department_name, o.name_bangla as office_name
+            SELECT i.*, d.name_bangla as department_name, d.serial as department_serial, o.name_bangla as office_name
             FROM invitees i
             LEFT JOIN departments d ON i.department_id = d.id
             LEFT JOIN offices o ON i.office_id = o.id
@@ -231,6 +231,37 @@ const addPresentees = async (req, res, next) => {
     }
 };
 
+const saveAttendance = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { present_invitee_ids } = req.body;
+
+        if (!Array.isArray(present_invitee_ids)) {
+            return next(new CustomError('present_invitee_ids must be an array', 400));
+        }
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query('UPDATE invitees SET is_present = false WHERE meeting_id = $1', [id]);
+            
+            if (present_invitee_ids.length > 0) {
+                await client.query('UPDATE invitees SET is_present = true WHERE meeting_id = $1 AND id = ANY($2)', [id, present_invitee_ids]);
+            }
+            
+            await client.query('COMMIT');
+            res.status(200).json({ success: true, message: 'Attendance saved successfully' });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
 const generatePdf = async (req, res, next) => {
     try {
         const { id, type } = req.params; // type = agenda, resolution, attendance
@@ -269,5 +300,6 @@ module.exports = {
     getInvitees,
     removeInvitee,
     addPresentees,
+    saveAttendance,
     generatePdf
 };

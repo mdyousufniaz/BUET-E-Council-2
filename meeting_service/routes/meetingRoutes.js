@@ -17,6 +17,7 @@ router.get('/:id/invitees', meetingController.getInvitees);
 router.delete('/:id/invitees/:inviteeId', meetingController.removeInvitee);
 router.post('/:id/invitees/bulk-fetch', meetingController.bulkFetchInvitees);
 router.post('/:id/presentees', meetingController.addPresentees);
+router.put('/:id/attendance', meetingController.saveAttendance);
 
 // Unified endpoint for generating PDFs
 router.get('/:id/pdf/:type', meetingController.generatePdf);
