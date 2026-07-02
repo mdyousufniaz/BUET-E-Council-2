@@ -3,8 +3,9 @@
 import { useState } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
-import { Mail, Plus, Trash2, CheckCircle, Clock } from "lucide-react";
+import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
+import DataTable from "../DataTable";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 
@@ -17,6 +18,26 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   // For now we will mock it or leave it empty if the API is not fully set up for fetching invitees
   const { data: inviteesRes, mutate: mutateInvitees } = useSWR(`/meetings/${meeting.id}/invitees`, fetcher, { fallbackData: { data: [] } });
   const invitees = inviteesRes?.data || [];
+
+  const columns = [
+    { key: "name", label: "Name" },
+    { key: "designation", label: "Designation" },
+    { key: "department_name", label: "Department" },
+    { key: "office_name", label: "Office" },
+    { 
+      key: "email_sent", 
+      label: "Agenda Sent",
+      render: (val: any) => val ? (
+        <span className="inline-flex items-center gap-1 bg-accent text-accent-foreground px-2 py-0.5 rounded-full text-xs font-medium">
+          <CheckCircle className="w-3 h-3" /> Sent
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs font-medium">
+          <Clock className="w-3 h-3" /> Not Sent
+        </span>
+      )
+    }
+  ];
 
   const [isFetching, setIsFetching] = useState(false);
 
@@ -83,43 +104,17 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
 
       {invitees.length === 0 ? (
         <div className="text-center py-16 bg-card border border-border rounded-lg shadow-sm">
-          <UsersIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+          <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-medium text-foreground">No {type} added yet</h3>
           <p className="text-muted-foreground mt-1">Click the add button above to include participants.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {invitees.map((invitee: any) => (
-            <div key={invitee.id} className="bg-card relative border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group">
-              <button 
-                onClick={() => handleRemove(invitee.id)}
-                className="text-muted-foreground hover:text-destructive absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-              
-              <div className="pr-6">
-                <h4 className="font-bold text-foreground text-lg leading-tight">
-                  {invitee.prefix ? `${invitee.prefix} ` : ''}{invitee.name}
-                </h4>
-                {invitee.designation && <p className="text-sm text-muted-foreground mt-1">{invitee.designation}</p>}
-                {invitee.office_name && <p className="text-xs text-muted-foreground mt-1">{invitee.office_name}</p>}
-              </div>
-
-              <div className="mt-4 flex items-center">
-                {invitee.email_sent ? (
-                  <span className="inline-flex items-center gap-1 bg-accent text-accent-foreground px-2 py-0.5 rounded-full text-xs font-medium">
-                    <CheckCircle className="w-3 h-3" /> Sent
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs font-medium">
-                    <Clock className="w-3 h-3" /> Not Sent
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <DataTable 
+          columns={columns} 
+          data={invitees} 
+          title="Invitees List" 
+          onDelete={(row) => handleRemove(row.id)}
+        />
       )}
 
       {/* Add Modal Placeholder */}

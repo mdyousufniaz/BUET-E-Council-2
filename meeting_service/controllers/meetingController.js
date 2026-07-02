@@ -10,7 +10,7 @@ const getMeetings = async (req, res, next) => {
             FROM meetings 
             ORDER BY created_at DESC
         `);
-        
+
         // Format dates correctly for the frontend
         const data = result.rows.map(meeting => ({
             ...meeting,
@@ -32,7 +32,7 @@ const getMeetingById = async (req, res, next) => {
             FROM meetings m
             WHERE m.id = $1
         `, [id]);
-        
+
         if (result.rows.length === 0) {
             return next(new CustomError('Meeting not found', 404));
         }
@@ -48,14 +48,14 @@ const getMeetingById = async (req, res, next) => {
 
 const createMeeting = async (req, res, next) => {
     try {
-        const { title, meeting_date, type, status } = req.body;
+        const { title, meeting_title, meeting_date, type, status } = req.body;
         if (!title || !meeting_date || !type) {
-            return next(new CustomError('Title, date, and type are required', 400));
+            return next(new CustomError('Title (serial), date, and type are required', 400));
         }
 
         const result = await db.query(
-            'INSERT INTO meetings (title, meeting_date, type, status) VALUES ($1, $2, $3, $4) RETURNING *',
-            [title, meeting_date, type, status || 'draft']
+            'INSERT INTO meetings (title, meeting_title, meeting_date, type, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [title, meeting_title || null, meeting_date, type, status || 'draft']
         );
         res.status(201).json({ success: true, message: 'Meeting created', data: result.rows[0] });
     } catch (error) {
@@ -66,17 +66,21 @@ const createMeeting = async (req, res, next) => {
 const updateMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { title, meeting_date, type, status, meeting_link } = req.body;
+        const { title, meeting_title, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript } = req.body;
 
         const result = await db.query(
-            `UPDATE meetings 
-             SET title = COALESCE($1, title), 
-                 meeting_date = COALESCE($2, meeting_date), 
-                 type = COALESCE($3, type), 
-                 status = COALESCE($4, status),
-                 meeting_link = COALESCE($5, meeting_link)
-             WHERE id = $6 RETURNING *`,
-            [title, meeting_date, type, status, meeting_link, id]
+            `UPDATE meetings SET 
+                title = COALESCE($1, title),
+                meeting_title = COALESCE($2, meeting_title),
+                meeting_date = COALESCE($3, meeting_date),
+                type = COALESCE($4, type),
+                status = COALESCE($5, status),
+                meeting_link = COALESCE($6, meeting_link),
+                agenda_pdf_link = COALESCE($7, agenda_pdf_link),
+                resolution_pdf_link = COALESCE($8, resolution_pdf_link),
+                transcript = COALESCE($9, transcript)
+             WHERE id = $10 RETURNING *`,
+            [title, meeting_title, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, id]
         );
 
         if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));
@@ -128,16 +132,16 @@ const addInvitees = async (req, res, next) => {
 const bulkFetchInvitees = async (req, res, next) => {
     try {
         const { id } = req.params;
-        
+
         const meetingRes = await db.query('SELECT type FROM meetings WHERE id = $1', [id]);
         if (meetingRes.rows.length === 0) return next(new CustomError('Meeting not found', 404));
-        
+
         const meetingType = meetingRes.rows[0].type;
-        
+
         const client = await db.pool.connect();
         try {
             await client.query('BEGIN');
-            
+
             const insertQuery = `
                 INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id)
                 SELECT m.name, m.email, m.designation, m.department_id, m.office_id, $1
@@ -149,7 +153,7 @@ const bulkFetchInvitees = async (req, res, next) => {
                   )
             `;
             const result = await client.query(insertQuery, [id, meetingType]);
-            
+
             await client.query('COMMIT');
             res.status(201).json({ success: true, message: `Fetched and added ${result.rowCount} members.` });
         } catch (err) {
@@ -167,14 +171,14 @@ const getInvitees = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query(`
-            SELECT i.*, d.name_english as department_name, o.name_bangla as office_name
+            SELECT i.*, d.name_bangla as department_name, o.name_bangla as office_name
             FROM invitees i
             LEFT JOIN departments d ON i.department_id = d.id
             LEFT JOIN offices o ON i.office_id = o.id
             WHERE i.meeting_id = $1
             ORDER BY i.created_at ASC
         `, [id]);
-        
+
         res.status(200).json({ success: true, data: result.rows });
     } catch (error) {
         next(error);
@@ -231,7 +235,7 @@ const generatePdf = async (req, res, next) => {
     try {
         const { id, type } = req.params; // type = agenda, resolution, attendance
         let pdfBuffer;
-        
+
         // Basic check if meeting exists
         const meetingCheck = await db.query('SELECT * FROM meetings WHERE id = $1', [id]);
         if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));

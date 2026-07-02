@@ -18,6 +18,7 @@ export default function ManageMeetingsPage() {
 
   const [newMeeting, setNewMeeting] = useState({
     title: "",
+    meeting_title: "",
     meeting_date: "",
     type: "syndicate",
     status: "draft"
@@ -36,8 +37,8 @@ export default function ManageMeetingsPage() {
   ];
 
   const columns = [
-    { key: "serial", label: "Meeting No." },
-    { key: "title", label: "Meeting Serial Number" },
+    { key: "title", label: "Meeting No." },
+    { key: "meeting_title", label: "Meeting Title" },
     { key: "status", label: "Status" },
     { key: "date", label: "Date" }
   ];
@@ -70,7 +71,7 @@ export default function ManageMeetingsPage() {
       await api.post('/meetings', payload);
       
       setIsModalOpen(false);
-      setNewMeeting({ title: "", meeting_date: "", type: "syndicate", status: "draft" });
+      setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
       mutate();
       toast.success('Meeting created successfully');
     } catch (err: any) {
@@ -89,7 +90,7 @@ export default function ManageMeetingsPage() {
         data={response.data || []} 
         title="Manage Meetings" 
         onAdd={() => {
-          setNewMeeting({ title: "", meeting_date: "", type: "syndicate", status: "draft" });
+          setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
           setIsModalOpen(true);
         }}
         onEdit={handleEdit}
@@ -105,6 +106,11 @@ export default function ManageMeetingsPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium">Meeting Serial Number (e.g., "304th")</label>
                 <input required value={newMeeting.title} onChange={e => setNewMeeting({...newMeeting, title: e.target.value})} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Meeting Title</label>
+                <input required value={newMeeting.meeting_title} onChange={e => setNewMeeting({...newMeeting, meeting_title: e.target.value})} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" placeholder="e.g. Disciplinary Committee Meeting" />
               </div>
 
               <div className="space-y-1">

@@ -132,6 +132,19 @@ const fetchExternalMembers = async (req, res, next) => {
         const deanHeadData = deanHeadResponse.data;
 
         const client = await db.pool.connect();
+        
+        const designationMap = {
+            "Professor": "অধ্যাপক",
+            "Associate Professor": "সহযোগী অধ্যাপক",
+            "Assistant Professor": "সহকারী অধ্যাপক",
+            "Lecturer": "প্রভাষক",
+            "Dean": "ডিন",
+            "Head": "বিভাগীয় প্রধান",
+            "VC": "উপাচার্য",
+            "Pro-VC": "উপ-উপাচার্য",
+            "Registrar": "রেজিস্ট্রার"
+        };
+        
         try {
             await client.query('BEGIN');
 
@@ -151,7 +164,11 @@ const fetchExternalMembers = async (req, res, next) => {
 
             for (const u of usersData) {
                 const name = u['Bangla Name:'];
-                const designation = u['designation:'];
+                let designation = u['designation:'];
+                if (designationMap[designation]) {
+                    designation = designationMap[designation];
+                }
+                
                 const deptSort = u['dept_sort:'];
                 let rawEmail = u['email:'];
 

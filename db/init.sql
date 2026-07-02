@@ -99,6 +99,7 @@ CREATE TABLE members (
 CREATE TABLE meetings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     title VARCHAR(255) NOT NULL,
+    meeting_title VARCHAR(255),
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),

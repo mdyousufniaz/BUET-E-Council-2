@@ -32,7 +32,6 @@ export default function MeetingWorkspace() {
     case 'description':
     case 'conclusion':
       return <DescriptionView meeting={meeting} type={view} mutate={mutate} />;
-    case 'president':
     case 'invitees':
       return <InviteesView meeting={meeting} type={view} mutate={mutate} />;
     case 'agenda':
