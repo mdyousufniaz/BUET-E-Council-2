@@ -159,7 +159,7 @@ const addInvitees = async (req, res, next) => {
             for (const invitee of invitees) {
                 await client.query(
                     'INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [invitee.name, invitee.email, invitee.designation, invitee.department_id, invitee.office_id, id]
+                    [invitee.name, invitee.email, invitee.designation, invitee.department_id || null, invitee.office_id || null, id]
                 );
             }
             await client.query('COMMIT');
@@ -278,7 +278,7 @@ const addPresentees = async (req, res, next) => {
             for (const presentee of presentees) {
                 await client.query(
                     'INSERT INTO presentees (name, designation, department_id, office_id, meeting_id) VALUES ($1, $2, $3, $4, $5)',
-                    [presentee.name, presentee.designation, presentee.department_id, presentee.office_id, id]
+                    [presentee.name, presentee.designation, presentee.department_id || null, presentee.office_id || null, id]
                 );
             }
             await client.query('COMMIT');
@@ -300,7 +300,7 @@ const updatePresentee = async (req, res, next) => {
         const { name, designation, department_id, office_id } = req.body;
         const result = await db.query(
             'UPDATE presentees SET name = $1, designation = $2, department_id = $3, office_id = $4 WHERE id = $5 AND meeting_id = $6 RETURNING *',
-            [name, designation, department_id, office_id, presenteeId, id]
+            [name, designation, department_id || null, office_id || null, presenteeId, id]
         );
 
         if (result.rows.length === 0) {
