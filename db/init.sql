@@ -78,7 +78,7 @@ CREATE TABLE departments (
     name_english VARCHAR(255) NOT NULL UNIQUE,
     alias_bangla VARCHAR(255) NOT NULL UNIQUE,
     alias_english VARCHAR(255) NOT NULL UNIQUE,
-    faculty_id UUID NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
+    faculty_id UUID REFERENCES faculties (id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -196,3 +196,352 @@ VALUES (
         'active'
     )
 ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    faculties (name_english, name_bangla)
+VALUES (
+        'Faculty of Architecture and Planning',
+        'স্থাপত্য ও পরিকল্পনা অনুষদ'
+    ),
+    (
+        'Faculty of Civil Engineering',
+        'পুরকৌশল অনুষদ'
+    ),
+    (
+        'Faculty of Electrical and Electronic Engineering',
+        'তড়িৎ ও ইলেক্ট্রনিক কৌশল অনুষদ'
+    ),
+    (
+        'Faculty of Mechanical Engineering',
+        'যন্ত্রকৌশল অনুষদ'
+    ),
+    (
+        'Faculty of Chemical and Materials Engineering',
+        'কেমিক্যাল ও ম্যাটেরিয়ালস কৌশল অনুষদ'
+    ),
+    (
+        'Faculty of Science',
+        'বিজ্ঞান অনুষদ'
+    ),
+    (
+        'Faculty of Post Graduate Studies',
+        'স্নাতকোত্তর স্টাডিজ অনুষদ'
+    );
+
+INSERT INTO
+    departments (
+        serial,
+        name_bangla,
+        name_english,
+        alias_bangla,
+        alias_english,
+        faculty_id
+    )
+VALUES (
+        1,
+        'পানি সম্পদ কৌশল বিভাগ',
+        'Water Resources Engineering',
+        'ডব্লিউআরই',
+        'WRE',
+        NULL
+    ),
+    (
+        2,
+        'নগর ও অঞ্চল পরিকল্পনা বিভাগ',
+        'Urban and Regional Planning',
+        'ইউআরপি',
+        'URP',
+        NULL
+    ),
+    (
+        3,
+        'পেট্রোলিয়াম ও মিনারেল রিসোর্সেস প্রকৌশল বিভাগ',
+        'Petroleum and Mineral Resources Engineering',
+        'পিএমআরই',
+        'PMRE',
+        NULL
+    ),
+    (
+        4,
+        'পদার্থবিজ্ঞান বিভাগ',
+        'Physics',
+        'ফিজিক্স',
+        'Phy',
+        NULL
+    ),
+    (
+        5,
+        'ন্যানোম্যাটেরিয়ালস এন্ড সিরামিক ইঞ্জিনিয়ারিং বিভাগ',
+        'Nanomaterials and Ceramic Engineering',
+        'এনসিই',
+        'NCE',
+        NULL
+    ),
+    (
+        6,
+        'নৌযান ও নৌযন্ত্র কৌশল বিভাগ',
+        'Naval Architecture and Marine Engineering',
+        'এনএএমই',
+        'NAME',
+        NULL
+    ),
+    (
+        7,
+        'বস্তু ও ধাতব কৌশল বিভাগ',
+        'Materials and Metallurgical Engineering',
+        'এমএমই',
+        'MME',
+        NULL
+    ),
+    (
+        8,
+        'যন্ত্রকৌশল বিভাগ',
+        'Mechanical Engineering',
+        'এমই',
+        'ME',
+        NULL
+    ),
+    (
+        9,
+        'গণিত বিভাগ',
+        'Mathematics',
+        'ম্যাথ',
+        'Math',
+        NULL
+    ),
+    (
+        10,
+        'পানি ও বন্যা ব্যবস্থাপনা ইনস্টিটিউট',
+        'Institute of Water and Flood Management',
+        'আইডব্লিউএফএম',
+        'IWFM',
+        NULL
+    ),
+    (
+        11,
+        'শিল্প ও উৎপাদন কৌশল বিভাগ',
+        'Industrial and Production Engineering',
+        'আইপিই',
+        'IPE',
+        NULL
+    ),
+    (
+        12,
+        'তথ্য ও যোগাযোগ প্রযুক্তি ইনস্টিটিউট',
+        'Institute of Information and Communication Technology',
+        'আইআইসিটি',
+        'IICT',
+        NULL
+    ),
+    (
+        13,
+        'লাগসই প্রযুক্তি ইনস্টিটিউট',
+        'Institute of Appropriate Technology',
+        'আইএটি',
+        'IAT',
+        NULL
+    ),
+    (
+        14,
+        'মানবিক বিভাগ',
+        'Humanities',
+        'হিউম',
+        'Hum',
+        NULL
+    ),
+    (
+        15,
+        'তড়িৎ ও ইলেক্ট্রনিক কৌশল বিভাগ',
+        'Electrical and Electronic Engineering',
+        'ইইই',
+        'EEE',
+        NULL
+    ),
+    (
+        16,
+        'কম্পিউটার সায়েন্স এন্ড ইঞ্জিনিয়ারিং বিভাগ',
+        'Computer Science and Engineering',
+        'সিএসই',
+        'CSE',
+        NULL
+    ),
+    (
+        17,
+        'রসায়ন বিভাগ',
+        'Chemistry',
+        'কেম',
+        'Chem',
+        NULL
+    ),
+    (
+        18,
+        'কেমিকৌশল বিভাগ',
+        'Chemical Engineering',
+        'সিএইচই',
+        'ChE',
+        NULL
+    ),
+    (
+        19,
+        'পুরকৌশল বিভাগ',
+        'Civil Engineering',
+        'সিই',
+        'CE',
+        NULL
+    ),
+    (
+        20,
+        'বায়োমেডিকেল ইঞ্জিনিয়ারিং বিভাগ',
+        'Biomedical Engineering',
+        'বিএমই',
+        'BME',
+        NULL
+    ),
+    (
+        21,
+        'দুর্ঘটনা গবেষণা ইনস্টিটিউট',
+        'Accident Research Institute',
+        'এআরআই',
+        'ARI',
+        NULL
+    ),
+    (
+        22,
+        'স্থাপত্য বিভাগ',
+        'Architecture',
+        'আর্চ',
+        'Arch',
+        NULL
+    );
+
+INSERT INTO
+    offices (
+        serial,
+        name_bangla,
+        name_english
+    )
+VALUES (
+        1,
+        'বিভাগীয় প্রধান, পেট্রোলিয়াম ও মিনারেল রিসোর্সেস প্রকৌশল বিভাগ (পিএমআরই)',
+        'Department Head, Department of Petroleum & Mineral Resources Engineering (PMRE)'
+    ),
+    (
+        2,
+        'ডিন, স্থাপত্য ও পরিকল্পনা অনুষদ',
+        'Dean, Faculty of Architecture and Planning'
+    ),
+    (
+        3,
+        'বিভাগীয় প্রধান, বস্তু ও ধাতব কৌশল বিভাগ (এমএমই)',
+        'Department Head, Department of Materials & Metallurgical Engineering (MME)'
+    ),
+    (
+        4,
+        'ডিন, যন্ত্রকৌশল অনুষদ',
+        'Dean, Faculty of Mechanical Engineering'
+    ),
+    (
+        5,
+        'বিভাগীয় প্রধান, স্থাপত্য বিভাগ (আর্চ)',
+        'Department Head, Department of Architecture (ARCH)'
+    ),
+    (
+        6,
+        'বিভাগীয় প্রধান, রসায়ন বিভাগ (কেম)',
+        'Department Head, Department of Chemistry (CHEM)'
+    ),
+    (
+        7,
+        'ডিন, কেমিক্যাল ও ম্যাটেরিয়ালস কৌশল অনুষদ (এফসিএমই)',
+        'Dean, Faculty of Chemical & Materials Engineering (FCME)'
+    ),
+    (
+        8,
+        'ডিন, পুরকৌশল অনুষদ',
+        'Dean, Faculty of Civil Engineering'
+    ),
+    (
+        9,
+        'বিভাগীয় প্রধান, কম্পিউটার সায়েন্স এন্ড ইঞ্জিনিয়ারিং বিভাগ (সিএসই)',
+        'Department Head, Department of Computer Science & Engineering (CSE)'
+    ),
+    (
+        10,
+        'বিভাগীয় প্রধান, কেমিকৌশল বিভাগ (সিএইচই)',
+        'Department Head, Department of Chemical Engineering (ChE)'
+    ),
+    (
+        11,
+        'বিভাগীয় প্রধান, গণিত বিভাগ (ম্যাথ)',
+        'Department Head, Department of Mathematics (MATH)'
+    ),
+    (
+        12,
+        'বিভাগীয় প্রধান, পানি সম্পদ কৌশল বিভাগ (ডব্লিউআরই)',
+        'Department Head, Department of Water Resources Engineering (WRE)'
+    ),
+    (
+        13,
+        'ডিন, তড়িৎ ও ইলেক্ট্রনিক কৌশল অনুষদ',
+        'Dean, Faculty of Electrical & Electronic Engineering'
+    ),
+    (
+        14,
+        'বিভাগীয় প্রধান, ন্যানোম্যাটেরিয়ালস এন্ড সিরামিক ইঞ্জিনিয়ারিং বিভাগ (এনসিই)',
+        'Department Head, Department of Nanomaterials & Ceramics Engineering (NCE)'
+    ),
+    (
+        15,
+        'বিভাগীয় প্রধান, শিল্প ও উৎপাদন কৌশল বিভাগ (আইপিই)',
+        'Department Head, Department of Industrial & Production Engineering (IPE)'
+    ),
+    (
+        16,
+        'বিভাগীয় প্রধান, পুরকৌশল বিভাগ (সিই)',
+        'Department Head, Department of Civil Engineering (CE)'
+    ),
+    (
+        17,
+        'বিভাগীয় প্রধান, বায়োমেডিকেল ইঞ্জিনিয়ারিং বিভাগ (বিএমই)',
+        'Department Head, Department of Bio-Medical Engineering (BME)'
+    ),
+    (
+        18,
+        'বিভাগীয় প্রধান, পদার্থবিজ্ঞান বিভাগ (ফিজিক্স)',
+        'Department Head, Department of Physics (Phy)'
+    ),
+    (
+        19,
+        'বিভাগীয় প্রধান, মানবিক বিভাগ (হিউম)',
+        'Department Head, Department of Humanities (HUM)'
+    ),
+    (
+        20,
+        'বিভাগীয় প্রধান, যন্ত্রকৌশল বিভাগ (এমই)',
+        'Department Head, Department of Mechanical Engineering (ME)'
+    ),
+    (
+        21,
+        'ডিন, বিজ্ঞান অনুষদ',
+        'Dean, Faculty of Science'
+    ),
+    (
+        22,
+        'বিভাগীয় প্রধান, নৌযান ও নৌযন্ত্র কৌশল বিভাগ (এনএএমই)',
+        'Department Head, Department of Naval Arch. & Marine Engineering (NAME)'
+    ),
+    (
+        23,
+        'বিভাগীয় প্রধান, নগর ও অঞ্চল পরিকল্পনা বিভাগ (ইউআরপি)',
+        'Department Head, Department of Urban & Regional Planning (URP)'
+    ),
+    (
+        24,
+        'ডিন, স্নাতকোত্তর স্টাডিজ অনুষদ',
+        'Dean, Faculty of Post Graduate Studies'
+    ),
+    (
+        25,
+        'বিভাগীয় প্রধান, তড়িৎ ও ইলেক্ট্রনিক কৌশল বিভাগ (ইইই)',
+        'Department Head, Department of Electrical & Electronic Engineering (EEE)'
+    );

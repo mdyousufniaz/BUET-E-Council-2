@@ -1,6 +1,67 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import useSWR from "swr";
+import api, { fetcher } from "../../lib/api";
+import { toast } from "sonner";
+
 export default function ProfilePage() {
+  const { data: response, error, mutate } = useSWR('/auth/me', fetcher);
+  
+  const [formData, setFormData] = useState({
+    email: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (response?.data) {
+      setFormData(prev => ({
+        ...prev,
+        email: response.data.email || ""
+      }));
+    }
+  }, [response]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
+      return toast.error("New passwords do not match");
+    }
+
+    setSaving(true);
+    try {
+      const payload: any = {};
+      if (formData.email !== response?.data?.email) payload.email = formData.email;
+      if (formData.currentPassword && formData.newPassword) {
+        payload.currentPassword = formData.currentPassword;
+        payload.newPassword = formData.newPassword;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        setSaving(false);
+        return toast.info("No changes to save");
+      }
+
+      await api.put('/auth/me', payload);
+      toast.success("Profile updated successfully");
+      setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }));
+      mutate();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (error) return <div className="p-8">Failed to load profile</div>;
+  if (!response) return <div className="p-8">Loading...</div>;
+
+  const user = response.data;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -8,24 +69,23 @@ export default function ProfilePage() {
       </div>
 
       <div className="bg-card p-6 rounded-lg border border-border shadow-sm max-w-2xl">
-        <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-foreground border-b border-border pb-2">Personal Information</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Name</label>
-                <input type="text" defaultValue="Samyo Pramanik" className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Username</label>
-                <input type="text" defaultValue="admin" disabled className="w-full px-3 py-2 bg-muted text-muted-foreground border border-input rounded-md cursor-not-allowed" />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Username</label>
+              <input type="text" value={user?.username || ""} disabled className="w-full px-3 py-2 bg-muted text-muted-foreground border border-input rounded-md cursor-not-allowed" />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Email</label>
-              <input type="email" defaultValue="admin@buet.ac.bd" className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" />
+              <input 
+                type="email" 
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
+                className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" 
+              />
             </div>
           </div>
 
@@ -34,24 +94,46 @@ export default function ProfilePage() {
             
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Current Password</label>
-              <input type="password" placeholder="••••••••" className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" />
+              <input 
+                type="password" 
+                value={formData.currentPassword}
+                onChange={e => setFormData({...formData, currentPassword: e.target.value})}
+                placeholder="••••••••" 
+                className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" 
+              />
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">New Password</label>
-                <input type="password" placeholder="••••••••" className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" />
+                <input 
+                  type="password" 
+                  value={formData.newPassword}
+                  onChange={e => setFormData({...formData, newPassword: e.target.value})}
+                  placeholder="••••••••" 
+                  className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" 
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Confirm Password</label>
-                <input type="password" placeholder="••••••••" className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" />
+                <input 
+                  type="password" 
+                  value={formData.confirmPassword}
+                  onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+                  placeholder="••••••••" 
+                  className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground" 
+                />
               </div>
             </div>
           </div>
 
           <div className="flex justify-end pt-4">
-            <button type="submit" className="bg-primary text-primary-foreground px-6 py-2 rounded-md hover:opacity-90 font-medium transition-opacity">
-              Save Profile
+            <button 
+              type="submit" 
+              disabled={saving}
+              className="bg-primary text-primary-foreground px-6 py-2 rounded-md hover:opacity-90 font-medium transition-opacity disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Profile"}
             </button>
           </div>
         </form>

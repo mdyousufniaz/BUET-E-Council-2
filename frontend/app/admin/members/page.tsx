@@ -69,6 +69,20 @@ export default function ManageMembersPage() {
     });
   };
 
+  const handleFetchApi = () => {
+    confirm("Sync from APIs", "This will fetch external data and sync with the database. Are you sure you want to proceed?", async () => {
+      try {
+        const loadingToast = toast.loading("Fetching data from external APIs...");
+        const res = await api.post('/members/fetch-external');
+        toast.dismiss(loadingToast);
+        toast.success(res.data.message || "Synced members successfully");
+        mutate();
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to sync members");
+      }
+    });
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -133,6 +147,7 @@ export default function ManageMembersPage() {
         }}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onFetchApi={handleFetchApi}
       />
 
       {isModalOpen && (

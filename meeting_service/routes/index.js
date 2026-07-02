@@ -14,7 +14,7 @@ router.use('/faculties', facultiesRoutes);
 router.use('/members', membersRoutes);
 router.use('/departments', departmentRoutes);
 router.use('/templates', templateRoutes);
-router.use('/agendams', agendaRoutes);
+router.use('/agendas', agendaRoutes);
 router.use('/offices', officeRoutes);
 
 module.exports = router;

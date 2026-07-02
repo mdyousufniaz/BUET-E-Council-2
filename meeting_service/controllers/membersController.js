@@ -1,5 +1,6 @@
 const CustomError = require('../errors/CustomError');
 const db = require('../db');
+const axios = require('axios');
 
 const getMembers = async (req, res, next) => {
     try {
@@ -120,9 +121,121 @@ const deleteMember = async (req, res, next) => {
     }
 };
 
+const fetchExternalMembers = async (req, res, next) => {
+    try {
+        const [usersResponse, deanHeadResponse] = await Promise.all([
+            axios.get('https://regoffice.buet.ac.bd/filetracker/my-php-api/api/users.php'),
+            axios.get('https://regoffice.buet.ac.bd/filetracker/my-php-api/api/Dean_Head.php')
+        ]);
+
+        const usersData = usersResponse.data;
+        const deanHeadData = deanHeadResponse.data;
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const deptsResult = await client.query('SELECT id, alias_english FROM departments');
+            const deptMap = {};
+            deptsResult.rows.forEach(d => {
+                if (d.alias_english) deptMap[d.alias_english.toLowerCase()] = d.id;
+            });
+
+            const officesResult = await client.query('SELECT id, name_english FROM offices');
+            const officeMap = {};
+            officesResult.rows.forEach(o => {
+                if (o.name_english) officeMap[o.name_english.toLowerCase()] = o.id;
+            });
+
+            let syncCount = 0;
+
+            for (const u of usersData) {
+                const name = u['name:'];
+                const designation = u['designation:'];
+                const deptSort = u['dept_sort:'];
+                let rawEmail = u['email:'];
+
+                if (!name) continue;
+
+                let email = null;
+                if (rawEmail) {
+                    email = rawEmail.split(/<|\s/)[0].trim();
+                    if (!email) email = null;
+                }
+
+                let department_id = (deptSort && deptMap[deptSort.toLowerCase()]) ? deptMap[deptSort.toLowerCase()] : null;
+                let office_id = null;
+
+                const dh = deanHeadData.find(d => d['name:'] === name);
+                if (dh) {
+                    const dhDesig = dh['designation:'];
+                    const dhOffice = dh['In-Charge-Office:'];
+                    let officeStr = '';
+                    if (dhDesig === 'Head') {
+                        officeStr = `Department Head, ${dhOffice}`;
+                    } else if (dhDesig === 'Dean') {
+                        officeStr = `Dean, ${dhOffice}`;
+                    } else {
+                        officeStr = `${dhDesig}, ${dhOffice}`;
+                    }
+
+                    if (officeMap[officeStr.toLowerCase()]) {
+                        office_id = officeMap[officeStr.toLowerCase()];
+                    } else {
+                        const newOfficeRes = await client.query(
+                            'INSERT INTO offices (name_english, name_bangla) VALUES ($1, $2) RETURNING id',
+                            [officeStr, officeStr]
+                        );
+                        office_id = newOfficeRes.rows[0].id;
+                        officeMap[officeStr.toLowerCase()] = office_id;
+                    }
+                }
+
+                const memberRes = await client.query('SELECT id FROM members WHERE name = $1', [name]);
+
+                if (memberRes.rows.length > 0) {
+                    await client.query(
+                        `UPDATE members 
+                         SET designation = $1, department_id = $2, office_id = $3, email = $4 
+                         WHERE id = $5`,
+                        [designation, department_id, office_id, email, memberRes.rows[0].id]
+                    );
+                } else {
+                    if (email) {
+                        const emailCheck = await client.query('SELECT id FROM members WHERE email = $1', [email]);
+                        if (emailCheck.rows.length > 0) {
+                            email = null;
+                        }
+                    }
+
+                    await client.query(
+                        `INSERT INTO members (name, designation, department_id, office_id, email)
+                         VALUES ($1, $2, $3, $4, $5)`,
+                        [name, designation, department_id, office_id, email]
+                    );
+                }
+                syncCount++;
+            }
+
+            await client.query('COMMIT');
+            res.status(200).json({ success: true, message: `Synced ${syncCount} members successfully` });
+
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getMembers,
     createMember,
     updateMember,
-    deleteMember
+    deleteMember,
+    fetchExternalMembers
 };

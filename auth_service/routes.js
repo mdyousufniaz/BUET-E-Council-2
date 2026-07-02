@@ -472,4 +472,64 @@ router.get('/download-csv', requireAuth, async (req, res) => {
     }
 });
 
+// 13. PUT /me (Update user profile)
+router.put('/me', requireAuth, async (req, res) => {
+    try {
+        const { email, currentPassword, newPassword } = req.body;
+        
+        // Fetch current user details including password
+        const userResult = await db.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const user = userResult.rows[0];
+        
+        let updateQueries = [];
+        let queryParams = [];
+        let paramIndex = 1;
+
+        if (email) {
+            // Check if email is already taken by someone else
+            const emailCheck = await db.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, req.user.id]);
+            if (emailCheck.rows.length > 0) {
+                return res.status(409).json({ success: false, message: 'Email already exists' });
+            }
+            updateQueries.push(`email = $${paramIndex++}`);
+            queryParams.push(email);
+        }
+
+        if (currentPassword && newPassword) {
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ success: false, message: 'Incorrect current password' });
+            }
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(newPassword, salt);
+            updateQueries.push(`password = $${paramIndex++}`);
+            queryParams.push(hashedPassword);
+        }
+
+        if (updateQueries.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nothing to update' });
+        }
+
+        queryParams.push(req.user.id);
+        const result = await db.query(
+            `UPDATE users SET ${updateQueries.join(', ')} WHERE id = $${paramIndex} RETURNING id, username, email`,
+            queryParams
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Profile updated successfully',
+            data: result.rows[0]
+        });
+
+    } catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
 module.exports = router;

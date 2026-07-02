@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', membersController.getMembers);
+router.post('/fetch-external', membersController.fetchExternalMembers);
 router.post('/', membersController.createMember);
 router.put('/:id', membersController.updateMember);
 router.delete('/:id', membersController.deleteMember);

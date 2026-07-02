@@ -19,6 +19,7 @@ interface DataTableProps {
   onAdd?: () => void;
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
+  onFetchApi?: () => void;
 }
 
 export default function DataTable({ 
@@ -30,7 +31,8 @@ export default function DataTable({
   onDownloadCsv,
   onAdd,
   onEdit,
-  onDelete
+  onDelete,
+  onFetchApi
 }: DataTableProps) {
   const [data, setData] = useState(initialData);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -134,6 +136,13 @@ export default function DataTable({
                 Upload CSV
               </button>
             </>
+          )}
+
+          {onFetchApi && (
+            <button onClick={onFetchApi} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:opacity-90 font-medium text-sm transition-opacity shadow-sm">
+              <Upload className="w-4 h-4 mr-2" />
+              Fetch API
+            </button>
           )}
 
           <button onClick={onAdd} className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 font-medium text-sm transition-opacity shadow-sm">
