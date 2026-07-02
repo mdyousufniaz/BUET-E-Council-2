@@ -114,7 +114,7 @@ export default function PublicMeetingView() {
       const isVC = (des.includes('উপাচার্য') || office.includes('উপাচার্য')) && !(des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য'));
       const isProVC = des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য');
       const isDean = office.includes('ডিন') || office.includes('dean') || des.includes('ডিন') || des.includes('dean');
-      const isHead = des.includes('head') || des.includes('বিভাগীয় প্রধান') || des.includes('বিভাগীয় প্রধান');
+      const isHead = office.includes('বিভাগীয় প্রধান') || office.includes('বিভাগীয় প্রধান');
 
       if (isVC) {
         p.department_name = 'সভাপতি';
@@ -150,9 +150,9 @@ export default function PublicMeetingView() {
     <div key={p.id} className="p-4 bg-muted/50 rounded-lg border border-border">
       <div className="font-medium text-foreground">{p.name}</div>
       <div className="text-sm text-muted-foreground">{p.designation}</div>
-      {(p.department_name || p.office_name) && (
+      {(p.office_name || p.department_name) && (
         <div className="text-xs text-muted-foreground mt-1">
-          {p.department_name || p.office_name}
+          {p.office_name ? p.office_name : p.department_name}
         </div>
       )}
     </div>
