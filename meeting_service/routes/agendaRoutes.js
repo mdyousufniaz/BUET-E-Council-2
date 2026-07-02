@@ -1,6 +1,10 @@
 const express = require('express');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const agendaController = require('../controllers/agendaController');
+const multer = require('multer');
+
+// Configure multer for memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -19,7 +23,9 @@ router.put('/resolutions/:resId', agendaController.updateResolution);
 router.delete('/resolutions/:resId', agendaController.deleteResolution);
 
 // Annexures
-router.post('/:id/annexures', agendaController.addAnnexures);
-router.post('/resolutions/:resId/annexures', agendaController.addAnnexures);
+router.get('/:id/annexures', agendaController.getAnnexures);
+router.post('/:id/annexures', upload.single('file'), agendaController.uploadAnnexure);
+router.put('/annexures/reorder', agendaController.reorderAnnexures);
+router.delete('/annexures/:annexureId', agendaController.deleteAnnexure);
 
 module.exports = router;

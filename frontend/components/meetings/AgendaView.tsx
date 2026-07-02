@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Edit3, Plus, FileText, GripVertical, Trash2 } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
+import AnnexureList from "./AnnexureList";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { toast } from "sonner";
@@ -196,6 +197,9 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                   dangerouslySetInnerHTML={{ __html: agenda.content || "<p class='text-muted-foreground italic'>Empty content...</p>" }} 
                 />
               )}
+
+              {/* Annexure List placed underneath the agenda content */}
+              <AnnexureList contentId={agenda.id} type="agenda" />
             </div>
 
             {/* Insertion Strip (UX Magic) */}

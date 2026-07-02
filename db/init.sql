@@ -177,6 +177,7 @@ CREATE TABLE annexures (
     file_name VARCHAR(255),
     file_path VARCHAR(255),
     summary TEXT,
+    annexure_serial INTEGER DEFAULT 1,
     embedding vector (1536), -- Vector embedding for the annexure summary/content
     upload_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

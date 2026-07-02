@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Edit3, FileText, FileCheck, Plus } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
+import AnnexureList from "./AnnexureList";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { toast } from "sonner";
@@ -110,6 +111,9 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
               </div>
             )}
           </div>
+
+          {/* Annexure List placed underneath the resolution content */}
+          <AnnexureList contentId={agenda.id} type="resolution" />
           
         </div>
       )))}

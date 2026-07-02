@@ -8,7 +8,8 @@ const s3Client = new S3Client({
     credentials: {
         accessKeyId: process.env.R3_ACCESS_KEY_ID || 'your-access-key-id',
         secretAccessKey: process.env.R3_SECRET_ACCESS_KEY || 'your-secret-access-key',
-    }
+    },
+    forcePathStyle: true // Needed for MinIO locally
 });
 
 const BUCKET_NAME = process.env.R3_BUCKET_NAME || 'ecouncil-bucket';

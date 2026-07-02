@@ -1,5 +1,7 @@
 const CustomError = require('../errors/CustomError');
 const db = require('../db');
+const storageService = require('../utils/storageService');
+const crypto = require('crypto');
 
 const getAgendams = async (req, res, next) => {
     try {
@@ -162,23 +164,122 @@ const deleteResolution = async (req, res, next) => {
     }
 };
 
-const addAnnexures = async (req, res, next) => {
+const getAnnexures = async (req, res, next) => {
     try {
-        // We will assume files are uploaded and we just insert metadata here.
-        // Actual file processing would involve `multer` and `s3Client`.
-        const content_id = req.params.id || req.params.resId;
-        const { annexure_type, file_name, file_path, summary } = req.body;
+        const { id } = req.params;
+        const result = await db.query(
+            'SELECT * FROM annexures WHERE content_id = $1 ORDER BY annexure_serial ASC',
+            [id]
+        );
+        
+        // Generate presigned URLs for each file
+        const annexures = await Promise.all(result.rows.map(async (annexure) => {
+            if (annexure.file_path) {
+                try {
+                    annexure.url = await storageService.getFileUrl(annexure.file_path, 3600);
+                } catch (err) {
+                    annexure.url = null; // if storage fails, skip throwing
+                }
+            }
+            return annexure;
+        }));
 
-        if (!content_id || !annexure_type) {
-            return next(new CustomError('content_id and annexure_type are required', 400));
+        res.status(200).json({ success: true, data: annexures });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const uploadAnnexure = async (req, res, next) => {
+    try {
+        const { id } = req.params; // content_id (agenda id)
+        const { summary } = req.body;
+        let { annexure_type } = req.body;
+        const file = req.file;
+
+        // Map 'agenda' to 'agendaItem' for the Postgres enum
+        if (annexure_type === 'agenda') {
+            annexure_type = 'agendaItem';
         }
 
+        if (!id || !annexure_type || !file) {
+            return next(new CustomError('content_id, annexure_type, and file are required', 400));
+        }
+
+        // Generate a unique file key
+        const ext = file.originalname.split('.').pop();
+        const fileKey = `annexures/${id}/${crypto.randomBytes(8).toString('hex')}.${ext}`;
+
+        // Upload to S3/MinIO
+        await storageService.uploadFile(file.buffer, fileKey, file.mimetype);
+
+        // Get max serial
+        const maxSerialResult = await db.query(
+            'SELECT COALESCE(MAX(annexure_serial), 0) as max_serial FROM annexures WHERE content_id = $1',
+            [id]
+        );
+        const nextSerial = parseInt(maxSerialResult.rows[0].max_serial, 10) + 1;
+
+        // Save to DB
         const result = await db.query(
-            'INSERT INTO annexures (content_id, annexure_type, file_name, file_path, summary) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [content_id, annexure_type, file_name, file_path, summary]
+            'INSERT INTO annexures (content_id, annexure_type, file_name, file_path, summary, annexure_serial) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [id, annexure_type, file.originalname, fileKey, summary || '', nextSerial]
         );
 
-        res.status(201).json({ success: true, message: 'Annexure added', data: result.rows[0] });
+        res.status(201).json({ success: true, message: 'Annexure added successfully', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const deleteAnnexure = async (req, res, next) => {
+    try {
+        const { annexureId } = req.params;
+
+        const result = await db.query('DELETE FROM annexures WHERE id = $1 RETURNING *', [annexureId]);
+        
+        if (result.rows.length === 0) return next(new CustomError('Annexure not found', 404));
+
+        const deletedAnnexure = result.rows[0];
+        if (deletedAnnexure.file_path) {
+            try {
+                await storageService.deleteFile(deletedAnnexure.file_path);
+            } catch (err) {
+                console.error("Failed to delete file from storage:", err);
+            }
+        }
+
+        res.status(200).json({ success: true, message: 'Annexure deleted' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const reorderAnnexures = async (req, res, next) => {
+    try {
+        const { items } = req.body; // array of { id, annexure_serial }
+        
+        if (!items || !Array.isArray(items)) {
+            return next(new CustomError('Invalid input', 400));
+        }
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const item of items) {
+                await client.query(
+                    'UPDATE annexures SET annexure_serial = $1 WHERE id = $2',
+                    [item.annexure_serial, item.id]
+                );
+            }
+            await client.query('COMMIT');
+            res.status(200).json({ success: true, message: 'Reordered successfully' });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     } catch (error) {
         next(error);
     }
@@ -193,5 +294,8 @@ module.exports = {
     createResolution,
     updateResolution,
     deleteResolution,
-    addAnnexures
+    getAnnexures,
+    uploadAnnexure,
+    deleteAnnexure,
+    reorderAnnexures
 };
