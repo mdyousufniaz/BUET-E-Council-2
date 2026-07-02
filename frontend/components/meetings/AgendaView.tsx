@@ -10,10 +10,9 @@ import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 
 export default function AgendaView({ meeting, type }: { meeting: any, type: string }) {
-  const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}`, fetcher, { fallbackData: { data: [] } });
-  const allAgendas = response?.data || [];
   const isSuppliView = type === 'Supplementary Agenda';
-  const agendas = allAgendas.filter((a: any) => isSuppliView ? a.is_suppli : !a.is_suppli);
+  const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}&is_suppli=${isSuppliView}`, fetcher, { fallbackData: { data: [] } });
+  const agendas = response?.data || [];
   const { confirm, ConfirmModal } = useConfirm();
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -93,7 +92,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
 
   const handleSaveNew = async () => {
     setIsSaving(true);
-    const nextSerial = allAgendas.length > 0 ? Math.max(...allAgendas.map((a: any) => a.agenda_serial || 0)) + 1 : 1;
+    const nextSerial = agendas.length > 0 ? Math.max(...agendas.map((a: any) => a.agenda_serial || 0)) + 1 : 1;
     try {
       await api.post(`/agendas`, { 
         meeting_id: meeting.id,

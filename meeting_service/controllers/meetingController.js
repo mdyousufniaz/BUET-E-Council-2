@@ -66,21 +66,23 @@ const createMeeting = async (req, res, next) => {
 const updateMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { title, meeting_title, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript } = req.body;
+        const { title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript } = req.body;
 
         const result = await db.query(
             `UPDATE meetings SET 
                 title = COALESCE($1, title),
                 meeting_title = COALESCE($2, meeting_title),
-                meeting_date = COALESCE($3, meeting_date),
-                type = COALESCE($4, type),
-                status = COALESCE($5, status),
-                meeting_link = COALESCE($6, meeting_link),
-                agenda_pdf_link = COALESCE($7, agenda_pdf_link),
-                resolution_pdf_link = COALESCE($8, resolution_pdf_link),
-                transcript = COALESCE($9, transcript)
-             WHERE id = $10 RETURNING *`,
-            [title, meeting_title, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, id]
+                description = COALESCE($3, description),
+                conclusion = COALESCE($4, conclusion),
+                meeting_date = COALESCE($5, meeting_date),
+                type = COALESCE($6, type),
+                status = COALESCE($7, status),
+                meeting_link = COALESCE($8, meeting_link),
+                agenda_pdf_link = COALESCE($9, agenda_pdf_link),
+                resolution_pdf_link = COALESCE($10, resolution_pdf_link),
+                transcript = COALESCE($11, transcript)
+             WHERE id = $12 RETURNING *`,
+            [title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, id]
         );
 
         if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));

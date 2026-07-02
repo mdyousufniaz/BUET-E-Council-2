@@ -1,14 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { Save } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Save, Loader2 } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
+import api from "../../lib/api";
+import { toast } from "sonner";
 
 export default function DescriptionView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const [content, setContent] = useState("");
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const title = type === 'description' ? 'Meeting Description' : 'Meeting Conclusion';
+  const dbField = type === 'description' ? 'description' : 'conclusion';
+
+  // Re-initialize content when switching between Description and Conclusion
+  useEffect(() => {
+    setContent(meeting[dbField] || "");
+    setIsDirty(false);
+  }, [type, meeting, dbField]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await api.put(`/meetings/${meeting.id}`, { [dbField]: content });
+      mutate();
+      setIsDirty(false);
+      toast.success(`${title} saved successfully.`);
+    } catch (error) {
+      toast.error(`Failed to save ${title.toLowerCase()}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
@@ -29,10 +53,12 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
         {/* Action Area */}
         <div className="bg-muted/30 border-t border-border p-4 flex justify-end shrink-0">
           <button 
-            disabled={!isDirty}
+            onClick={handleSave}
+            disabled={!isDirty || isSaving}
             className="bg-primary text-primary-foreground hover:opacity-90 px-6 py-2 rounded-md font-medium disabled:opacity-50 transition-opacity flex items-center gap-2 shadow-sm"
           >
-            <Save className="w-4 h-4" /> Save {type === 'description' ? 'Description' : 'Conclusion'}
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save {type === 'description' ? 'Description' : 'Conclusion'}
           </button>
         </div>
       </div>

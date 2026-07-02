@@ -6,13 +6,21 @@ const crypto = require('crypto');
 const getAgendams = async (req, res, next) => {
     try {
         const meeting_id = req.query.meeting_id;
+        const is_suppli = req.query.is_suppli;
         
         let query = 'SELECT * FROM agenda';
         let params = [];
         
         if (meeting_id) {
-            query += ' WHERE meeting_id = $1 ORDER BY agenda_serial ASC';
+            query += ' WHERE meeting_id = $1';
             params.push(meeting_id);
+            
+            if (is_suppli !== undefined) {
+                query += ' AND is_suppli = $2';
+                params.push(is_suppli === 'true');
+            }
+            
+            query += ' ORDER BY agenda_serial ASC';
         } else {
             query += ' ORDER BY created_at DESC';
         }
@@ -26,15 +34,15 @@ const getAgendams = async (req, res, next) => {
 
 const createAgendam = async (req, res, next) => {
     try {
-        const { meeting_id, agenda_serial, content, is_executed, execution_status } = req.body;
+        const { meeting_id, agenda_serial, content, is_executed, execution_status, is_suppli } = req.body;
         
         if (!meeting_id) {
             return next(new CustomError('meeting_id is required', 400));
         }
 
         const result = await db.query(
-            'INSERT INTO agenda (meeting_id, agenda_serial, content, is_executed, execution_status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [meeting_id, agenda_serial, content || '', is_executed || 'no', execution_status]
+            'INSERT INTO agenda (meeting_id, agenda_serial, content, is_executed, execution_status, is_suppli) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [meeting_id, agenda_serial, content || '', is_executed || 'no', execution_status, is_suppli || false]
         );
 
         res.status(201).json({ success: true, message: 'Agendam created', data: result.rows[0] });

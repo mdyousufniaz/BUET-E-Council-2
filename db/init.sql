@@ -100,6 +100,8 @@ CREATE TABLE meetings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     title VARCHAR(255) NOT NULL,
     meeting_title VARCHAR(255),
+    description TEXT,
+    conclusion TEXT,
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),
@@ -123,7 +125,8 @@ CREATE TABLE agenda (
     execution_status TEXT, -- Detailed status description
     agenda_serial INTEGER, -- e.g., "Ag-1", "Res-5"
     meeting_id UUID REFERENCES meetings (id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_suppli BOOLEAN DEFAULT false
 );
 
 -- Templates Table
@@ -140,7 +143,7 @@ CREATE TABLE templates (
 CREATE TABLE invitees (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE,
+    email VARCHAR(255),
     designation VARCHAR(255),
     department_id UUID REFERENCES departments (id) ON DELETE SET NULL,
     office_id UUID REFERENCES offices (id) ON DELETE SET NULL,
