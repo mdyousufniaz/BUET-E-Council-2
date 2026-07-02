@@ -4,14 +4,28 @@ const db = require('../db');
 const getTemplates = async (req, res, next) => {
     try {
         const userId = req.user ? req.user.id : null;
+        const { type, scope } = req.query; // scope: 'all' or 'mine'
         
-        // Show public templates and private templates created by the user
-        const query = `
-            SELECT * FROM templates 
-            WHERE visibility = 'public' OR created_by = $1
-            ORDER BY created_at DESC
-        `;
-        const result = await db.query(query, [userId]);
+        let query = `SELECT * FROM templates WHERE 1=1`;
+        let params = [];
+        let paramCount = 1;
+
+        if (scope === 'mine') {
+            query += ` AND created_by = $${paramCount++}`;
+            params.push(userId);
+        } else {
+            query += ` AND (visibility = 'public' OR created_by = $${paramCount++})`;
+            params.push(userId);
+        }
+
+        if (type) {
+            query += ` AND type = $${paramCount++}`;
+            params.push(type);
+        }
+
+        query += ` ORDER BY used_count DESC, created_at DESC`;
+        
+        const result = await db.query(query, params);
         
         res.status(200).json({ success: true, data: result.rows });
     } catch (error) {
@@ -21,20 +35,33 @@ const getTemplates = async (req, res, next) => {
 
 const searchTemplates = async (req, res, next) => {
     try {
-        const { q } = req.query;
+        const { q, type, scope } = req.query;
         const userId = req.user ? req.user.id : null;
 
         if (!q) {
             return next(new CustomError('Search query (q) is required', 400));
         }
 
-        const query = `
-            SELECT * FROM templates 
-            WHERE (visibility = 'public' OR created_by = $1)
-            AND text_content ILIKE $2
-            ORDER BY created_at DESC
-        `;
-        const result = await db.query(query, [userId, `%${q}%`]);
+        let query = `SELECT * FROM templates WHERE text_content ILIKE $1`;
+        let params = [`%${q}%`];
+        let paramCount = 2;
+
+        if (scope === 'mine') {
+            query += ` AND created_by = $${paramCount++}`;
+            params.push(userId);
+        } else {
+            query += ` AND (visibility = 'public' OR created_by = $${paramCount++})`;
+            params.push(userId);
+        }
+
+        if (type) {
+            query += ` AND type = $${paramCount++}`;
+            params.push(type);
+        }
+
+        query += ` ORDER BY used_count DESC, created_at DESC`;
+
+        const result = await db.query(query, params);
         
         res.status(200).json({ success: true, data: result.rows });
     } catch (error) {
@@ -129,11 +156,26 @@ const updateVisibility = async (req, res, next) => {
     }
 };
 
+const incrementUseCount = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query(
+            'UPDATE templates SET used_count = used_count + 1 WHERE id = $1 RETURNING *',
+            [id]
+        );
+        if (result.rows.length === 0) return next(new CustomError('Template not found', 404));
+        res.status(200).json({ success: true, data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getTemplates,
     searchTemplates,
     createTemplate,
     updateTemplate,
     deleteTemplate,
-    updateVisibility
+    updateVisibility,
+    incrementUseCount
 };

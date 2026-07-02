@@ -1,18 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, FileText } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
 import api from "../../lib/api";
 import { toast } from "sonner";
+import TemplateDrawer from "../TemplateDrawer";
 
 export default function DescriptionView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const [content, setContent] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const title = type === 'description' ? 'Meeting Description' : 'Meeting Conclusion';
   const dbField = type === 'description' ? 'description' : 'conclusion';
+  const templateType = type === 'description' ? 'description' : 'conclusion';
 
   // Re-initialize content when switching between Description and Conclusion
   useEffect(() => {
@@ -51,7 +54,14 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
         />
 
         {/* Action Area */}
-        <div className="bg-muted/30 border-t border-border p-4 flex justify-end shrink-0">
+        <div className="bg-muted/30 border-t border-border p-4 flex justify-between shrink-0">
+          <button 
+            onClick={() => setIsDrawerOpen(true)}
+            className="text-primary hover:text-primary/80 font-medium px-4 py-2 transition-colors flex items-center gap-2"
+          >
+            <FileText className="w-4 h-4" /> From Template
+          </button>
+
           <button 
             onClick={handleSave}
             disabled={!isDirty || isSaving}
@@ -62,6 +72,16 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
           </button>
         </div>
       </div>
+      
+      <TemplateDrawer 
+        isOpen={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        type={templateType as any}
+        onSelect={(templateContent) => {
+          setContent(templateContent);
+          setIsDirty(true);
+        }}
+      />
     </div>
   );
 }

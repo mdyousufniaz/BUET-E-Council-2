@@ -7,6 +7,7 @@ import AnnexureList from "./AnnexureList";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { toast } from "sonner";
+import TemplateDrawer from "../TemplateDrawer";
 
 export default function ResolutionView({ meeting }: { meeting: any }) {
   const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}`, fetcher, { fallbackData: { data: [] } });
@@ -22,6 +23,8 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [targetAgendaId, setTargetAgendaId] = useState<string | null>(null);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -86,11 +89,19 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                   onChange={setEditContent}
                   className="p-4 min-h-[150px]"
                 />
-                <div className="bg-muted p-2 flex justify-end gap-2 border-t border-border">
-                  <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-muted-foreground hover:bg-background rounded-md">Cancel</button>
-                  <button onClick={handleSave} disabled={isSaving} className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50">
-                    {isSaving ? "Saving..." : "Save Resolution"}
+                <div className="bg-muted p-2 flex justify-between items-center border-t border-border">
+                  <button 
+                    onClick={() => { setTargetAgendaId(agenda.id); setIsDrawerOpen(true); }}
+                    className="px-3 py-1 text-xs text-primary font-medium hover:bg-primary/10 rounded-md flex items-center gap-1.5 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> From Template
                   </button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-muted-foreground hover:bg-background rounded-md">Cancel</button>
+                    <button onClick={handleSave} disabled={isSaving} className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50">
+                      {isSaving ? "Saving..." : "Save Resolution"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : agenda.resolution ? (
@@ -114,7 +125,14 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                 >
                   <Edit3 className="w-4 h-4" /> Create Resolution
                 </button>
-                <button className="bg-background border border-border text-foreground hover:bg-muted shadow-sm py-2 px-4 text-sm font-medium rounded-md flex items-center gap-2 transition-colors">
+                <button 
+                  onClick={() => {
+                    handleEditClick(agenda);
+                    setTargetAgendaId(agenda.id);
+                    setIsDrawerOpen(true);
+                  }}
+                  className="bg-accent text-accent-foreground border border-border shadow-sm py-2 px-4 text-sm font-medium rounded-md flex items-center gap-2 hover:bg-accent/80 transition-colors"
+                >
                   <FileText className="w-4 h-4" /> From Template
                 </button>
               </div>
@@ -128,6 +146,20 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
           
         </div>
       )))}
+
+      <TemplateDrawer 
+        isOpen={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        type="resolution"
+        onSelect={(templateContent) => {
+          if (editingId === targetAgendaId) {
+            setEditContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
+          } else {
+            // Unlikely to hit this branch because we set editingId when opening from "Create" view
+            setEditContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
+          }
+        }}
+      />
     </div>
   );
 }

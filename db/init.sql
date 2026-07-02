@@ -20,7 +20,7 @@ CREATE TYPE member_status AS ENUM ('active', 'onleave', 'past');
 
 CREATE TYPE template_visibility AS ENUM ('public', 'private');
 
-CREATE TYPE template_type AS ENUM ('agendaItem', 'resolutionItem');
+CREATE TYPE template_type AS ENUM ('agendaItem', 'resolutionItem', 'agendam', 'resolution', 'description', 'conclusion');
 
 CREATE TYPE content_type AS ENUM ('agendaItem', 'resolutionItem');
 

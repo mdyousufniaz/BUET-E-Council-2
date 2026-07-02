@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Calendar, Building2, Briefcase, Settings, Shield } from 'lucide-react';
+import { 
+  Users, Building2, Briefcase, Calendar, 
+  Settings, Shield, LogOut, LayoutGrid, FileText
+} from 'lucide-react';
 
 interface SidebarProps {
   type?: 'admin' | 'profile';
@@ -13,6 +16,7 @@ export default function Sidebar({ type = 'admin' }: SidebarProps) {
 
   const adminLinks = [
     { name: 'Meetings', href: '/admin/meetings', icon: Calendar },
+    { name: 'Templates', href: '/admin/templates', icon: FileText },
     { name: 'Members', href: '/admin/members', icon: Users },
     { name: 'Faculties', href: '/admin/faculties', icon: Building2 },
     { name: 'Departments', href: '/admin/departments', icon: Briefcase },

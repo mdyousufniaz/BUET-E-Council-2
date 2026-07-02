@@ -14,13 +14,13 @@ const typeOptions = [
 const statusOptions = [
   { value: "draft", label: "Draft" },
   { value: "ongoing", label: "Ongoing" },
-  { value: "past", label: "Past" },
-  { value: "locked", label: "Locked" }
+  { value: "past", label: "Past" }
 ];
 
 export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mutate: any }) {
   const [formData, setFormData] = useState({
     title: meeting.title || "",
+    meeting_title: meeting.meeting_title || "",
     meeting_date: meeting.meeting_date ? new Date(meeting.meeting_date).toISOString().split('T')[0] : "",
     type: meeting.type || "syndicate",
     status: meeting.status || "draft"
@@ -48,18 +48,18 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   };
 
   const markCompleted = () => {
-    confirm("Lock Meeting", "Are you sure you want to mark this meeting as completed? This will lock appropriate fields.", async () => {
-      setFormData(prev => ({ ...prev, status: "locked" }));
+    confirm("Mark Meeting as Past", "Are you sure you want to mark this meeting as past? This will lock appropriate fields.", async () => {
+      setFormData(prev => ({ ...prev, status: "past" }));
       setSaving(true);
       try {
         const payload = {
           ...formData,
-          status: "locked",
+          status: "past",
           meeting_date: new Date(formData.meeting_date).toISOString()
         };
         await api.put(`/meetings/${meeting.id}`, payload);
         mutate();
-        toast.success("Meeting locked successfully.");
+        toast.success("Meeting marked as past successfully.");
       } catch (err: any) {
         toast.error(err.response?.data?.message || 'Failed to lock meeting');
       } finally {
@@ -75,15 +75,29 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
       
       <div className="bg-card border border-border shadow-sm rounded-lg p-6">
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Meeting Serial Number</label>
-            <input 
-              required 
-              value={formData.title} 
-              onChange={e => setFormData({...formData, title: e.target.value})} 
-              className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" 
-              placeholder='e.g., "304th"'
-            />
+          <div className="col-span-1 md:col-span-2 flex gap-4">
+            <div className="space-y-1 w-1/3">
+              <label className="text-sm font-medium">Meeting Serial Number</label>
+              <input 
+                required 
+                disabled={formData.status === 'past'}
+                value={formData.title} 
+                onChange={e => setFormData({...formData, title: e.target.value})} 
+                className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm disabled:opacity-50" 
+                placeholder='e.g., "304th"'
+              />
+            </div>
+            
+            <div className="space-y-1 w-2/3">
+              <label className="text-sm font-medium">Meeting Title</label>
+              <input 
+                disabled={formData.status === 'past'}
+                value={formData.meeting_title} 
+                onChange={e => setFormData({...formData, meeting_title: e.target.value})} 
+                className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm disabled:opacity-50" 
+                placeholder='e.g., "Monthly General Meeting"'
+              />
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -126,21 +140,23 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
           </div>
         </form>
 
-        <hr className="my-8 border-border" />
-
-        <div>
-          <h3 className="text-lg font-medium mb-2">Completion Actions</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Marking a meeting as completed will lock its contents and transition its state to finalized.
-          </p>
-          <button 
-            onClick={markCompleted}
-            disabled={formData.status === 'locked'}
-            className="bg-secondary text-secondary-foreground border border-secondary font-semibold hover:bg-secondary/80 px-6 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {formData.status === 'locked' ? 'Meeting Locked' : 'Mark Meeting Completed'}
-          </button>
-        </div>
+        {formData.status !== 'past' && (
+          <>
+            <hr className="my-8 border-border" />
+            <div>
+              <h3 className="text-lg font-medium mb-2">Completion Actions</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Marking a meeting as completed will lock its contents and transition its state to finalized.
+              </p>
+              <button 
+                onClick={markCompleted}
+                className="bg-secondary text-secondary-foreground border border-secondary font-semibold hover:bg-secondary/80 px-6 py-2 rounded-md transition-colors"
+              >
+                Mark Meeting Completed
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

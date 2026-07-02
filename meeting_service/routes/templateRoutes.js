@@ -12,5 +12,6 @@ router.post('/', templateController.createTemplate);
 router.put('/:id', templateController.updateTemplate);
 router.delete('/:id', templateController.deleteTemplate);
 router.patch('/:id/visibility', templateController.updateVisibility);
+router.post('/:id/use', templateController.incrementUseCount);
 
 module.exports = router;

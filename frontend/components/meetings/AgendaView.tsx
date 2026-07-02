@@ -8,6 +8,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
+import TemplateDrawer from "../TemplateDrawer";
 
 export default function AgendaView({ meeting, type }: { meeting: any, type: string }) {
   const isSuppliView = type === 'Supplementary Agenda';
@@ -20,6 +21,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newContent, setNewContent] = useState("");
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const title = type === 'suppli-agenda' ? 'Supplementary Agenda' : 'Agenda Items';
 
@@ -146,12 +148,20 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               <h3 className="text-lg font-semibold text-primary">No Agendas Found</h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">There are currently no agendas for this meeting. Create a new agenda to get started.</p>
             </div>
-            <button 
-              onClick={handleStartCreate} 
-              className="mt-4 bg-primary text-primary-foreground py-2 px-6 rounded-md font-medium shadow-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Create New Agenda
-            </button>
+            <div className="flex gap-4 mt-4">
+              <button 
+                onClick={handleStartCreate} 
+                className="bg-primary text-primary-foreground py-2 px-6 rounded-md font-medium shadow-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" /> Create New Agenda
+              </button>
+              <button 
+                onClick={() => setIsDrawerOpen(true)}
+                className="bg-accent text-accent-foreground border border-border py-2 px-6 rounded-md font-medium shadow-sm hover:bg-accent/80 transition-colors flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> Create from Template
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -216,7 +226,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                   <button onClick={handleStartCreate} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
                     <Plus className="w-3 h-3" /> Create Agenda
                   </button>
-                  <button className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
+                  <button onClick={() => setIsDrawerOpen(true)} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
                     <FileText className="w-3 h-3" /> From Template
                   </button>
                 </div>
@@ -286,6 +296,21 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
         </div>
       </div>
 
+      <TemplateDrawer 
+        isOpen={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        type="agendam"
+        onSelect={(templateContent) => {
+          if (editingId) {
+            setEditContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
+          } else {
+            setNewContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
+            if (!isCreating) {
+              setIsCreating(true);
+            }
+          }
+        }}
+      />
     </div>
   );
 }
