@@ -10,7 +10,14 @@ import { toast } from "sonner";
 
 export default function ResolutionView({ meeting }: { meeting: any }) {
   const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}`, fetcher, { fallbackData: { data: [] } });
-  const agendas = response?.data || [];
+  
+  // Sort main agendas first, suppli agendas last, then by serial
+  const agendas = [...(response?.data || [])].sort((a: any, b: any) => {
+    if (a.is_suppli === b.is_suppli) {
+      return (a.agenda_serial || 0) - (b.agenda_serial || 0);
+    }
+    return a.is_suppli ? 1 : -1;
+  });
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -57,7 +64,9 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
           
           {/* Top Section (Read-Only Agenda) */}
           <div className="mb-6">
-            <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-2">Ag-{agenda.agenda_serial || index + 1}</h3>
+            <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-2">
+              {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+            </h3>
             <div className="text-muted-foreground bg-muted/30 p-4 rounded-md border-l-4 border-muted/50 prose prose-sm dark:prose-invert max-w-none">
               <div dangerouslySetInnerHTML={{ __html: agenda.content || "<p class='italic opacity-50'>Empty agenda...</p>" }} />
             </div>

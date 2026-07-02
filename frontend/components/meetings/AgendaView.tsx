@@ -161,7 +161,9 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               {/* Agenda Card */}
               <div className="bg-card border border-border p-6 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
-                <h3 className="font-semibold text-lg text-primary">Ag-{agenda.agenda_serial || index + 1}</h3>
+                <h3 className="font-semibold text-lg text-primary">
+                  {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+                </h3>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => handleEditClick(agenda)}
@@ -269,7 +271,9 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                 className="bg-card border border-border p-3 rounded-md flex items-center gap-3 cursor-grab hover:border-primary/50 transition-colors group shadow-sm active:cursor-grabbing"
               >
                 <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="font-medium text-sm">Ag-{agenda.agenda_serial || index + 1}</span>
+                <span className="font-medium text-sm">
+                  {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+                </span>
                 <span className="text-xs text-muted-foreground truncate flex-1 opacity-60">
                   {agenda.content ? agenda.content.replace(/<[^>]*>?/gm, '').substring(0, 20) : '...'}...
                 </span>
