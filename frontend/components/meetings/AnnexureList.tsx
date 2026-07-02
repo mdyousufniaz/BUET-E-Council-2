@@ -167,7 +167,13 @@ export default function AnnexureList({ contentId, type }: AnnexureListProps) {
                 <File className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{annexure.file_name}</p>
+                {annexure.url ? (
+                  <a href={annexure.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline truncate block">
+                    {annexure.file_name}
+                  </a>
+                ) : (
+                  <p className="text-sm font-medium text-foreground truncate">{annexure.file_name}</p>
+                )}
               </div>
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {annexure.url && (

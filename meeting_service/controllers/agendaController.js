@@ -176,9 +176,11 @@ const getAnnexures = async (req, res, next) => {
         const annexures = await Promise.all(result.rows.map(async (annexure) => {
             if (annexure.file_path) {
                 try {
-                    annexure.url = await storageService.getFileUrl(annexure.file_path, 3600);
+                    // Since MinIO bucket is public and proxied via NGINX, we can directly link it!
+                    // Removing 'annexures/' prefix if file_path includes it since the bucket name is the root
+                    annexure.url = `/storage/${annexure.file_path}`;
                 } catch (err) {
-                    annexure.url = null; // if storage fails, skip throwing
+                    annexure.url = null;
                 }
             }
             return annexure;

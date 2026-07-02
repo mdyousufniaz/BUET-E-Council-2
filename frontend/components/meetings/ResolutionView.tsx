@@ -113,7 +113,9 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
           </div>
 
           {/* Annexure List placed underneath the resolution content */}
-          <AnnexureList contentId={agenda.id} type="resolution" />
+          {agenda.resolution && (
+            <AnnexureList contentId={agenda.id} type="resolution" />
+          )}
           
         </div>
       )))}
