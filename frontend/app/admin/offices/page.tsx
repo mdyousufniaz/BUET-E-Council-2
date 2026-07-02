@@ -5,9 +5,12 @@ import useSWR from "swr";
 import { fetcher } from "../../../lib/api";
 import api from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageOfficesPage() {
   const { data: response, error, mutate } = useSWR('/offices', fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -29,7 +32,7 @@ export default function ManageOfficesPage() {
       mutate();
     } catch (err) {
       console.error(err);
-      alert('Failed to reorder offices');
+      toast.error('Failed to reorder offices');
     }
   };
 
@@ -41,10 +44,10 @@ export default function ManageOfficesPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       mutate();
-      alert('CSV uploaded successfully!');
+      toast.success('CSV uploaded successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to upload CSV');
+      toast.error('Failed to upload CSV');
     }
   };
 
@@ -59,16 +62,17 @@ export default function ManageOfficesPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (office: any) => {
-    if (window.confirm("Are you sure you want to delete this office?")) {
+  const handleDelete = (office: any) => {
+    confirm("Delete Office", "Are you sure you want to delete this office?", async () => {
       try {
         await api.delete(`/offices/${office.id}`);
         mutate();
+        toast.success('Office deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete office');
+        toast.error('Failed to delete office');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -84,8 +88,9 @@ export default function ManageOfficesPage() {
       setEditingId(null);
       setNewOffice({ name_bangla: "", name_english: "" });
       mutate();
+      toast.success(isEditMode ? 'Office updated successfully' : 'Office created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save office');
+      toast.error(err.response?.data?.message || 'Failed to save office');
     }
   };
 
@@ -94,6 +99,7 @@ export default function ManageOfficesPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <ConfirmModal />
       <DataTable 
         columns={columns} 
         data={response.data || []} 

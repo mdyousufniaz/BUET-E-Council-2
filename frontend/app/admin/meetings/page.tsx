@@ -6,10 +6,13 @@ import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageMeetingsPage() {
   const router = useRouter();
   const { data: response, error, mutate } = useSWR('/meetings', fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -43,16 +46,17 @@ export default function ManageMeetingsPage() {
     router.push(`/admin/meetings/${meeting.id}?view=info`);
   };
 
-  const handleDelete = async (meeting: any) => {
-    if (window.confirm("Are you sure you want to delete this meeting?")) {
+  const handleDelete = (meeting: any) => {
+    confirm("Delete Meeting", "Are you sure you want to delete this meeting?", async () => {
       try {
         await api.delete(`/meetings/${meeting.id}`);
         mutate();
+        toast.success('Meeting deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete meeting');
+        toast.error('Failed to delete meeting');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -68,8 +72,9 @@ export default function ManageMeetingsPage() {
       setIsModalOpen(false);
       setNewMeeting({ title: "", meeting_date: "", type: "syndicate", status: "draft" });
       mutate();
+      toast.success('Meeting created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save meeting');
+      toast.error(err.response?.data?.message || 'Failed to save meeting');
     }
   };
 
@@ -78,6 +83,7 @@ export default function ManageMeetingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <ConfirmModal />
       <DataTable 
         columns={columns} 
         data={response.data || []} 

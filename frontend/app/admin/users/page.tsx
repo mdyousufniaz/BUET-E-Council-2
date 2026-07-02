@@ -5,9 +5,12 @@ import useSWR from "swr";
 import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageUsersPage() {
   const { data: response, error, mutate } = useSWR('/auth/users', fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -35,10 +38,10 @@ export default function ManageUsersPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       mutate();
-      alert('CSV uploaded successfully!');
+      toast.success('CSV uploaded successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to upload CSV');
+      toast.error('Failed to upload CSV');
     }
   };
 
@@ -59,16 +62,17 @@ export default function ManageUsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (user: any) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
+  const handleDelete = (user: any) => {
+    confirm("Delete User", "Are you sure you want to delete this user?", async () => {
       try {
         await api.delete(`/auth/users/${user.id}`);
         mutate();
+        toast.success('User deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete user');
+        toast.error('Failed to delete user');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -84,8 +88,9 @@ export default function ManageUsersPage() {
       setEditingId(null);
       setNewUser({ username: "", email: "", password: "", role: "member", member_type: "none" });
       mutate();
+      toast.success(isEditMode ? 'User updated successfully' : 'User created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save user');
+      toast.error(err.response?.data?.message || 'Failed to save user');
     }
   };
 
@@ -94,6 +99,7 @@ export default function ManageUsersPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <ConfirmModal />
       <DataTable 
         columns={columns} 
         data={response.data || []} 

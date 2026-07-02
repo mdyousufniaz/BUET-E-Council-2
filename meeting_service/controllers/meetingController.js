@@ -125,6 +125,44 @@ const addInvitees = async (req, res, next) => {
     }
 };
 
+const bulkFetchInvitees = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        
+        const meetingRes = await db.query('SELECT type FROM meetings WHERE id = $1', [id]);
+        if (meetingRes.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        
+        const meetingType = meetingRes.rows[0].type;
+        
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            const insertQuery = `
+                INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id)
+                SELECT m.name, m.email, m.designation, m.department_id, m.office_id, $1
+                FROM members m
+                WHERE m.member_type = $2
+                  AND NOT EXISTS (
+                      SELECT 1 FROM invitees i 
+                      WHERE i.meeting_id = $1 AND (i.email = m.email OR (i.name = m.name AND m.email IS NULL))
+                  )
+            `;
+            const result = await client.query(insertQuery, [id, meetingType]);
+            
+            await client.query('COMMIT');
+            res.status(201).json({ success: true, message: `Fetched and added ${result.rowCount} members.` });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
 const addPresentees = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -187,6 +225,7 @@ module.exports = {
     updateMeeting,
     deleteMeeting,
     addInvitees,
+    bulkFetchInvitees,
     addPresentees,
     generatePdf
 };

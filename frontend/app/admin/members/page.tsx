@@ -5,10 +5,13 @@ import useSWR from "swr";
 import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageMembersPage() {
   const [filter, setFilter] = useState("all");
   const { data: response, error, mutate } = useSWR(`/members${filter !== 'all' ? `?type=${filter}` : ''}`, fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -53,16 +56,17 @@ export default function ManageMembersPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (member: any) => {
-    if (window.confirm("Are you sure you want to delete this member?")) {
+  const handleDelete = (member: any) => {
+    confirm("Delete Member", "Are you sure you want to delete this member?", async () => {
       try {
         await api.delete(`/members/${member.id}`);
         mutate();
+        toast.success('Member deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete member');
+        toast.error('Failed to delete member');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -78,8 +82,9 @@ export default function ManageMembersPage() {
       setEditingId(null);
       setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic" });
       mutate();
+      toast.success(isEditMode ? 'Member updated successfully' : 'Member created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save member');
+      toast.error(err.response?.data?.message || 'Failed to save member');
     }
   };
 
@@ -91,9 +96,10 @@ export default function ManageMembersPage() {
       });
       const newOfficeId = res.data.data.id;
       setNewMember({ ...newMember, office_id: newOfficeId });
+      toast.success('Office added successfully');
       // Revalidate offices globally if SWR mutate was available, but it will sync eventually
     } catch (err: any) {
-      alert('Failed to add new office');
+      toast.error('Failed to add new office');
     }
   };
 
@@ -101,7 +107,7 @@ export default function ManageMembersPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      
+      <ConfirmModal />
       <div className="flex items-center space-x-4">
         <label className="text-sm font-medium">Filter by Type:</label>
         <select 

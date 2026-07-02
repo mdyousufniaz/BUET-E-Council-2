@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Save } from "lucide-react";
+import RichTextEditor from "../RichTextEditor";
 
 export default function DescriptionView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const [content, setContent] = useState("");
@@ -16,20 +17,13 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
       </div>
 
       <div className="flex-1 flex flex-col bg-card border border-border rounded-lg shadow-sm overflow-hidden relative">
-        {/* Toolbar Placeholder */}
-        <div className="bg-muted/50 border-b border-border sticky top-0 z-10 p-2 flex items-center gap-2">
-           <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider px-2">Plate Editor Toolbar Placeholder</span>
-        </div>
-        
-        {/* Canvas */}
-        <textarea 
-          className="flex-1 min-h-[60vh] p-8 bg-background text-foreground focus:outline-none resize-none prose dark:prose-invert max-w-none"
-          placeholder={`Start typing the ${type} here...`}
-          value={content}
-          onChange={(e) => {
-            setContent(e.target.value);
+        <RichTextEditor 
+          content={content}
+          onChange={(html) => {
+            setContent(html);
             setIsDirty(true);
           }}
+          className="p-8"
         />
 
         {/* Action Area */}

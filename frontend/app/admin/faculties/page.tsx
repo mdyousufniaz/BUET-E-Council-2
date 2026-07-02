@@ -5,9 +5,12 @@ import useSWR from "swr";
 import { fetcher } from "../../../lib/api";
 import api from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageFacultiesPage() {
   const { data: response, error, mutate } = useSWR('/faculties', fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -29,7 +32,7 @@ export default function ManageFacultiesPage() {
       mutate();
     } catch (err) {
       console.error(err);
-      alert('Failed to reorder faculties');
+      toast.error('Failed to reorder faculties');
     }
   };
 
@@ -41,10 +44,10 @@ export default function ManageFacultiesPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       mutate();
-      alert('CSV uploaded successfully!');
+      toast.success('CSV uploaded successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to upload CSV');
+      toast.error('Failed to upload CSV');
     }
   };
 
@@ -59,16 +62,17 @@ export default function ManageFacultiesPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (faculty: any) => {
-    if (window.confirm("Are you sure you want to delete this faculty?")) {
+  const handleDelete = (faculty: any) => {
+    confirm("Delete Faculty", "Are you sure you want to delete this faculty?", async () => {
       try {
         await api.delete(`/faculties/${faculty.id}`);
         mutate();
+        toast.success('Faculty deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete faculty');
+        toast.error('Failed to delete faculty');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -84,8 +88,9 @@ export default function ManageFacultiesPage() {
       setEditingId(null);
       setNewFaculty({ name_bangla: "", name_english: "" });
       mutate();
+      toast.success(isEditMode ? 'Faculty updated successfully' : 'Faculty created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save faculty');
+      toast.error(err.response?.data?.message || 'Failed to save faculty');
     }
   };
 
@@ -94,6 +99,7 @@ export default function ManageFacultiesPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <ConfirmModal />
       <DataTable 
         columns={columns} 
         data={response.data || []} 

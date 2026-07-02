@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileText, FileCheck, Users, Loader2 } from "lucide-react";
 import api from "../../lib/api";
+import { toast } from "sonner";
 
 export default function MaterialsView({ meeting }: { meeting: any }) {
   const [generating, setGenerating] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
       link.click();
       link.parentNode?.removeChild(link);
     } catch (err) {
-      alert(`Failed to generate ${type} PDF.`);
+      toast.error(`Failed to generate ${type} PDF.`);
     } finally {
       setGenerating(null);
     }

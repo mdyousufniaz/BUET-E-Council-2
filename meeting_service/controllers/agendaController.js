@@ -24,15 +24,15 @@ const getAgendams = async (req, res, next) => {
 
 const createAgendam = async (req, res, next) => {
     try {
-        const { meeting_id, agenda_serial, is_executed, execution_status } = req.body;
+        const { meeting_id, agenda_serial, content, is_executed, execution_status } = req.body;
         
         if (!meeting_id) {
             return next(new CustomError('meeting_id is required', 400));
         }
 
         const result = await db.query(
-            'INSERT INTO agenda (meeting_id, agenda_serial, is_executed, execution_status) VALUES ($1, $2, $3, $4) RETURNING *',
-            [meeting_id, agenda_serial, is_executed || 'no', execution_status]
+            'INSERT INTO agenda (meeting_id, agenda_serial, content, is_executed, execution_status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [meeting_id, agenda_serial, content || '', is_executed || 'no', execution_status]
         );
 
         res.status(201).json({ success: true, message: 'Agendam created', data: result.rows[0] });
@@ -44,15 +44,16 @@ const createAgendam = async (req, res, next) => {
 const updateAgendam = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { agenda_serial, is_executed, execution_status } = req.body;
+        const { agenda_serial, content, is_executed, execution_status } = req.body;
 
         const result = await db.query(
             `UPDATE agenda 
              SET agenda_serial = COALESCE($1, agenda_serial),
-                 is_executed = COALESCE($2, is_executed),
-                 execution_status = COALESCE($3, execution_status)
-             WHERE id = $4 RETURNING *`,
-            [agenda_serial, is_executed, execution_status, id]
+                 content = COALESCE($2, content),
+                 is_executed = COALESCE($3, is_executed),
+                 execution_status = COALESCE($4, execution_status)
+             WHERE id = $5 RETURNING *`,
+            [agenda_serial, content, is_executed, execution_status, id]
         );
 
         if (result.rows.length === 0) {

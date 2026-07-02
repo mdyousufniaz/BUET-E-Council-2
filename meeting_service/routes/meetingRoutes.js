@@ -13,6 +13,7 @@ router.put('/:id', meetingController.updateMeeting);
 router.delete('/:id', meetingController.deleteMeeting); // critical
 
 router.post('/:id/invitees', meetingController.addInvitees);
+router.post('/:id/invitees/bulk-fetch', meetingController.bulkFetchInvitees);
 router.post('/:id/presentees', meetingController.addPresentees);
 
 // Unified endpoint for generating PDFs

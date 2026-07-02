@@ -5,29 +5,51 @@ import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { Mail, Plus, Trash2, CheckCircle, Clock } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
+import { toast } from "sonner";
+import { useConfirm } from "../../hooks/useConfirm";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'custom'>('search');
+  const { confirm, ConfirmModal } = useConfirm();
   
   // This would fetch actual invitees for this meeting
   // For now we will mock it or leave it empty if the API is not fully set up for fetching invitees
   const { data: inviteesRes, mutate: mutateInvitees } = useSWR(`/meetings/${meeting.id}/invitees`, fetcher, { fallbackData: { data: [] } });
   const invitees = inviteesRes?.data || [];
 
-  const handleRemove = async (inviteeId: string) => {
-    if (window.confirm("Remove this invitee?")) {
+  const [isFetching, setIsFetching] = useState(false);
+
+  const handleRemove = (inviteeId: string) => {
+    confirm("Remove Invitee", "Are you sure you want to remove this invitee?", async () => {
       try {
         await api.delete(`/invitees/${inviteeId}`);
         mutateInvitees();
+        toast.success("Invitee removed successfully");
       } catch (err) {
-        alert("Failed to remove invitee");
+        toast.error("Failed to remove invitee");
       }
-    }
+    });
+  };
+
+  const handleBulkFetch = () => {
+    confirm("Fetch Members", `Are you sure you want to fetch all ${meeting.type} members into this meeting's invitee list?`, async () => {
+      setIsFetching(true);
+      try {
+        const res = await api.post(`/meetings/${meeting.id}/invitees/bulk-fetch`);
+        toast.success(res.data.message || "Members fetched successfully");
+        mutateInvitees();
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to fetch members");
+      } finally {
+        setIsFetching(false);
+      }
+    });
   };
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <ConfirmModal />
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold capitalize">{type}</h2>
         
@@ -36,6 +58,14 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
             Take Attendance
           </button>
           <div className="flex gap-2">
+            <button 
+              onClick={handleBulkFetch}
+              disabled={isFetching}
+              className="bg-accent text-accent-foreground border border-border px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:bg-accent/80 transition-opacity disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              {isFetching ? "Fetching..." : "Fetch From Members"}
+            </button>
             <button className="bg-secondary text-secondary-foreground px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:opacity-90 transition-opacity">
               <Mail className="w-4 h-4" />
               Send Agenda

@@ -114,6 +114,7 @@ CREATE TABLE agenda (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     -- 'vector(1536)' is standard for OpenAI embeddings. 
     -- Change 1536 to your specific model's dimension if different.
+    content TEXT,
     embedding vector (1536),
     resolution TEXT,
     resolution_embedding vector (1536),

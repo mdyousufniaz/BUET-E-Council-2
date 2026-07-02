@@ -3,6 +3,8 @@
 import { useState } from "react";
 import api from "../../lib/api";
 import SearchableSelect from "../SearchableSelect";
+import { toast } from "sonner";
+import { useConfirm } from "../../hooks/useConfirm";
 
 const typeOptions = [
   { value: "syndicate", label: "Syndicate" },
@@ -23,6 +25,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     type: meeting.type || "syndicate",
     status: meeting.status || "draft"
   });
+  const { confirm, ConfirmModal } = useConfirm();
 
   const [saving, setSaving] = useState(false);
 
@@ -36,16 +39,16 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
       };
       await api.put(`/meetings/${meeting.id}`, payload);
       mutate();
-      alert("Meeting info updated successfully.");
+      toast.success("Meeting info updated successfully.");
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update meeting info');
+      toast.error(err.response?.data?.message || 'Failed to update meeting info');
     } finally {
       setSaving(false);
     }
   };
 
-  const markCompleted = async () => {
-    if (window.confirm("Are you sure you want to mark this meeting as completed? This will lock appropriate fields.")) {
+  const markCompleted = () => {
+    confirm("Lock Meeting", "Are you sure you want to mark this meeting as completed? This will lock appropriate fields.", async () => {
       setFormData(prev => ({ ...prev, status: "locked" }));
       setSaving(true);
       try {
@@ -56,17 +59,18 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
         };
         await api.put(`/meetings/${meeting.id}`, payload);
         mutate();
-        alert("Meeting locked successfully.");
+        toast.success("Meeting locked successfully.");
       } catch (err: any) {
-        alert(err.response?.data?.message || 'Failed to lock meeting');
+        toast.error(err.response?.data?.message || 'Failed to lock meeting');
       } finally {
         setSaving(false);
       }
-    }
+    });
   };
 
   return (
     <div className="max-w-3xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <ConfirmModal />
       <h2 className="text-2xl font-bold mb-6">Meeting Info</h2>
       
       <div className="bg-card border border-border shadow-sm rounded-lg p-6">

@@ -6,9 +6,12 @@ import { fetcher } from "../../../lib/api";
 import api from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import { toast } from "sonner";
+import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageDepartmentsPage() {
   const { data: response, error, mutate } = useSWR('/departments', fetcher);
+  const { confirm, ConfirmModal } = useConfirm();
   const { data: facultyRes } = useSWR('/faculties', fetcher);
   
   const faculties = facultyRes?.data || [];
@@ -37,7 +40,7 @@ export default function ManageDepartmentsPage() {
       mutate();
     } catch (err) {
       console.error(err);
-      alert('Failed to reorder departments');
+      toast.error('Failed to reorder departments');
     }
   };
 
@@ -49,10 +52,10 @@ export default function ManageDepartmentsPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       mutate();
-      alert('CSV uploaded successfully!');
+      toast.success('CSV uploaded successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to upload CSV');
+      toast.error('Failed to upload CSV');
     }
   };
 
@@ -73,16 +76,17 @@ export default function ManageDepartmentsPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (department: any) => {
-    if (window.confirm("Are you sure you want to delete this department?")) {
+  const handleDelete = (department: any) => {
+    confirm("Delete Department", "Are you sure you want to delete this department?", async () => {
       try {
         await api.delete(`/departments/${department.id}`);
         mutate();
+        toast.success('Department deleted successfully');
       } catch (err) {
         console.error(err);
-        alert('Failed to delete department');
+        toast.error('Failed to delete department');
       }
-    }
+    });
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -98,8 +102,9 @@ export default function ManageDepartmentsPage() {
       setEditingId(null);
       setNewDepartment({ name_bangla: "", name_english: "", alias_bangla: "", alias_english: "", faculty_id: "" });
       mutate();
+      toast.success(isEditMode ? 'Department updated successfully' : 'Department created successfully');
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to save department');
+      toast.error(err.response?.data?.message || 'Failed to save department');
     }
   };
 
@@ -108,6 +113,7 @@ export default function ManageDepartmentsPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <ConfirmModal />
       <DataTable 
         columns={columns} 
         data={response.data || []} 
