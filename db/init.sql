@@ -549,4 +549,14 @@ VALUES (
         25,
         'বিভাগীয় প্রধান, তড়িৎ ও ইলেক্ট্রনিক কৌশল বিভাগ (ইইই)',
         'Department Head, Department of Electrical & Electronic Engineering (EEE)'
+    ),
+    (
+        26,
+        'উপাচার্য, বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়',
+        'Vice Chancellor, Bangladesh University of Engineering and Technology'
+    ),
+    (
+        27,
+        'উপ-উপাচার্য, বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়',
+        'Pro-Vice Chancellor, Bangladesh University of Engineering and Technology'
     );

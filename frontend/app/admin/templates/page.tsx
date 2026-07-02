@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 import { Plus } from "lucide-react";
 import RichTextEditor from "../../../components/RichTextEditor";
+import CustomSelect from "../../../components/CustomSelect";
 
 export default function ManageTemplatesPage() {
   const { data: response, error, mutate } = useSWR('/templates', fetcher);
@@ -23,6 +24,18 @@ export default function ManageTemplatesPage() {
     type: "agendam",
     visibility: "private"
   });
+
+  const typeOptions = [
+    { value: "agendam", label: "Agenda Item" },
+    { value: "resolution", label: "Resolution Item" },
+    { value: "description", label: "Meeting Description" },
+    { value: "conclusion", label: "Meeting Conclusion" }
+  ];
+
+  const visibilityOptions = [
+    { value: "private", label: "Private (Only Me)" },
+    { value: "public", label: "Public (Everyone)" }
+  ];
 
   const columns = [
     { key: "typeDisplay", label: "Template Type" },
@@ -139,27 +152,19 @@ export default function ManageTemplatesPage() {
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Template Type</label>
-                  <select 
+                  <CustomSelect 
+                    options={typeOptions}
                     value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring"
-                  >
-                    <option value="agendam">Agenda Item</option>
-                    <option value="resolution">Resolution Item</option>
-                    <option value="description">Meeting Description</option>
-                    <option value="conclusion">Meeting Conclusion</option>
-                  </select>
+                    onChange={(value) => setFormData({...formData, type: value})}
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Visibility</label>
-                  <select 
+                  <CustomSelect 
+                    options={visibilityOptions}
                     value={formData.visibility}
-                    onChange={(e) => setFormData({...formData, visibility: e.target.value})}
-                    className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring"
-                  >
-                    <option value="private">Private (Only Me)</option>
-                    <option value="public">Public (Everyone)</option>
-                  </select>
+                    onChange={(value) => setFormData({...formData, visibility: value})}
+                  />
                 </div>
               </div>
 

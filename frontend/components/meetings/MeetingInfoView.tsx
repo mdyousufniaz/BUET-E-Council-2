@@ -13,8 +13,7 @@ const typeOptions = [
 
 const statusOptions = [
   { value: "draft", label: "Draft" },
-  { value: "ongoing", label: "Ongoing" },
-  { value: "past", label: "Past" }
+  { value: "ongoing", label: "Ongoing" }
 ];
 
 export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mutate: any }) {
@@ -28,6 +27,9 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const { confirm, ConfirmModal } = useConfirm();
 
   const [saving, setSaving] = useState(false);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -47,25 +49,24 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     }
   };
 
-  const markCompleted = () => {
-    confirm("Mark Meeting as Past", "Are you sure you want to mark this meeting as past? This will lock appropriate fields.", async () => {
+  const handleCompleteMeeting = async () => {
+    if (confirmTitle !== formData.title) {
+      toast.error("Meeting Serial Number does not match.");
+      return;
+    }
+    
+    setIsCompleting(true);
+    try {
+      await api.post(`/meetings/${meeting.id}/complete`, { title: confirmTitle });
+      mutate();
+      toast.success("Meeting marked as completed successfully.");
+      setIsCompleteModalOpen(false);
       setFormData(prev => ({ ...prev, status: "past" }));
-      setSaving(true);
-      try {
-        const payload = {
-          ...formData,
-          status: "past",
-          meeting_date: new Date(formData.meeting_date).toISOString()
-        };
-        await api.put(`/meetings/${meeting.id}`, payload);
-        mutate();
-        toast.success("Meeting marked as past successfully.");
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Failed to lock meeting');
-      } finally {
-        setSaving(false);
-      }
-    });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to complete meeting');
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -122,11 +123,17 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Meeting Status</label>
-            <SearchableSelect 
-              options={statusOptions}
-              value={formData.status}
-              onChange={(val) => setFormData({...formData, status: val})}
-            />
+            {formData.status === 'past' ? (
+              <div className="w-full px-3 py-2 bg-input/10 border border-input rounded-md text-sm text-muted-foreground cursor-not-allowed">
+                Past (Completed)
+              </div>
+            ) : (
+              <SearchableSelect 
+                options={statusOptions}
+                value={formData.status}
+                onChange={(val) => setFormData({...formData, status: val})}
+              />
+            )}
           </div>
 
           <div className="md:col-span-2 pt-2">
@@ -149,13 +156,58 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                 Marking a meeting as completed will lock its contents and transition its state to finalized.
               </p>
               <button 
-                onClick={markCompleted}
+                onClick={() => {
+                  setConfirmTitle("");
+                  setIsCompleteModalOpen(true);
+                }}
                 className="bg-secondary text-secondary-foreground border border-secondary font-semibold hover:bg-secondary/80 px-6 py-2 rounded-md transition-colors"
               >
                 Mark Meeting Completed
               </button>
             </div>
           </>
+        )}
+
+        {/* Custom Confirmation Modal for Completion */}
+        {isCompleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+            <div className="bg-card w-full max-w-md rounded-lg shadow-xl border border-border flex flex-col p-6 animate-in zoom-in-95 duration-200">
+              <h2 className="text-xl font-bold mb-2">Confirm Meeting Completion</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                This action is irreversible. The meeting status will be set to Past, and present members will be moved to the final Presentees list.
+              </p>
+              
+              <div className="space-y-2 mb-6">
+                <label className="text-sm font-medium text-destructive">
+                  Type <span className="font-bold">"{formData.title}"</span> to confirm:
+                </label>
+                <input 
+                  type="text" 
+                  value={confirmTitle}
+                  onChange={(e) => setConfirmTitle(e.target.value)}
+                  placeholder="Meeting Serial Number"
+                  className="w-full px-3 py-2 bg-input/20 border border-destructive/50 rounded-md focus:ring-1 focus:ring-destructive focus:border-destructive text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button 
+                  onClick={() => setIsCompleteModalOpen(false)}
+                  disabled={isCompleting}
+                  className="px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground rounded-md transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleCompleteMeeting}
+                  disabled={confirmTitle !== formData.title || isCompleting}
+                  className="px-4 py-2 bg-destructive text-destructive-foreground hover:bg-destructive/90 text-sm font-medium rounded-md shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {isCompleting ? "Processing..." : "Complete Meeting"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

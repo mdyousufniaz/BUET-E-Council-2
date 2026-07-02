@@ -79,14 +79,33 @@ const updateAgendam = async (req, res, next) => {
 const deleteAgendam = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const result = await db.query('DELETE FROM agenda WHERE id = $1 RETURNING *', [id]);
-
-        if (result.rows.length === 0) {
+        const findAgenda = await db.query('SELECT meeting_id FROM agenda WHERE id = $1', [id]);
+        
+        if (findAgenda.rows.length === 0) {
             return next(new CustomError('Agendam not found', 404));
         }
+        
+        const meeting_id = findAgenda.rows[0].meeting_id;
 
+        await db.query('BEGIN');
+        await db.query('DELETE FROM agenda WHERE id = $1', [id]);
+
+        // Re-serialize agendas to prevent gaps
+        const mainAgendas = await db.query('SELECT id FROM agenda WHERE meeting_id = $1 AND is_suppli = false ORDER BY agenda_serial ASC, created_at ASC', [meeting_id]);
+        for (let i = 0; i < mainAgendas.rows.length; i++) {
+            await db.query('UPDATE agenda SET agenda_serial = $1 WHERE id = $2', [i + 1, mainAgendas.rows[i].id]);
+        }
+        
+        const suppliAgendas = await db.query('SELECT id FROM agenda WHERE meeting_id = $1 AND is_suppli = true ORDER BY agenda_serial ASC, created_at ASC', [meeting_id]);
+        let nextSerial = mainAgendas.rows.length + 1;
+        for (let i = 0; i < suppliAgendas.rows.length; i++) {
+            await db.query('UPDATE agenda SET agenda_serial = $1 WHERE id = $2', [nextSerial + i, suppliAgendas.rows[i].id]);
+        }
+
+        await db.query('COMMIT');
         res.status(200).json({ success: true, message: 'Agendam deleted' });
     } catch (error) {
+        await db.query('ROLLBACK');
         next(error);
     }
 };

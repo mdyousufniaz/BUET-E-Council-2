@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useSearchParams, useParams } from "next/navigation";
 import { FileText, Users, FileCheck, Info, FileBarChart, LayoutList, Layers } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "../../../../lib/api";
 
 const navigation = [
   { name: 'Meeting Info', view: 'info', icon: Info },
@@ -24,6 +26,9 @@ export default function MeetingWorkspaceLayout({
   const searchParams = useSearchParams();
   const currentView = searchParams.get('view') || 'info';
 
+  const { data: response } = useSWR(`/meetings/${params.id}`, fetcher);
+  const meeting = response?.data;
+
   return (
     <div className="flex flex-1 w-full h-full overflow-hidden">
       {/* Left Sidebar Navigation specifically for Meeting Workspace */}
@@ -37,6 +42,13 @@ export default function MeetingWorkspaceLayout({
           {navigation.map((item) => {
             const isActive = currentView === item.view;
             const Icon = item.icon;
+            
+            // Dynamically change Invitees to Presentees for past meetings
+            let displayName = item.name;
+            if (item.view === 'invitees' && meeting?.status === 'past') {
+              displayName = 'Presentees';
+            }
+
             return (
               <Link
                 key={item.name}
@@ -47,7 +59,7 @@ export default function MeetingWorkspaceLayout({
                   }`}
               >
                 <Icon className="w-4 h-4" />
-                {item.name}
+                {displayName}
               </Link>
             );
           })}

@@ -103,6 +103,48 @@ const deleteMeeting = async (req, res, next) => {
     }
 };
 
+const completeMeeting = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { title } = req.body;
+        
+        // Verify meeting
+        const check = await db.query('SELECT title, status FROM meetings WHERE id = $1', [id]);
+        if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        if (check.rows[0].status === 'past') return next(new CustomError('Meeting is already marked as past', 400));
+        
+        if (check.rows[0].title !== title) {
+            return next(new CustomError('Meeting serial number does not match', 400));
+        }
+
+        await db.query('BEGIN');
+        
+        // Update meeting status
+        await db.query('UPDATE meetings SET status = $1 WHERE id = $2', ['past', id]);
+        
+        // Get present invitees
+        const invitees = await db.query('SELECT name, designation, department_id, office_id FROM invitees WHERE meeting_id = $1 AND is_present = true', [id]);
+        
+        // Insert into presentees
+        for (const invitee of invitees.rows) {
+            await db.query(
+                'INSERT INTO presentees (meeting_id, name, designation, department_id, office_id) VALUES ($1, $2, $3, $4, $5)',
+                [id, invitee.name, invitee.designation, invitee.department_id, invitee.office_id]
+            );
+        }
+        
+        // Delete ALL invitees for this meeting
+        await db.query('DELETE FROM invitees WHERE meeting_id = $1', [id]);
+        
+        await db.query('COMMIT');
+        
+        res.status(200).json({ success: true, message: 'Meeting marked as complete' });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        next(error);
+    }
+};
+
 const addInvitees = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -303,5 +345,6 @@ module.exports = {
     removeInvitee,
     addPresentees,
     saveAttendance,
-    generatePdf
+    generatePdf,
+    completeMeeting
 };
