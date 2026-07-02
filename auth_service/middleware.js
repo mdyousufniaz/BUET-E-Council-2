@@ -49,4 +49,12 @@ const requireAuth = async (req, res, next) => {
     }
 };
 
-module.exports = { requireAuth };
+const requireAdminOrModerator = (req, res, next) => {
+    if (req.user && (req.user.role === 'admin' || req.user.role === 'moderator')) {
+        next();
+    } else {
+        return res.status(403).json({ success: false, message: 'Forbidden. Admin or moderator access required.' });
+    }
+};
+
+module.exports = { requireAuth, requireAdminOrModerator };

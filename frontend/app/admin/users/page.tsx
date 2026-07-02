@@ -20,7 +20,8 @@ export default function ManageUsersPage() {
     email: "",
     password: "",
     role: "member",
-    member_type: "none"
+    member_type: "none",
+    status: "active"
   });
 
   const columns = [
@@ -57,7 +58,8 @@ export default function ManageUsersPage() {
       email: user.email || "",
       password: "", // Usually blank out password on edit
       role: user.role || "member",
-      member_type: user.member_type || "none"
+      member_type: user.member_type || "none",
+      status: user.status || "active"
     });
     setIsModalOpen(true);
   };
@@ -86,7 +88,7 @@ export default function ManageUsersPage() {
       setIsModalOpen(false);
       setIsEditMode(false);
       setEditingId(null);
-      setNewUser({ username: "", email: "", password: "", role: "member", member_type: "none" });
+      setNewUser({ username: "", email: "", password: "", role: "member", member_type: "none", status: "active" });
       mutate();
       toast.success(isEditMode ? 'User updated successfully' : 'User created successfully');
     } catch (err: any) {
@@ -109,7 +111,7 @@ export default function ManageUsersPage() {
         onAdd={() => {
           setIsEditMode(false);
           setEditingId(null);
-          setNewUser({ username: "", email: "", password: "", role: "member", member_type: "none" });
+          setNewUser({ username: "", email: "", password: "", role: "member", member_type: "none", status: "active" });
           setIsModalOpen(true);
         }}
         onEdit={handleEdit}
@@ -160,6 +162,17 @@ export default function ManageUsersPage() {
                     ]}
                     value={newUser.member_type}
                     onChange={(val) => setNewUser({...newUser, member_type: val})}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Status</label>
+                  <SearchableSelect 
+                    options={[
+                      { value: "active", label: "Active" },
+                      { value: "inactive", label: "Inactive" }
+                    ]}
+                    value={newUser.status}
+                    onChange={(val) => setNewUser({...newUser, status: val})}
                   />
                 </div>
               </div>

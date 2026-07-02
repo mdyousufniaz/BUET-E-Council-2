@@ -1,10 +1,30 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
+import useSWR from "swr";
+import { fetcher } from "../lib/api";
+import { useEffect } from "react";
 
 export default function AdminLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  
+  const { data: response, error } = useSWR('/auth/me', fetcher);
+  
+  useEffect(() => {
+    if (response?.data?.role === 'member') {
+      router.push('/');
+    }
+  }, [response, router]);
+
+  if (!response) {
+    return <div className="flex flex-1 items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  if (response.data?.role === 'member') {
+    return null; // Avoid flashing the layout before redirect
+  }
   
   // Check if we are inside a specific meeting's workspace
   // Matches /admin/meetings/uuid or any other ID, but NOT /admin/meetings directly.

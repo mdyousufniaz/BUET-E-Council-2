@@ -6,7 +6,7 @@ const csv = require('csv-parser');
 const { Parser } = require('json2csv');
 const { Readable } = require('stream');
 const db = require('./db');
-const { requireAuth } = require('./middleware');
+const { requireAuth, requireAdminOrModerator } = require('./middleware');
 const { getDeviceInfo } = require('./utils');
 
 const router = express.Router();
@@ -382,7 +382,7 @@ router.get('/secure-test', requireAuth, (req, res) => {
 });
 
 // 9. GET /users
-router.get('/users', requireAuth, async (req, res) => {
+router.get('/users', requireAuth, requireAdminOrModerator, async (req, res) => {
     try {
         const result = await db.query('SELECT id, username, email, role, member_type, status, created_at FROM users ORDER BY created_at DESC');
         res.status(200).json({ success: true, data: result.rows });
@@ -392,25 +392,50 @@ router.get('/users', requireAuth, async (req, res) => {
     }
 });
 
-// 10. PUT /users/:id/role
-router.put('/users/:id/role', requireAuth, async (req, res) => {
+// 10. PUT /users/:id
+router.put('/users/:id', requireAuth, requireAdminOrModerator, async (req, res) => {
     try {
         const { id } = req.params;
-        const { role } = req.body;
-        if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
+        const { username, email, password, role, member_type, status } = req.body;
+        
+        let updateQueries = [];
+        let queryParams = [];
+        let paramIndex = 1;
 
-        const result = await db.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, username, role', [role, id]);
+        if (username) { updateQueries.push(`username = $${paramIndex++}`); queryParams.push(username); }
+        if (email) { updateQueries.push(`email = $${paramIndex++}`); queryParams.push(email); }
+        if (role) { updateQueries.push(`role = $${paramIndex++}`); queryParams.push(role); }
+        if (member_type) { updateQueries.push(`member_type = $${paramIndex++}`); queryParams.push(member_type); }
+        if (status) { updateQueries.push(`status = $${paramIndex++}`); queryParams.push(status); }
+        
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+            updateQueries.push(`password = $${paramIndex++}`);
+            queryParams.push(hashedPassword);
+        }
+
+        if (updateQueries.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nothing to update' });
+        }
+
+        queryParams.push(id);
+        const result = await db.query(
+            `UPDATE users SET ${updateQueries.join(', ')} WHERE id = $${paramIndex} RETURNING id, username, role, status`,
+            queryParams
+        );
+
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
         
-        res.status(200).json({ success: true, message: 'Role updated successfully', data: result.rows[0] });
+        res.status(200).json({ success: true, message: 'User updated successfully', data: result.rows[0] });
     } catch (err) {
-        console.error('Update role error:', err);
+        console.error('Update user error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
 
 // 11. POST /upload-csv (users)
-router.post('/upload-csv', requireAuth, upload.single('file'), async (req, res) => {
+router.post('/upload-csv', requireAuth, requireAdminOrModerator, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
