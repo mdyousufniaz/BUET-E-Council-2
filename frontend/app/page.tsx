@@ -3,15 +3,27 @@
 import { useState } from "react";
 import Header from "../components/Header";
 import MeetingTable from "../components/MeetingTable";
+import useSWR from "swr";
+import { fetcher } from "../lib/api";
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'academic' | 'syndicate'>('academic');
 
-  // Dummy data
-  const meetings = [
-    { id: "1", serial: 1, title: `1st ${activeTab === 'academic' ? 'Academic' : 'Syndicate'} Meeting`, date: "Oct 12, 2026" },
-    { id: "2", serial: 2, title: `2nd ${activeTab === 'academic' ? 'Academic' : 'Syndicate'} Meeting`, date: "Nov 15, 2026" },
-  ];
+  // Fetch real data
+  const { data: response, error } = useSWR('/meetings', fetcher);
+  
+  const allMeetings = response?.data || [];
+  
+  // Filter by type
+  const meetings = allMeetings
+    .filter((m: any) => m.type === activeTab)
+    .sort((a: any, b: any) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
+    .map((m: any, idx: number) => ({
+      id: m.id,
+      serial: m.title || idx + 1, // 'title' in DB holds the serial like "253"
+      title: m.meeting_title || `${m.title} ${m.type} Meeting`,
+      date: new Date(m.meeting_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    }));
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

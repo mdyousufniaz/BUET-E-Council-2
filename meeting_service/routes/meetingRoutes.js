@@ -12,8 +12,9 @@ router.use(authMiddleware);
 router.use(checkMeetingLock);
 
 router.get('/', meetingController.getMeetings);
-router.get('/:id', meetingController.getMeetingById);
 router.post('/', meetingController.createMeeting);
+router.post('/bulk-import', meetingController.bulkImportMeeting);
+router.get('/:id', meetingController.getMeetingById);
 router.put('/:id', meetingController.updateMeeting);
 router.delete('/:id', meetingController.deleteMeeting); // critical
 router.post('/:id/complete', meetingController.completeMeeting);

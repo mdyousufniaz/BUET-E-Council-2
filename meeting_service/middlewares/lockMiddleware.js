@@ -14,7 +14,7 @@ const checkMeetingLock = async (req, res, next) => {
         let potentialId = pathParts[0];
 
         // Route: /api/meetings
-        if (req.baseUrl.includes('/meetings') && potentialId && potentialId !== 'materials') {
+        if (req.baseUrl.includes('/meetings') && potentialId && potentialId !== 'materials' && potentialId !== 'bulk-import') {
             meeting_id = potentialId;
         } 
         // Route: /api/agendas

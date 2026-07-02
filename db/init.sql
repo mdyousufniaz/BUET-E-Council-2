@@ -59,7 +59,7 @@ CREATE TABLE faculties (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     serial INTEGER,
     name_bangla VARCHAR(255) NOT NULL UNIQUE,
-    name_english VARCHAR(255) NOT NULL UNIQUE,
+    name_english VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -67,7 +67,7 @@ CREATE TABLE offices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     serial INTEGER,
     name_bangla VARCHAR(255) NOT NULL UNIQUE,
-    name_english VARCHAR(255) NOT NULL UNIQUE,
+    name_english VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -75,9 +75,9 @@ CREATE TABLE departments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     serial INTEGER,
     name_bangla VARCHAR(255) NOT NULL UNIQUE,
-    name_english VARCHAR(255) NOT NULL UNIQUE,
-    alias_bangla VARCHAR(255) NOT NULL UNIQUE,
-    alias_english VARCHAR(255) NOT NULL UNIQUE,
+    name_english VARCHAR(255),
+    alias_bangla VARCHAR(255),
+    alias_english VARCHAR(255),
     faculty_id UUID REFERENCES faculties (id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -101,8 +101,10 @@ CREATE TABLE meetings (
     title VARCHAR(255) NOT NULL,
     meeting_title VARCHAR(255),
     description TEXT,
+    president VARCHAR(255),
     conclusion TEXT,
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    is_locked BOOLEAN DEFAULT FALSE,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),
     agenda_pdf_link VARCHAR(255),
@@ -156,7 +158,7 @@ CREATE TABLE invitees (
 -- Presentees Table (Linking table for attendance)
 CREATE TABLE presentees (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
     designation VARCHAR(255),
     department_id UUID REFERENCES departments (id) ON DELETE SET NULL,
     office_id UUID REFERENCES offices (id) ON DELETE SET NULL,

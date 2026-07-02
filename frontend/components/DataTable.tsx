@@ -20,6 +20,7 @@ interface DataTableProps {
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
   onFetchApi?: () => void;
+  customActions?: React.ReactNode;
 }
 
 export default function DataTable({ 
@@ -32,7 +33,8 @@ export default function DataTable({
   onAdd,
   onEdit,
   onDelete,
-  onFetchApi
+  onFetchApi,
+  customActions
 }: DataTableProps) {
   const [data, setData] = useState(initialData);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -122,6 +124,7 @@ export default function DataTable({
           {title && <h2 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h2>}
           
           <div className="flex space-x-2">
+            {customActions}
             {onDownloadCsv && (
               <button onClick={onDownloadCsv} className="flex items-center bg-accent text-accent-foreground px-4 py-2 rounded-md hover:opacity-90 font-medium text-sm transition-opacity shadow-sm">
                 <Download className="w-4 h-4 mr-2" />

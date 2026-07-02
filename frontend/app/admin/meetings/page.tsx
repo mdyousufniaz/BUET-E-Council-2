@@ -8,6 +8,8 @@ import SearchableSelect from "../../../components/SearchableSelect";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
+import JsonImportDialog from "../../../components/meetings/JsonImportDialog";
+import { FileJson } from "lucide-react";
 
 export default function ManageMeetingsPage() {
   const router = useRouter();
@@ -15,6 +17,7 @@ export default function ManageMeetingsPage() {
   const { confirm, ConfirmModal } = useConfirm();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
 
   const [newMeeting, setNewMeeting] = useState({
     title: "",
@@ -94,7 +97,26 @@ export default function ManageMeetingsPage() {
         }}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        customActions={
+          <button
+            onClick={() => setIsJsonModalOpen(true)}
+            className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:bg-secondary/80 transition-colors text-sm font-medium"
+          >
+            <FileJson className="w-4 h-4" />
+            + Create Meeting with JSON
+          </button>
+        }
       />
+
+      {isJsonModalOpen && (
+        <JsonImportDialog 
+          onClose={() => setIsJsonModalOpen(false)}
+          onImportSuccess={() => {
+            setIsJsonModalOpen(false);
+            mutate();
+          }}
+        />
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
