@@ -1,6 +1,28 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Override prose typography variables to match our active theme colors */
+.prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+
 @theme {
   --font-sans: "Inter", Arial, Helvetica, sans-serif;
   --font-mono: var(--font-geist-mono);
@@ -81,42 +103,40 @@
   --radius: 0.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #151010;
-    --foreground: #ede4e0;
-    --card: #1e1616;
-    --card-foreground: #ede4e0;
-    --popover: #1e1616;
-    --popover-foreground: #ede4e0;
+.dark {
+  --background: #151010;
+  --foreground: #ede4e0;
+  --card: #1e1616;
+  --card-foreground: #ede4e0;
+  --popover: #1e1616;
+  --popover-foreground: #ede4e0;
 
-    --primary: #c45c5c;
-    --primary-foreground: #150808;
+  --primary: #c45c5c;
+  --primary-foreground: #150808;
 
-    --secondary: #3d2222;
-    --secondary-foreground: #f5d8d8;
+  --secondary: #3d2222;
+  --secondary-foreground: #f5d8d8;
 
-    --muted: #2a1e1e;
-    --muted-foreground: #a08888;
+  --muted: #2a1e1e;
+  --muted-foreground: #a08888;
 
-    --accent: #322020;
-    --accent-foreground: #ede4e0;
+  --accent: #322020;
+  --accent-foreground: #ede4e0;
 
-    --destructive: #991b1b;
-    --destructive-foreground: #fef2f2;
+  --destructive: #991b1b;
+  --destructive-foreground: #fef2f2;
 
-    --border: #3a2828;
-    --input: #3a2828;
-    --ring: #c45c5c;
+  --border: #3a2828;
+  --input: #3a2828;
+  --ring: #c45c5c;
 
-    --sidebar-background: #181111;
-    --sidebar-foreground: #d8c8c4;
-    --sidebar-primary: #994040;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #2a1e1e;
-    --sidebar-accent-foreground: #f5d8d8;
-    --sidebar-border: #322020;
-  }
+  --sidebar-background: #181111;
+  --sidebar-foreground: #d8c8c4;
+  --sidebar-primary: #994040;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2a1e1e;
+  --sidebar-accent-foreground: #f5d8d8;
+  --sidebar-border: #322020;
 }
 
 html {

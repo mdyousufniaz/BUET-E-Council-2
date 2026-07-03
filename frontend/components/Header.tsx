@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import UserDropdown from './UserDropdown';
+import ThemeToggle from './ThemeToggle';
 
 export default function Header() {
   return (
@@ -11,6 +12,7 @@ export default function Header() {
           </span>
         </Link>
         <div className="flex items-center space-x-4">
+          <ThemeToggle />
           <UserDropdown />
         </div>
       </div>
