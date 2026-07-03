@@ -524,6 +524,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                 <label className="text-xs font-medium">Designation</label>
                 <SearchableSelect 
                   options={[
+                    { value: "", label: "None" },
                     { value: "অধ্যাপক", label: "অধ্যাপক" },
                     { value: "সহযোগী অধ্যাপক", label: "সহযোগী অধ্যাপক" },
                   ]}
@@ -536,7 +537,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
               <div className="space-y-1">
                 <label className="text-xs font-medium">Department</label>
                 <SearchableSelect
-                  options={[{ value: "", label: "None" }, ...departments.map((d: any) => ({ value: d.id, label: d.name_english || d.name_bangla }))]}
+                  options={[{ value: "", label: "None" }, ...departments.map((d: any) => ({ value: d.id, label: d.name_bangla }))]}
                   value={customForm.department_id || ''}
                   onChange={(val) => setCustomForm(prev => ({ ...prev, department_id: val }))}
                   placeholder="Select Department..."
@@ -606,6 +607,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                   <label className="text-xs font-medium">Designation</label>
                   <SearchableSelect 
                     options={[
+                      { value: "", label: "None" },
                       { value: "অধ্যাপক", label: "অধ্যাপক" },
                       { value: "সহযোগী অধ্যাপক", label: "সহযোগী অধ্যাপক" },
                     ]}
@@ -618,7 +620,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
               <div className="space-y-1">
                 <label className="text-xs font-medium">Department</label>
                 <SearchableSelect
-                  options={[{ value: "", label: "None" }, ...departments.map((d: any) => ({ value: d.id, label: d.name_english || d.name_bangla }))]}
+                  options={[{ value: "", label: "None" }, ...departments.map((d: any) => ({ value: d.id, label: d.name_bangla }))]}
                   value={editForm.department_id || ''}
                   onChange={(val) => setEditForm(prev => ({ ...prev, department_id: val }))}
                   placeholder="Select Department..."

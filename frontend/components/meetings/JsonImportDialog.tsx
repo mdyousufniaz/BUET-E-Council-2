@@ -237,7 +237,7 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
                         <div className="flex-1 font-medium">{dept}</div>
                         <div className="flex-1">
                           <SearchableSelect
-                            options={departments.map((d: any) => ({ value: d.id, label: d.name_english || d.name_bangla }))}
+                            options={departments.map((d: any) => ({ value: d.id, label: d.name_bangla }))}
                             value={deptMapping[dept] || ""}
                             onChange={(val) => {
                               setDeptMapping(prev => ({ ...prev, [dept]: val }));
@@ -280,7 +280,7 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
                         <div className="flex-1 font-medium">{office}</div>
                         <div className="flex-1">
                           <SearchableSelect
-                            options={offices.map((o: any) => ({ value: o.id, label: o.name_english || o.name_bangla }))}
+                            options={offices.map((o: any) => ({ value: o.id, label: o.name_bangla }))}
                             value={officeMapping[office] || ""}
                             onChange={(val) => {
                               setOfficeMapping(prev => ({ ...prev, [office]: val }));

@@ -30,7 +30,7 @@ export default function ManageMembersPage() {
   const { data: deptRes } = useSWR('/departments', fetcher);
   const { data: officeRes } = useSWR('/offices', fetcher);
 
-  const departments = [{ value: "", label: "None" }, ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_english })) || [])];
+  const departments = [{ value: "", label: "None" }, ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_bangla })) || [])];
   const offices = [{ value: "", label: "None" }, ...(officeRes?.data?.map((o: any) => ({ value: o.id, label: o.name_bangla })) || [])];
 
   const columns = [
@@ -176,6 +176,7 @@ export default function ManageMembersPage() {
                   <label className="text-xs font-medium">Designation</label>
                   <SearchableSelect
                     options={[
+                      { value: "", label: "None" },
                       { value: "অধ্যাপক", label: "অধ্যাপক" },
                       { value: "সহযোগী অধ্যাপক", label: "সহযোগী অধ্যাপক" },
                     ]}
