@@ -43,85 +43,132 @@
 }
 
 :root {
-  --background: #fdfaf6;
-  --foreground: #2d2420;
+  /* ── BUET Maroon Light Theme ── */
+  --background: #faf7f5;
+  --foreground: #1c1017;
   --card: #ffffff;
-  --card-foreground: #2d2420;
+  --card-foreground: #1c1017;
   --popover: #ffffff;
-  --popover-foreground: #2d2420;
-  
-  --primary: hsl(25, 20%, 35%); /* grounded taupe/brown */
-  --primary-foreground: #fcfcfc;
-  
-  --secondary: hsl(25, 80%, 75%); /* warm peach */
-  --secondary-foreground: #3d2b1f;
-  
-  --muted: #f3efea;
-  --muted-foreground: #786a60;
-  
-  --accent: #f7e8dc;
-  --accent-foreground: #3d2b1f;
-  
-  --destructive: #dc2626;
-  --destructive-foreground: #fcfcfc;
-  
-  --border: #e6dfd7;
-  --input: #e6dfd7;
-  --ring: hsl(25, 20%, 35%);
-  
-  --sidebar-background: #f9f5f0;
-  --sidebar-foreground: #4a3b32;
-  --sidebar-primary: hsl(25, 20%, 35%);
+  --popover-foreground: #1c1017;
+
+  --primary: #800000; /* BUET Maroon */
+  --primary-foreground: #fff5f5;
+
+  --secondary: #f5e6e6; /* soft rose tint */
+  --secondary-foreground: #5c1a1a;
+
+  --muted: #f2edeb;
+  --muted-foreground: #6b5c58;
+
+  --accent: #fceaea; /* warm blush */
+  --accent-foreground: #4a1212;
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #fef2f2;
+
+  --border: #e8ddd9;
+  --input: #e0d4cf;
+  --ring: #800000;
+
+  --sidebar-background: #f6f0ed;
+  --sidebar-foreground: #3d2828;
+  --sidebar-primary: #800000;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0e6dc;
-  --sidebar-accent-foreground: #2d2420;
-  --sidebar-border: #e6dfd7;
+  --sidebar-accent: #f0dfdb;
+  --sidebar-accent-foreground: #1c1017;
+  --sidebar-border: #e0d0ca;
 
   --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #1a1715;
-    --foreground: #e6dfd7;
-    --card: #241f1c;
-    --card-foreground: #e6dfd7;
-    --popover: #241f1c;
-    --popover-foreground: #e6dfd7;
-    
-    --primary: hsl(25, 20%, 65%);
-    --primary-foreground: #1a1715;
-    
-    --secondary: hsl(25, 50%, 40%);
-    --secondary-foreground: #fcfcfc;
-    
-    --muted: #2d2724;
-    --muted-foreground: #9a8c82;
-    
-    --accent: #332b27;
-    --accent-foreground: #e6dfd7;
-    
-    --destructive: #7f1d1d;
-    --destructive-foreground: #fcfcfc;
-    
-    --border: #3d332d;
-    --input: #3d332d;
-    --ring: hsl(25, 20%, 65%);
-    
-    --sidebar-background: #1c1917;
-    --sidebar-foreground: #d1c7bd;
-    --sidebar-primary: hsl(25, 20%, 45%);
+    --background: #151010;
+    --foreground: #ede4e0;
+    --card: #1e1616;
+    --card-foreground: #ede4e0;
+    --popover: #1e1616;
+    --popover-foreground: #ede4e0;
+
+    --primary: #c45c5c;
+    --primary-foreground: #150808;
+
+    --secondary: #3d2222;
+    --secondary-foreground: #f5d8d8;
+
+    --muted: #2a1e1e;
+    --muted-foreground: #a08888;
+
+    --accent: #322020;
+    --accent-foreground: #ede4e0;
+
+    --destructive: #991b1b;
+    --destructive-foreground: #fef2f2;
+
+    --border: #3a2828;
+    --input: #3a2828;
+    --ring: #c45c5c;
+
+    --sidebar-background: #181111;
+    --sidebar-foreground: #d8c8c4;
+    --sidebar-primary: #994040;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #2d2724;
-    --sidebar-accent-foreground: #fcfcfc;
-    --sidebar-border: #332b27;
+    --sidebar-accent: #2a1e1e;
+    --sidebar-accent-foreground: #f5d8d8;
+    --sidebar-border: #322020;
   }
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: #80000022;
+  color: #4a0000;
+}
+
+/* ── Focus rings ── */
+*:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+::-webkit-scrollbar-thumb {
+  background: #80000040;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #80000070;
+}
+
+/* ── Smooth transitions on interactive elements ── */
+button, a, input, select, textarea {
+  transition: all 0.15s ease;
+}
+
+/* ── Input focus enhancement ── */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--ring) !important;
+  box-shadow: 0 1px 0 0 var(--ring);
 }
 
 /* Tiptap Table Styles */
@@ -154,7 +201,7 @@ body {
   position: absolute;
   content: "";
   left: 0; right: 0; top: 0; bottom: 0;
-  background: rgba(200, 200, 255, 0.4);
+  background: rgba(128, 0, 0, 0.15);
   pointer-events: none;
 }
 
