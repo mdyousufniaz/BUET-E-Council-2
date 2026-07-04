@@ -386,8 +386,8 @@ const generatePdf = async (req, res, next) => {
         const { id, type } = req.params; // type = agenda, resolution, attendance
         let pdfBuffer;
 
-        // Basic check if meeting exists
-        const meetingCheck = await db.query('SELECT * FROM meetings WHERE id = $1', [id]);
+        // Basic check if meeting exists (the generators fetch the full data themselves).
+        const meetingCheck = await db.query('SELECT id FROM meetings WHERE id = $1', [id]);
         if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
 
         if (type === 'agenda') {

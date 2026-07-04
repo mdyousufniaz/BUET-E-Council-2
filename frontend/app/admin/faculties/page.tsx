@@ -100,10 +100,12 @@ export default function ManageFacultiesPage() {
   return (
     <div className="max-w-6xl mx-auto">
       <ConfirmModal />
-      <DataTable 
-        columns={columns} 
-        data={response.data || []} 
-        title="Manage Faculties" 
+      <DataTable
+        columns={columns}
+        data={response.data || []}
+        title="Manage Faculties"
+        searchable
+        searchPlaceholder="Search faculties..."
         onReorder={handleReorder}
         onUploadCsv={handleUploadCsv}
         onDownloadCsv={handleDownloadCsv}
