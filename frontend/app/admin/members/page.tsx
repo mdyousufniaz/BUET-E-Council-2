@@ -5,6 +5,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import CustomSelect from "../../../components/CustomSelect";
 import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 
@@ -147,45 +148,47 @@ export default function ManageMembersPage() {
         searchPlaceholder="Search by name or designation..."
         filters={
           <>
-            <select
-              value={designationFilter}
-              onChange={(e) => setDesignationFilter(e.target.value)}
-              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-            >
-              <option value="all">All Designations</option>
-              {designationOptions.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-            >
-              <option value="all">All Departments</option>
-              {deptRes?.data?.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.name_bangla}</option>
-              ))}
-            </select>
-            <select
-              value={officeFilter}
-              onChange={(e) => setOfficeFilter(e.target.value)}
-              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-            >
-              <option value="all">All Offices</option>
-              {officeRes?.data?.map((o: any) => (
-                <option key={o.id} value={o.id}>{o.name_bangla}</option>
-              ))}
-            </select>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-            >
-              <option value="all">All Types</option>
-              <option value="academic">Academic</option>
-              <option value="syndicate">Syndicate</option>
-            </select>
+            <div className="w-44">
+              <CustomSelect
+                value={designationFilter}
+                onChange={setDesignationFilter}
+                options={[
+                  { value: "all", label: "All Designations" },
+                  ...designationOptions.map((d) => ({ value: d, label: d }))
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={departmentFilter}
+                onChange={setDepartmentFilter}
+                options={[
+                  { value: "all", label: "All Departments" },
+                  ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_bangla })) || [])
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={officeFilter}
+                onChange={setOfficeFilter}
+                options={[
+                  { value: "all", label: "All Offices" },
+                  ...(officeRes?.data?.map((o: any) => ({ value: o.id, label: o.name_bangla })) || [])
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={[
+                  { value: "all", label: "All Types" },
+                  { value: "academic", label: "Academic" },
+                  { value: "syndicate", label: "Syndicate" }
+                ]}
+              />
+            </div>
           </>
         }
         onAdd={() => {
