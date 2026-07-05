@@ -97,6 +97,7 @@ export default function ManageMeetingsPage() {
         }}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onView={(meeting) => window.open(`/meetings/${meeting.id}`, '_blank')}
         customActions={
           <button
             onClick={() => setIsJsonModalOpen(true)}

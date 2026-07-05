@@ -192,10 +192,14 @@ export default function PublicMeetingView() {
               </section>
             )}
 
-            {meeting.status === 'past' && rawPresentees.length > 0 && (
+            {meeting.status === 'past' && (
               <>
                 <section className="space-y-6">
                   <h2 className="text-xl font-semibold mb-4 text-primary border-b border-border pb-2">উপস্থিত সদস্যবৃন্দ</h2>
+
+                  {rawPresentees.length === 0 && (
+                    <p className="text-sm text-muted-foreground">এই সভার উপস্থিতির তথ্য সংরক্ষিত নেই।</p>
+                  )}
 
                   {adminGroup.length > 0 && (
                     <div>

@@ -7,10 +7,10 @@ const crypto = require('crypto');
 const getMeetings = async (req, res, next) => {
     try {
         const result = await db.query(`
-            SELECT *, 
-                   ROW_NUMBER() OVER (ORDER BY created_at ASC) as serial 
-            FROM meetings 
-            ORDER BY created_at DESC
+            SELECT *,
+                   ROW_NUMBER() OVER (ORDER BY legacy_meeting_no DESC NULLS FIRST) as serial
+            FROM meetings
+            ORDER BY legacy_meeting_no DESC NULLS FIRST
         `);
 
         // Format dates correctly for the frontend
@@ -29,8 +29,10 @@ const getMeetingById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query(`
-            SELECT m.*, 
-            (SELECT COUNT(*) FROM meetings m2 WHERE m2.created_at <= m.created_at) as serial 
+            SELECT m.*,
+            (SELECT COUNT(*) FROM meetings m2
+             WHERE m2.legacy_meeting_no IS NOT NULL AND m.legacy_meeting_no IS NOT NULL
+               AND m2.legacy_meeting_no <= m.legacy_meeting_no) as serial
             FROM meetings m
             WHERE m.id = $1
         `, [id]);

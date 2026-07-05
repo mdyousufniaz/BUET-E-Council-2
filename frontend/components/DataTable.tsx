@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, Pencil, Trash2, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, Eye, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Column {
   key: string;
@@ -19,13 +19,14 @@ interface DataTableProps {
   onAdd?: () => void;
   onEdit?: (row: any) => void;
   onDelete?: (row: any) => void;
+  onView?: (row: any) => void;
   onFetchApi?: () => void;
   customActions?: React.ReactNode;
 }
 
-export default function DataTable({ 
-  columns, 
-  data: initialData, 
+export default function DataTable({
+  columns,
+  data: initialData,
   title,
   onReorder,
   onUploadCsv,
@@ -33,6 +34,7 @@ export default function DataTable({
   onAdd,
   onEdit,
   onDelete,
+  onView,
   onFetchApi,
   customActions
 }: DataTableProps) {
@@ -195,31 +197,41 @@ export default function DataTable({
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, index)}
-                  className="hover:bg-accent/50 transition-colors bg-card"
+                  onClick={() => onEdit && onEdit(row)}
+                  className={`hover:bg-accent/50 transition-colors bg-card ${onEdit ? 'cursor-pointer' : ''}`}
                 >
                   {onReorder && (
                     <td className="px-4 py-4 cursor-grab active:cursor-grabbing text-muted-foreground flex items-center justify-center">
                       <GripVertical className="w-4 h-4 opacity-50 hover:opacity-100" />
                     </td>
                   )}
-                  
+
                   {columns.map(col => (
                     <td key={col.key} className="px-6 py-4 text-sm text-foreground">
                       {row[col.key]}
                     </td>
                   ))}
-                  
+
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end space-x-2">
-                      <button 
-                        onClick={() => onEdit && onEdit(row)}
+                      {onView && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onView(row); }}
+                          className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEdit && onEdit(row); }}
                         className="p-1 text-muted-foreground hover:text-primary transition-colors"
                         title="Edit"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button 
-                        onClick={() => onDelete && onDelete(row)}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDelete && onDelete(row); }}
                         className="p-1 text-muted-foreground hover:text-destructive transition-colors"
                         title="Delete"
                       >
