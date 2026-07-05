@@ -16,6 +16,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup environment variables for CI
+        run: cp .env.example .env
+
       - name: Build Docker Compose Services
         run: docker compose build
 

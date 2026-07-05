@@ -2,7 +2,7 @@ name: Deploy to Azure VM
 
 on:
   workflow_run:
-    workflows: ["CI Pipeline"] # Must match the 'name' in ci.yml exactly
+    workflows: ["CI Pipeline"]
     types:
       - completed
     branches:
@@ -10,8 +10,6 @@ on:
 
 jobs:
   deploy:
-    # CRITICAL: This condition ensures deployment ONLY happens if CI passed.
-    # Without this, it would trigger even if the CI workflow failed.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
@@ -37,28 +35,26 @@ jobs:
           script: |
             cd /home/${{ secrets.VM_USER }}/buet_ecouncil
 
-            # --- NEW ADDITION: INJECT ENVIRONMENT VARIABLES ---
-            # This creates (or overwrites) the .env file directly on your Azure VM
-            # using the variables and secrets stored in your GitHub UI.
+            # --- UPDATED: COMPREHENSIVE VARIABLE INJECTION ---
             echo "Generating .env file from GitHub Secrets and Variables..."
             cat <<EOF > .env
+            POSTGRES_USER=${{ vars.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            POSTGRES_DB=${{ vars.POSTGRES_DB }}
+            DATABASE_URL=${{ vars.DATABASE_URL }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            MINIO_ROOT_USER=${{ vars.MINIO_ROOT_USER }}
+            MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+            R3_REGION=${{ vars.R3_REGION }}
+            R3_ENDPOINT=${{ vars.R3_ENDPOINT }}
+            R3_ACCESS_KEY_ID=${{ vars.R3_ACCESS_KEY_ID }}
+            R3_SECRET_ACCESS_KEY=${{ secrets.R3_SECRET_ACCESS_KEY }}
+            R3_BUCKET_NAME=${{ vars.R3_BUCKET_NAME }}
             BACKEND_URL=${{ vars.BACKEND_URL }}
-            FRONTEND_URL=${{ vars.FRONTEND_URL }}
-            # Add any other variables your docker-compose.yml expects below:
-            # DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            # GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
             EOF
-            # --------------------------------------------------
+            # -------------------------------------------------
 
-            # Pull any new base images
             docker compose pull
-
-            # Shut down existing containers
             docker compose down
-
-            # Build and spin up the new containers
-            # Docker compose will automatically detect and use the .env file we just created
             docker compose up -d --build --wait
-
-            # Clean up old images to keep the Azure VM disk clean
             docker system prune -f
