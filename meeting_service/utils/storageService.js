@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // Configure S3 client (compatible with Cloudflare R2, AWS S3, MinIO)
@@ -17,7 +17,7 @@ const BUCKET_NAME = process.env.R3_BUCKET_NAME || 'ecouncil-bucket';
 /**
  * Upload a file to R3
  */
-const uploadFile = async (fileBuffer, fileName, mimeType) => {
+const uploadFile = async (fileBuffer, fileName, mimeType, metadata) => {
     const params = {
         Bucket: BUCKET_NAME,
         Key: fileName,
@@ -25,12 +25,45 @@ const uploadFile = async (fileBuffer, fileName, mimeType) => {
         ContentType: mimeType,
     };
 
+    // Optional user metadata (e.g. a cache fingerprint). Values must be strings.
+    if (metadata) {
+        params.Metadata = metadata;
+    }
+
     try {
         const command = new PutObjectCommand(params);
         await s3Client.send(command);
         return { success: true, key: fileName };
     } catch (error) {
         console.error("Error uploading file to R3:", error);
+        throw error;
+    }
+};
+
+/**
+ * Download a file's contents as a Buffer.
+ */
+const getFileBuffer = async (fileName) => {
+    const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: fileName });
+    const response = await s3Client.send(command);
+    const byteArray = await response.Body.transformToByteArray();
+    return Buffer.from(byteArray);
+};
+
+/**
+ * Fetch an object's user metadata without downloading its body.
+ * Returns the metadata object, or null if the object does not exist.
+ */
+const getFileMetadata = async (fileName) => {
+    try {
+        const command = new HeadObjectCommand({ Bucket: BUCKET_NAME, Key: fileName });
+        const response = await s3Client.send(command);
+        return response.Metadata || {};
+    } catch (error) {
+        const status = error.$metadata && error.$metadata.httpStatusCode;
+        if (error.name === 'NotFound' || error.name === 'NoSuchKey' || status === 404) {
+            return null;
+        }
         throw error;
     }
 };
@@ -77,5 +110,7 @@ module.exports = {
     s3Client,
     uploadFile,
     deleteFile,
-    getFileUrl
+    getFileUrl,
+    getFileBuffer,
+    getFileMetadata
 };

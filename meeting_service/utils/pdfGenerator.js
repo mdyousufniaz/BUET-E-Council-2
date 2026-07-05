@@ -1,7 +1,9 @@
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { pool } = require('../db');
+const storageService = require('./storageService');
 
 const getFontBase64 = () => {
     const sonarPath = path.join(__dirname, 'fonts', 'SonarBangla.ttf');
@@ -20,29 +22,181 @@ const getFontBase64 = () => {
     return null;
 };
 
+// Read and encode the Bangla font once at startup, then reuse for every request.
+const FONT_BASE64 = getFontBase64();
+
+// Reuse a single Chromium instance across requests instead of launching one per PDF.
+let browserPromise = null;
+
+const getBrowser = async () => {
+    if (browserPromise) {
+        try {
+            const existing = await browserPromise;
+            if (existing.connected) return existing;
+            // Stale/disconnected instance: best-effort teardown before relaunching.
+            existing.close().catch(() => {});
+        } catch (e) {
+            // Previous launch failed; fall through and relaunch.
+        }
+        browserPromise = null;
+    }
+
+    browserPromise = puppeteer.launch({
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        headless: true
+    });
+
+    const browser = await browserPromise;
+    // If Chromium ever crashes/disconnects, drop the cached instance so the next
+    // request relaunches a fresh one.
+    browser.on('disconnected', () => { browserPromise = null; });
+    return browser;
+};
+
+/**
+ * Warm up Chromium during service startup so the first PDF request doesn't pay
+ * the launch cost. Non-blocking and best-effort: a failure here does not delay
+ * startup and the lazy getBrowser() path still recovers on the first request.
+ */
+const warmUp = async () => {
+    try {
+        await getBrowser();
+        console.log('Puppeteer Chromium warmed up and ready.');
+    } catch (err) {
+        console.error('Puppeteer warm-up failed (will retry lazily on first request):', err.message);
+    }
+};
+
+/**
+ * Render an HTML string to a PDF Buffer using the shared browser. Extracted so
+ * both generators share identical rendering/cleanup behaviour.
+ */
+const renderPdf = async (html) => {
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+    try {
+        // Harden against SSRF / local-file access: the PDF only needs the inline
+        // HTML and the embedded (data: URI) font, so block any other resource
+        // request that user-supplied content might trigger.
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            if (req.isNavigationRequest() || req.url().startsWith('data:')) {
+                req.continue().catch(() => {});
+            } else {
+                req.abort().catch(() => {});
+            }
+        });
+
+        await page.setContent(html, { waitUntil: 'load' });
+        // Ensure the embedded Bangla font is fully loaded before rendering so
+        // the output stays identical to the previous networkidle0 behaviour.
+        await page.evaluate(() => document.fonts.ready.then(() => true));
+
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
+            printBackground: true
+        });
+
+        return pdfBuffer;
+    } finally {
+        // Close the page but keep the shared browser alive for reuse. Never let a
+        // cleanup failure mask the original error or crash the process.
+        await page.close().catch(() => {});
+    }
+};
+
+// ---------------------------------------------------------------------------
+// PDF caching (backed by the existing MinIO/S3 bucket).
+//
+// A generated PDF is stored at a fixed key per (meeting, type) with a content
+// fingerprint saved in its object metadata. On each request we recompute the
+// fingerprint from the current meeting data; if it matches the stored one we
+// return the cached bytes without launching Chromium. Any change to the meeting
+// (or its presentees/agendas/joined names) changes the fingerprint and triggers
+// a one-time regeneration. Locked meetings never change, so they always hit.
+// Bump PDF_TEMPLATE_VERSION whenever the PDF template/appearance changes so all
+// existing caches are invalidated.
+// ---------------------------------------------------------------------------
+const CACHE_PREFIX = 'generated-pdfs';
+const PDF_TEMPLATE_VERSION = 'v2';
+
+const pdfCacheKey = (meetingId, type) => `${CACHE_PREFIX}/${meetingId}/${type}.pdf`;
+
+// Deterministic ordering so row order from the DB doesn't cause false misses.
+const stableRows = (rows) => [...rows]
+    .map(r => ({ ...r }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
+const computeFingerprint = (payload) => crypto
+    .createHash('sha256')
+    .update(`${PDF_TEMPLATE_VERSION}|${JSON.stringify(payload)}`)
+    .digest('hex');
+
+// Returns the cached PDF Buffer if the fingerprint matches, otherwise null.
+// Best-effort: any storage error falls back to regeneration.
+const getCachedPdf = async (cacheKey, fingerprint) => {
+    try {
+        const meta = await storageService.getFileMetadata(cacheKey);
+        if (meta && meta.fingerprint === fingerprint) {
+            return await storageService.getFileBuffer(cacheKey);
+        }
+    } catch (err) {
+        console.error('PDF cache read failed, regenerating:', err.message);
+    }
+    return null;
+};
+
+// Best-effort cache write: never fail the request if the upload fails.
+const storeCachedPdf = async (cacheKey, pdfBuffer, fingerprint) => {
+    try {
+        await storageService.uploadFile(pdfBuffer, cacheKey, 'application/pdf', { fingerprint });
+    } catch (err) {
+        console.error('PDF cache write failed:', err.message);
+    }
+};
+
 const generateAgendaPdf = async (meetingData) => {
     // Left untouched for now, or just return empty buffer
     return Buffer.from('');
 };
 
-const generateResolutionPdf = async (meetingId) => {
+const generateResolutionPdf = async (meetingId, includeStatus = false) => {
     try {
-        const meetingQuery = `SELECT * FROM meetings WHERE id = $1`;
-        const { rows: meetings } = await pool.query(meetingQuery, [meetingId]);
-        if (meetings.length === 0) throw new Error("Meeting not found");
-        const meeting = meetings[0];
-
+        const meetingQuery = `SELECT title, meeting_date, description FROM meetings WHERE id = $1`;
         const presenteesQuery = `
-            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name 
-            FROM presentees p 
-            LEFT JOIN departments d ON p.department_id = d.id 
-            LEFT JOIN offices o ON p.office_id = o.id 
-            WHERE p.meeting_id = $1 
+            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name
+            FROM presentees p
+            LEFT JOIN departments d ON p.department_id = d.id
+            LEFT JOIN offices o ON p.office_id = o.id
+            WHERE p.meeting_id = $1
         `;
-        const { rows: presentees } = await pool.query(presenteesQuery, [meetingId]);
+        const agendasQuery = `SELECT agenda_serial, content, resolution FROM agenda WHERE meeting_id = $1 ORDER BY agenda_serial ASC`;
 
-        const agendasQuery = `SELECT * FROM agenda WHERE meeting_id = $1 ORDER BY agenda_serial ASC`;
-        const { rows: agendas } = await pool.query(agendasQuery, [meetingId]);
+        // These queries are independent, so run them in parallel.
+        const [meetingResult, presenteesResult, agendasResult] = await Promise.all([
+            pool.query(meetingQuery, [meetingId]),
+            pool.query(presenteesQuery, [meetingId]),
+            pool.query(agendasQuery, [meetingId])
+        ]);
+
+        if (meetingResult.rows.length === 0) throw new Error("Meeting not found");
+        const meeting = meetingResult.rows[0];
+        const presentees = presenteesResult.rows;
+        const agendas = agendasResult.rows;
+
+        // Serve a cached PDF when the underlying data is unchanged.
+        const cacheType = includeStatus ? 'resolution-status' : 'resolution';
+        const cacheKey = pdfCacheKey(meetingId, cacheType);
+        const fingerprint = computeFingerprint({
+            type: cacheType,
+            meeting: { title: meeting.title, meeting_date: meeting.meeting_date, description: meeting.description },
+            presentees: stableRows(presentees),
+            agendas: stableRows(agendas)
+        });
+        const cached = await getCachedPdf(cacheKey, fingerprint);
+        if (cached) return cached;
 
         const admins = [];
         const deans = [];
@@ -88,7 +242,7 @@ const generateResolutionPdf = async (meetingId) => {
             return 0;
         });
 
-        const fontBase64 = getFontBase64();
+        const fontBase64 = FONT_BASE64;
         const fontFace = fontBase64 ? `@font-face { font-family: 'PrimaryFont'; src: url(${fontBase64}) format('truetype'); }` : '';
 
         const getSuffix = (item) => {
@@ -188,7 +342,7 @@ const generateResolutionPdf = async (meetingId) => {
             
             ${agendas.map(ag => `
                 <div class="agenda-block">
-                    <div class="agenda-title">প্রস্তাব নং: ${ag.agenda_serial || ''}</div>
+                    <div class="agenda-title">প্রস্তাবনা নং ${ag.agenda_serial || ''}</div>
                     <div class="agenda-content">${ag.content || ''}</div>
                     <div class="agenda-title" style="margin-top:15px;">সিদ্ধান্ত:</div>
                     <div class="agenda-resolution">${ag.resolution || ''}</div>
@@ -198,21 +352,9 @@ const generateResolutionPdf = async (meetingId) => {
         </html>
         `;
 
-        const browser = await puppeteer.launch({
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-            headless: true
-        });
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        
-        const pdfBuffer = await page.pdf({
-            format: 'A4',
-            margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
-            printBackground: true
-        });
-        
-        await browser.close();
+        const pdfBuffer = await renderPdf(html);
+        // Cache for future requests (best-effort; keyed by the content fingerprint).
+        await storeCachedPdf(cacheKey, pdfBuffer, fingerprint);
         return pdfBuffer;
 
     } catch (error) {
@@ -222,19 +364,34 @@ const generateResolutionPdf = async (meetingId) => {
 
 const generateAttendanceSheet = async (meetingId) => {
     try {
-        const meetingQuery = `SELECT * FROM meetings WHERE id = $1`;
-        const { rows: meetings } = await pool.query(meetingQuery, [meetingId]);
-        if (meetings.length === 0) throw new Error("Meeting not found");
-        const meeting = meetings[0];
-
+        const meetingQuery = `SELECT title FROM meetings WHERE id = $1`;
         const presenteesQuery = `
-            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name 
-            FROM invitees p 
-            LEFT JOIN departments d ON p.department_id = d.id 
-            LEFT JOIN offices o ON p.office_id = o.id 
-            WHERE p.meeting_id = $1 
+            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name
+            FROM invitees p
+            LEFT JOIN departments d ON p.department_id = d.id
+            LEFT JOIN offices o ON p.office_id = o.id
+            WHERE p.meeting_id = $1
         `;
-        const { rows: presentees } = await pool.query(presenteesQuery, [meetingId]);
+
+        // These queries are independent, so run them in parallel.
+        const [meetingResult, presenteesResult] = await Promise.all([
+            pool.query(meetingQuery, [meetingId]),
+            pool.query(presenteesQuery, [meetingId])
+        ]);
+
+        if (meetingResult.rows.length === 0) throw new Error("Meeting not found");
+        const meeting = meetingResult.rows[0];
+        const presentees = presenteesResult.rows;
+
+        // Serve a cached PDF when the underlying data is unchanged.
+        const cacheKey = pdfCacheKey(meetingId, 'attendance');
+        const fingerprint = computeFingerprint({
+            type: 'attendance',
+            meeting: { title: meeting.title },
+            invitees: stableRows(presentees)
+        });
+        const cached = await getCachedPdf(cacheKey, fingerprint);
+        if (cached) return cached;
 
         const admins = [];
         const deans = [];
@@ -292,7 +449,7 @@ const generateAttendanceSheet = async (meetingId) => {
             return 0;
         });
 
-        const fontBase64 = getFontBase64();
+        const fontBase64 = FONT_BASE64;
         const fontFace = fontBase64 ? `@font-face { font-family: 'PrimaryFont'; src: url(${fontBase64}) format('truetype'); }` : '';
 
         const renderTableSection = (title, items) => {
@@ -369,21 +526,9 @@ const generateAttendanceSheet = async (meetingId) => {
         </html>
         `;
 
-        const browser = await puppeteer.launch({
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-            headless: true
-        });
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        
-        const pdfBuffer = await page.pdf({
-            format: 'A4',
-            margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
-            printBackground: true
-        });
-        
-        await browser.close();
+        const pdfBuffer = await renderPdf(html);
+        // Cache for future requests (best-effort; keyed by the content fingerprint).
+        await storeCachedPdf(cacheKey, pdfBuffer, fingerprint);
         return pdfBuffer;
 
     } catch (error) {
@@ -394,5 +539,6 @@ const generateAttendanceSheet = async (meetingId) => {
 module.exports = {
     generateAgendaPdf,
     generateResolutionPdf,
-    generateAttendanceSheet
+    generateAttendanceSheet,
+    warmUp
 };

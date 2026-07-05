@@ -100,10 +100,12 @@ export default function ManageOfficesPage() {
   return (
     <div className="max-w-6xl mx-auto">
       <ConfirmModal />
-      <DataTable 
-        columns={columns} 
-        data={response.data || []} 
+      <DataTable
+        columns={columns}
+        data={response.data || []}
         title="Manage Offices"
+        searchable
+        searchPlaceholder="Search offices..."
         onReorder={handleReorder}
         onUploadCsv={handleUploadCsv}
         onDownloadCsv={handleDownloadCsv} 

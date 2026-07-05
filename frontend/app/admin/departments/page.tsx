@@ -114,10 +114,12 @@ export default function ManageDepartmentsPage() {
   return (
     <div className="max-w-6xl mx-auto">
       <ConfirmModal />
-      <DataTable 
-        columns={columns} 
-        data={response.data || []} 
+      <DataTable
+        columns={columns}
+        data={response.data || []}
         title="Manage Departments"
+        searchable
+        searchPlaceholder="Search departments..."
         onReorder={handleReorder}
         onUploadCsv={handleUploadCsv}
         onDownloadCsv={handleDownloadCsv} 

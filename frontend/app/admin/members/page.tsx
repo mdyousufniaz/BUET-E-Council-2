@@ -9,8 +9,11 @@ import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageMembersPage() {
-  const [filter, setFilter] = useState("all");
-  const { data: response, error, mutate } = useSWR(`/members${filter !== 'all' ? `?type=${filter}` : ''}`, fetcher);
+  const [designationFilter, setDesignationFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [officeFilter, setOfficeFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const { data: response, error, mutate } = useSWR('/members', fetcher);
   const { confirm, ConfirmModal } = useConfirm();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,6 +35,19 @@ export default function ManageMembersPage() {
 
   const departments = [{ value: "", label: "None" }, ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_bangla })) || [])];
   const offices = [{ value: "", label: "None" }, ...(officeRes?.data?.map((o: any) => ({ value: o.id, label: o.name_bangla })) || [])];
+
+  // Derive filter options and apply Designation/Department filters client-side.
+  const allMembers = response?.data || [];
+  const designationOptions: string[] = Array.from(
+    new Set(allMembers.map((m: any) => m.designation).filter(Boolean))
+  ).sort() as string[];
+
+  const displayedMembers = allMembers.filter((m: any) =>
+    (designationFilter === "all" || m.designation === designationFilter) &&
+    (departmentFilter === "all" || m.department_id === departmentFilter) &&
+    (officeFilter === "all" || m.office_id === officeFilter) &&
+    (typeFilter === "all" || m.member_type === typeFilter)
+  );
 
   const columns = [
     { key: "name", label: "Name" },
@@ -122,23 +138,56 @@ export default function ManageMembersPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <ConfirmModal />
-      <div className="flex items-center space-x-4">
-        <label className="text-sm font-medium">Filter by Type:</label>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm"
-        >
-          <option value="all">All</option>
-          <option value="academic">Academic</option>
-          <option value="syndicate">Syndicate</option>
-        </select>
-      </div>
-
       <DataTable
+        key={`${designationFilter}-${departmentFilter}-${officeFilter}-${typeFilter}`}
         columns={columns}
-        data={response?.data || []}
+        data={displayedMembers}
         title="Manage Members"
+        searchable
+        searchPlaceholder="Search by name or designation..."
+        filters={
+          <>
+            <select
+              value={designationFilter}
+              onChange={(e) => setDesignationFilter(e.target.value)}
+              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+            >
+              <option value="all">All Designations</option>
+              {designationOptions.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+            >
+              <option value="all">All Departments</option>
+              {deptRes?.data?.map((d: any) => (
+                <option key={d.id} value={d.id}>{d.name_bangla}</option>
+              ))}
+            </select>
+            <select
+              value={officeFilter}
+              onChange={(e) => setOfficeFilter(e.target.value)}
+              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+            >
+              <option value="all">All Offices</option>
+              {officeRes?.data?.map((o: any) => (
+                <option key={o.id} value={o.id}>{o.name_bangla}</option>
+              ))}
+            </select>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+            >
+              <option value="all">All Types</option>
+              <option value="academic">Academic</option>
+              <option value="syndicate">Syndicate</option>
+            </select>
+          </>
+        }
         onAdd={() => {
           setIsEditMode(false);
           setEditingId(null);
