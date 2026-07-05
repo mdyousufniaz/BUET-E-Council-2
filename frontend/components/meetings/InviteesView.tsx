@@ -5,6 +5,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
+import CustomSelect from "../CustomSelect";
 import DataTable from "../DataTable";
 import TakeAttendanceView from "./TakeAttendanceView";
 import { toast } from "sonner";
@@ -62,6 +63,21 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const fetchUrl = isPast ? `/meetings/${meeting.id}/presentees` : `/meetings/${meeting.id}/invitees`;
   const { data: inviteesRes, mutate: mutateInvitees } = useSWR(fetchUrl, fetcher, { fallbackData: { data: [] } });
   const invitees = inviteesRes?.data || [];
+
+  // Search + filters for the main invitees/presentees table (search handled by DataTable)
+  const [tableDesignation, setTableDesignation] = useState("all");
+  const [tableDepartment, setTableDepartment] = useState("all");
+  const [tableOffice, setTableOffice] = useState("all");
+
+  const inviteeDesignations = Array.from(new Set(invitees.map((m: any) => m.designation).filter(Boolean))).sort() as string[];
+  const inviteeDepartments = Array.from(new Set(invitees.map((m: any) => m.department_name).filter(Boolean))).sort() as string[];
+  const inviteeOffices = Array.from(new Set(invitees.map((m: any) => m.office_name).filter(Boolean))).sort() as string[];
+
+  const displayedInvitees = invitees.filter((m: any) =>
+    (tableDesignation === "all" || m.designation === tableDesignation) &&
+    (tableDepartment === "all" || m.department_name === tableDepartment) &&
+    (tableOffice === "all" || m.office_name === tableOffice)
+  );
 
   const columns = isPast ? [
     { key: "name", label: "Name" },
@@ -353,8 +369,45 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
         </div>
       ) : (
         <DataTable
+          key={`${tableDesignation}-${tableDepartment}-${tableOffice}`}
           columns={columns}
-          data={invitees}
+          data={displayedInvitees}
+          searchable
+          searchPlaceholder="Search by name or designation..."
+          filters={
+            <>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableDesignation}
+                  onChange={setTableDesignation}
+                  options={[
+                    { value: "all", label: "All Designations" },
+                    ...inviteeDesignations.map((d) => ({ value: d, label: d }))
+                  ]}
+                />
+              </div>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableDepartment}
+                  onChange={setTableDepartment}
+                  options={[
+                    { value: "all", label: "All Departments" },
+                    ...inviteeDepartments.map((d) => ({ value: d, label: d }))
+                  ]}
+                />
+              </div>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableOffice}
+                  onChange={setTableOffice}
+                  options={[
+                    { value: "all", label: "All Offices" },
+                    ...inviteeOffices.map((o) => ({ value: o, label: o }))
+                  ]}
+                />
+              </div>
+            </>
+          }
           onEdit={!isLocked ? handleEditClick : undefined}
           onDelete={!isLocked ? (row) => handleRemove(row.id) : undefined}
         />

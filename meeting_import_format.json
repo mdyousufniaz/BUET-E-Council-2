@@ -1,0 +1,26 @@
+{
+    "serial": "XX",
+    "title": "XX",
+    "date": "YYYY-MM-DD",
+    "type": "academic",
+    "status": "past",
+    "description": "",
+    "conclusion": "",
+    "president": "",
+    "presentees": [
+        {
+            "name": "Name",
+            "prefix": "Designation Prefix",
+            "designation": "Designation",
+            "department": "Department Name",
+            "office": "Office Name"
+        }
+    ],
+    "agenda": [
+        {
+            "serial": 1,
+            "body": "Agenda body",
+            "resolution": "Resolution"
+        }
+    ]
+}

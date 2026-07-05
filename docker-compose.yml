@@ -1,13 +1,10 @@
 services:
   db:
     image: docker.io/ankane/pgvector:latest
-    # container_name: ecouncil_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    # ports:
-    #   - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -22,21 +19,19 @@ services:
     build:
       context: ./auth_service
       dockerfile: Dockerfile
-    # container_name: auth_service
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
-
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy # FIX: Wait until PostgreSQL is fully initialized
 
   meeting_service:
     build:
       context: ./meeting_service
       dockerfile: Dockerfile
-    # container_name: meeting_service
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
@@ -48,28 +43,20 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      - db
-      - minio
+      db:
+        condition: service_healthy # FIX: Wait until PostgreSQL is fully initialized
+      minio:
+        condition: service_healthy # FIX: Wait until MinIO is fully initialized
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${BACKEND_URL}/api
-        VITE_API_INTERNAL_URL: http://backend:8000
-    # container_name: ecouncil_ui
     ports:
       - "3000:3000"
-    # depends_on:
-    #   auth_service:
-    #     condition: service_healthy
-    #   meeting_service:
-    #     condition: service_healthy
 
   nginx:
     image: nginx:alpine
-    # container_name: ecouncil_nginx
     restart: always
     ports:
       - "9001:80"
@@ -82,7 +69,6 @@ services:
 
   minio:
     image: minio/minio
-    # container_name: ecouncil_minio
     ports:
       - "9000:9000"
       - "9090:9090"
@@ -104,7 +90,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; /usr/bin/mc mb myminio/${R3_BUCKET_NAME} --ignore-existing; /usr/bin/mc anonymous set public myminio/${R3_BUCKET_NAME}; exit 0; "
+      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; /usr/bin/mc mb myminio/${R3_BUCKET_NAME} --ignore-existing; /usr/bin/mc anonymous set public myminio/${R3_BUCKET_NAME}; tail -f /dev/null; "
 
 volumes:
   pgdata:

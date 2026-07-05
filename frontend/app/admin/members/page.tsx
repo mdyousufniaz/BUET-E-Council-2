@@ -5,12 +5,16 @@ import useSWR from "swr";
 import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import CustomSelect from "../../../components/CustomSelect";
 import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 
 export default function ManageMembersPage() {
-  const [filter, setFilter] = useState("all");
-  const { data: response, error, mutate } = useSWR(`/members${filter !== 'all' ? `?type=${filter}` : ''}`, fetcher);
+  const [designationFilter, setDesignationFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [officeFilter, setOfficeFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const { data: response, error, mutate } = useSWR('/members', fetcher);
   const { confirm, ConfirmModal } = useConfirm();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,6 +36,19 @@ export default function ManageMembersPage() {
 
   const departments = [{ value: "", label: "None" }, ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_bangla })) || [])];
   const offices = [{ value: "", label: "None" }, ...(officeRes?.data?.map((o: any) => ({ value: o.id, label: o.name_bangla })) || [])];
+
+  // Derive filter options and apply Designation/Department filters client-side.
+  const allMembers = response?.data || [];
+  const designationOptions: string[] = Array.from(
+    new Set(allMembers.map((m: any) => m.designation).filter(Boolean))
+  ).sort() as string[];
+
+  const displayedMembers = allMembers.filter((m: any) =>
+    (designationFilter === "all" || m.designation === designationFilter) &&
+    (departmentFilter === "all" || m.department_id === departmentFilter) &&
+    (officeFilter === "all" || m.office_id === officeFilter) &&
+    (typeFilter === "all" || m.member_type === typeFilter)
+  );
 
   const columns = [
     { key: "serial", label: "Serial No" },
@@ -123,23 +140,58 @@ export default function ManageMembersPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <ConfirmModal />
-      <div className="flex items-center space-x-4">
-        <label className="text-sm font-medium">Filter by Type:</label>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="bg-card border border-border rounded-md px-3 py-1.5 text-sm"
-        >
-          <option value="all">All</option>
-          <option value="academic">Academic</option>
-          <option value="syndicate">Syndicate</option>
-        </select>
-      </div>
-
       <DataTable
+        key={`${designationFilter}-${departmentFilter}-${officeFilter}-${typeFilter}`}
         columns={columns}
-        data={response?.data || []}
+        data={displayedMembers}
         title="Manage Members"
+        searchable
+        searchPlaceholder="Search by name or designation..."
+        filters={
+          <>
+            <div className="w-44">
+              <CustomSelect
+                value={designationFilter}
+                onChange={setDesignationFilter}
+                options={[
+                  { value: "all", label: "All Designations" },
+                  ...designationOptions.map((d) => ({ value: d, label: d }))
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={departmentFilter}
+                onChange={setDepartmentFilter}
+                options={[
+                  { value: "all", label: "All Departments" },
+                  ...(deptRes?.data?.map((d: any) => ({ value: d.id, label: d.name_bangla })) || [])
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={officeFilter}
+                onChange={setOfficeFilter}
+                options={[
+                  { value: "all", label: "All Offices" },
+                  ...(officeRes?.data?.map((o: any) => ({ value: o.id, label: o.name_bangla })) || [])
+                ]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={[
+                  { value: "all", label: "All Types" },
+                  { value: "academic", label: "Academic" },
+                  { value: "syndicate", label: "Syndicate" }
+                ]}
+              />
+            </div>
+          </>
+        }
         onAdd={() => {
           setIsEditMode(false);
           setEditingId(null);

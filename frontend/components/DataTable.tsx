@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo } from 'react';
-import { GripVertical, Pencil, Trash2, Eye, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, Eye, Upload, Download, ArrowUpDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
 
 interface Column {
   key: string;
@@ -22,6 +22,9 @@ interface DataTableProps {
   onView?: (row: any) => void;
   onFetchApi?: () => void;
   customActions?: React.ReactNode;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  filters?: React.ReactNode;
 }
 
 export default function DataTable({
@@ -36,10 +39,14 @@ export default function DataTable({
   onDelete,
   onView,
   onFetchApi,
-  customActions
+  customActions,
+  searchable,
+  searchPlaceholder,
+  filters
 }: DataTableProps) {
   const [data, setData] = useState(initialData);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [query, setQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update local state when initialData changes (from SWR)
@@ -74,6 +81,15 @@ export default function DataTable({
       return 0;
     });
   }, [data, sortConfig]);
+
+  // Client-side search across the visible columns (opt-in via `searchable`).
+  const filteredData = useMemo(() => {
+    if (!searchable || !query.trim()) return sortedData;
+    const q = query.trim().toLowerCase();
+    return sortedData.filter(row =>
+      columns.some(col => String(row[col.key] ?? '').toLowerCase().includes(q))
+    );
+  }, [sortedData, query, searchable, columns]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.setData('text/plain', index.toString());
@@ -160,6 +176,28 @@ export default function DataTable({
         </div>
       )}
 
+      {(searchable || filters) && (
+        <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+          {searchable && (
+            <div className="relative flex-1 md:min-w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder || 'Search...'}
+                className="w-full pl-9 pr-3 py-2.5 bg-input/20 border border-input rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
+          {filters && (
+            <div className="flex flex-wrap items-center gap-3">
+              {filters}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -189,7 +227,7 @@ export default function DataTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sortedData.map((row, index) => (
+              {filteredData.map((row, index) => (
                 <tr 
                   key={row.id || index}
                   draggable={!!onReorder}
@@ -242,7 +280,7 @@ export default function DataTable({
                 </tr>
               ))}
               
-              {sortedData.length === 0 && (
+              {filteredData.length === 0 && (
                 <tr>
                   <td colSpan={columns.length + (onReorder ? 2 : 1)} className="px-6 py-8 text-center text-muted-foreground">
                     No data found.

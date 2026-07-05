@@ -8,6 +8,9 @@ const routes = require('./routes');
 // Import middlewares
 const errorHandler = require('./middlewares/errorHandler');
 
+// PDF service (Chromium warm-up)
+const { warmUp: warmUpPdf } = require('./utils/pdfGenerator');
+
 const app = express();
 const port = process.env.PORT || 8001; // Using 8001 to distinguish from auth_service (8000)
 
@@ -30,6 +33,9 @@ app.use(errorHandler);
 if (require.main === module) {
     app.listen(port, () => {
         console.log(`Meeting service running on port ${port}`);
+        // Warm up Chromium in the background so the first PDF request is fast.
+        // Fire-and-forget: this never blocks startup and is safe if it fails.
+        warmUpPdf();
     });
 }
 
