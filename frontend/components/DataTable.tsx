@@ -23,6 +23,7 @@ interface DataTableProps {
   customActions?: React.ReactNode;
   searchable?: boolean;
   searchPlaceholder?: string;
+  filters?: React.ReactNode;
 }
 
 export default function DataTable({ 
@@ -38,7 +39,8 @@ export default function DataTable({
   onFetchApi,
   customActions,
   searchable,
-  searchPlaceholder
+  searchPlaceholder,
+  filters
 }: DataTableProps) {
   const [data, setData] = useState(initialData);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -172,16 +174,25 @@ export default function DataTable({
         </div>
       )}
 
-      {searchable && (
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder || 'Search...'}
-            className="w-full pl-9 pr-3 py-2 bg-input/20 border border-input rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+      {(searchable || filters) && (
+        <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+          {searchable && (
+            <div className="relative flex-1 md:min-w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder || 'Search...'}
+                className="w-full pl-9 pr-3 py-2.5 bg-input/20 border border-input rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
+          {filters && (
+            <div className="flex flex-wrap items-center gap-3">
+              {filters}
+            </div>
+          )}
         </div>
       )}
 

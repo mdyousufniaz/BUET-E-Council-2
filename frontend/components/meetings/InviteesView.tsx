@@ -63,6 +63,21 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const { data: inviteesRes, mutate: mutateInvitees } = useSWR(fetchUrl, fetcher, { fallbackData: { data: [] } });
   const invitees = inviteesRes?.data || [];
 
+  // Search + filters for the main invitees/presentees table (search handled by DataTable)
+  const [tableDesignation, setTableDesignation] = useState("all");
+  const [tableDepartment, setTableDepartment] = useState("all");
+  const [tableOffice, setTableOffice] = useState("all");
+
+  const inviteeDesignations = Array.from(new Set(invitees.map((m: any) => m.designation).filter(Boolean))).sort() as string[];
+  const inviteeDepartments = Array.from(new Set(invitees.map((m: any) => m.department_name).filter(Boolean))).sort() as string[];
+  const inviteeOffices = Array.from(new Set(invitees.map((m: any) => m.office_name).filter(Boolean))).sort() as string[];
+
+  const displayedInvitees = invitees.filter((m: any) =>
+    (tableDesignation === "all" || m.designation === tableDesignation) &&
+    (tableDepartment === "all" || m.department_name === tableDepartment) &&
+    (tableOffice === "all" || m.office_name === tableOffice)
+  );
+
   const columns = isPast ? [
     { key: "name", label: "Name" },
     { key: "designation", label: "Designation" },
@@ -353,8 +368,45 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
         </div>
       ) : (
         <DataTable
+          key={`${tableDesignation}-${tableDepartment}-${tableOffice}`}
           columns={columns}
-          data={invitees}
+          data={displayedInvitees}
+          searchable
+          searchPlaceholder="Search by name or designation..."
+          filters={
+            <>
+              <select
+                value={tableDesignation}
+                onChange={(e) => setTableDesignation(e.target.value)}
+                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+              >
+                <option value="all">All Designations</option>
+                {inviteeDesignations.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <select
+                value={tableDepartment}
+                onChange={(e) => setTableDepartment(e.target.value)}
+                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+              >
+                <option value="all">All Departments</option>
+                {inviteeDepartments.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <select
+                value={tableOffice}
+                onChange={(e) => setTableOffice(e.target.value)}
+                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
+              >
+                <option value="all">All Offices</option>
+                {inviteeOffices.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </>
+          }
           onEdit={!isLocked ? handleEditClick : undefined}
           onDelete={!isLocked ? (row) => handleRemove(row.id) : undefined}
         />
