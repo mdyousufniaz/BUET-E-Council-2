@@ -17,6 +17,7 @@ import {
   Table as TableIcon, LayoutTemplate, Trash2, Columns, Rows, Settings
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import CustomSelect from './CustomSelect';
 
 const MenuBar = ({ editor }: { editor: any }) => {
   if (!editor) return null;
@@ -25,15 +26,17 @@ const MenuBar = ({ editor }: { editor: any }) => {
     <div className="bg-muted/50 border-b border-border p-2 flex flex-col gap-2 sticky top-0 z-10 w-full">
       {/* Primary Formatting Toolbar */}
       <div className="flex flex-wrap items-center gap-1">
-        <select 
-          className="p-1.5 text-sm bg-background border border-border rounded-md text-foreground focus:outline-none"
-          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
-          value={editor.getAttributes('textStyle').fontFamily || ''}
-        >
-          <option value="">Default Font</option>
-          <option value="Inter">English (Inter)</option>
-          <option value="Noto Sans Bengali, sans-serif">Bangla (Noto Sans)</option>
-        </select>
+        <div className="w-44">
+          <CustomSelect
+            value={editor.getAttributes('textStyle').fontFamily || ''}
+            onChange={(val) => editor.chain().focus().setFontFamily(val).run()}
+            options={[
+              { value: "", label: "Default Font" },
+              { value: "Inter", label: "English (Inter)" },
+              { value: "Noto Sans Bengali, sans-serif", label: "Bangla (Noto Sans)" }
+            ]}
+          />
+        </div>
         
         <div className="w-px h-6 bg-border mx-1" />
 

@@ -5,6 +5,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
+import CustomSelect from "../CustomSelect";
 import DataTable from "../DataTable";
 import TakeAttendanceView from "./TakeAttendanceView";
 import { toast } from "sonner";
@@ -375,36 +376,36 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
           searchPlaceholder="Search by name or designation..."
           filters={
             <>
-              <select
-                value={tableDesignation}
-                onChange={(e) => setTableDesignation(e.target.value)}
-                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-              >
-                <option value="all">All Designations</option>
-                {inviteeDesignations.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <select
-                value={tableDepartment}
-                onChange={(e) => setTableDepartment(e.target.value)}
-                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-              >
-                <option value="all">All Departments</option>
-                {inviteeDepartments.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <select
-                value={tableOffice}
-                onChange={(e) => setTableOffice(e.target.value)}
-                className="bg-muted/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring w-44"
-              >
-                <option value="all">All Offices</option>
-                {inviteeOffices.map((o) => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableDesignation}
+                  onChange={setTableDesignation}
+                  options={[
+                    { value: "all", label: "All Designations" },
+                    ...inviteeDesignations.map((d) => ({ value: d, label: d }))
+                  ]}
+                />
+              </div>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableDepartment}
+                  onChange={setTableDepartment}
+                  options={[
+                    { value: "all", label: "All Departments" },
+                    ...inviteeDepartments.map((d) => ({ value: d, label: d }))
+                  ]}
+                />
+              </div>
+              <div className="w-44">
+                <CustomSelect
+                  value={tableOffice}
+                  onChange={setTableOffice}
+                  options={[
+                    { value: "all", label: "All Offices" },
+                    ...inviteeOffices.map((o) => ({ value: o, label: o }))
+                  ]}
+                />
+              </div>
             </>
           }
           onEdit={!isLocked ? handleEditClick : undefined}
