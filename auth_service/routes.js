@@ -140,6 +140,8 @@ router.post('/signin', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Account is inactive' });
         }
 
+        console.log('Hello')
+
         // Verify password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {

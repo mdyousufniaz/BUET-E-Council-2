@@ -7,6 +7,8 @@ import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
 import DataTable from "../DataTable";
 import TakeAttendanceView from "./TakeAttendanceView";
+import SendAgendaModal from "./SendAgendaModal";
+
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 
@@ -20,7 +22,13 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const [activeTab, setActiveTab] = useState<'search' | 'custom'>('search');
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [isSendAgendaModalOpen, setIsSendAgendaModalOpen] = useState(false);
+
   const { confirm, ConfirmModal } = useConfirm();
+  // TODO: Replace with the actual logged-in user's email from your auth/user
+  // context (e.g. a useAuth() hook or a /auth/me call), instead of this stub.
+  const currentUserEmail = "you@example.com";
+
 
   // Fetch members for the Add Presentee modal
   const { data: membersRes } = useSWR('/members', fetcher);
@@ -304,8 +312,11 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                     <Plus className="w-4 h-4" />
                     {isFetching ? "Fetching..." : "Fetch From Members"}
                   </button>
-                  <button className="bg-secondary text-secondary-foreground px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:opacity-90 transition-opacity">
-                    <Mail className="w-4 h-4" />
+                                    <button
+                    onClick={() => setIsSendAgendaModalOpen(true)}
+                    className="bg-secondary text-secondary-foreground px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:opacity-90 transition-opacity"
+                  >
+
                     Send Agenda
                   </button>
                   <button
@@ -359,6 +370,16 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
           onDelete={!isLocked ? (row) => handleRemove(row.id) : undefined}
         />
       )}
+
+            {/* Send Agenda Modal (Invitees tab + Email tab) */}
+      <SendAgendaModal
+        isOpen={isSendAgendaModalOpen}
+        onClose={() => setIsSendAgendaModalOpen(false)}
+        meeting={meeting}
+        currentUserEmail={currentUserEmail}
+      />
+
+
 
       {/* Add Presentee Modal */}
       {isAddPresenteeModalOpen && (

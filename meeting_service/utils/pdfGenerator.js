@@ -50,28 +50,55 @@ const generateResolutionPdf = async (meetingId) => {
         const depts = {};
         const others = [];
 
+        // Guards against invisible Unicode mismatches (e.g. differently-composed
+        // Bengali conjuncts/vowel signs from DB entry vs. source-code literals)
+        // that make .includes() silently fail on visually-identical text.
+        const normalize = (str) => (str || '').normalize('NFC').trim();
+
+        // Short label used when noting a dean/head's office inline within the dept-wise list
+        const getShortOfficeLabel = (officeStr) => {
+            const o = normalize(officeStr);
+            if (!o) return null;
+            if (o.includes(normalize('উপাচার্য'))) return 'উপাচার্য';
+            if (o.includes(normalize('ডিন')) || o.includes(normalize('ডীন'))) return 'ডিন';
+            if (o.includes(normalize('বিভাগীয় প্রধান'))) return 'বিভাগীয় প্রধান';
+            return o;
+        };
+
         presentees.forEach(p => {
             let extractedName = p.name;
-            let officeStr = p.office_name || '';
+            let officeStr = normalize(p.office_name || '');
             if (!extractedName && officeStr.includes(',')) {
                 const parts = officeStr.split(',');
                 extractedName = parts[0].trim();
                 officeStr = parts.slice(1).join(',').trim();
             }
             if (!extractedName) extractedName = 'Unknown';
-            
+
             const pObj = { name: extractedName, office: officeStr, designation: p.designation };
 
-            if (officeStr.includes('উপাচার্য')) {
+            let classifiedOffice = null;
+
+            if (officeStr.includes(normalize('উপাচার্য'))) {
                 admins.push(pObj);
-            } else if (officeStr.includes('ডিন')) {
+                classifiedOffice = officeStr;
+            } else if (officeStr.includes(normalize('ডিন')) || officeStr.includes(normalize('ডীন'))) {
                 deans.push(pObj);
-            } else if (officeStr.includes('বিভাগীয় প্রধান')) {
+                classifiedOffice = officeStr;
+            } else if (officeStr.includes(normalize('বিভাগীয় প্রধান'))) {
                 heads.push(pObj);
-            } else if (p.department_name) {
+                classifiedOffice = officeStr;
+            }
+
+            // Dept-wise membership is independent of the classification above: a dean/head
+            // who also belongs to a department still shows up here, with their office noted.
+            if (p.department_name) {
                 if (!depts[p.department_name]) depts[p.department_name] = [];
-                depts[p.department_name].push(pObj);
-            } else {
+                depts[p.department_name].push({
+                    ...pObj,
+                    extraOfficeLabel: classifiedOffice ? getShortOfficeLabel(classifiedOffice) : null
+                });
+            } else if (!classifiedOffice) {
                 others.push(pObj);
             }
         });
@@ -98,12 +125,27 @@ const generateResolutionPdf = async (meetingId) => {
             return 'সদস্য';
         };
 
+        // Builds the visible name text: appends "সহযোগী অধ্যাপক" when the designation is
+        // Associate Professor and the name doesn't already start with "অধ্যাপক" (i.e. Professor
+        // names already carry their own title, e.g. "অধ্যাপক ডঃ ..."), and appends the
+        // dean/head office label (if any) for members also shown in a dept section.
+        const getDisplayName = (item) => {
+            let displayName = item.name;
+            if (item.designation && normalize(item.designation).includes(normalize('সহযোগী অধ্যাপক')) && !normalize(displayName).startsWith(normalize('অধ্যাপক'))) {
+                displayName = `${displayName}, সহযোগী অধ্যাপক`;
+            }
+            if (item.extraOfficeLabel) {
+                displayName = `${displayName} (${item.extraOfficeLabel})`;
+            }
+            return displayName;
+        };
+
         const renderSection = (title, items) => {
             if (!items || items.length === 0) return '';
             let html = `<div class="presentee-section"><div class="section-title"><u>${title}</u></div>`;
             items.forEach(item => {
                 html += `<div class="presentee-row">
-                    <div class="p-name">${item.name}</div>
+                    <div class="p-name">${getDisplayName(item)}</div>
                     <div class="p-suffix">${getSuffix(item)}</div>
                 </div>`;
             });
@@ -154,15 +196,14 @@ const generateResolutionPdf = async (meetingId) => {
                 .p-name { width: 75%; text-align: left; }
                 .p-suffix { width: 25%; text-align: right; }
                 .disclaimer { text-align: center; margin-top: 20px; margin-bottom: 40px; font-size: 14px; }
-                
+
                 .agenda-block {
                     page-break-inside: avoid;
                     margin-bottom: 30px;
                 }
                 .agenda-title { font-weight: bold; margin-bottom: 5px; font-size: 14px;}
                 .agenda-content, .agenda-resolution { margin-left: 30px; text-align: justify; font-size: 14px;}
-                
-                /* Rich text formatting overrides */
+
                 table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
                 table, th, td { border: 1px solid black; }
                 th, td { padding: 4px; text-align: left; }
@@ -170,22 +211,22 @@ const generateResolutionPdf = async (meetingId) => {
             </style>
         </head>
         <body>
-            <div class="text-center header-title">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
+            <div class="text-center header-title">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
             <div class="text-center sub-title">${meetingDate} তারিখে অনুষ্ঠিত ${serialNo}নং সভার কার্যবিবরণী</div>
-            
+
             ${meeting.description ? `<div class="description">${meeting.description}</div>` : ''}
 
             <div class="presentees-header">উপস্থিত সদস্যবৃন্দ</div>
             <div class="columns-container">
                 ${renderSection('প্রশাসন', admins)}
                 ${renderSection('সকল ডিন', deans)}
-                ${renderSection('সকল বিভাগীয় প্রধান', heads)}
+                ${renderSection('সকল বিভাগীয় প্রধান', heads)}
                 ${Object.keys(depts).sort().map(dept => renderSection(dept, depts[dept])).join('')}
                 ${renderSection('অন্যান্য সদস্য', others)}
             </div>
-            
+
             <div class="disclaimer">এই তালিকা সিনিওরিটি হিসেবে গণ্য হবে না।</div>
-            
+
             ${agendas.map(ag => `
                 <div class="agenda-block">
                     <div class="agenda-title">প্রস্তাব নং: ${ag.agenda_serial || ''}</div>
@@ -205,13 +246,13 @@ const generateResolutionPdf = async (meetingId) => {
         });
         const page = await browser.newPage();
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        
+
         const pdfBuffer = await page.pdf({
             format: 'A4',
             margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
             printBackground: true
         });
-        
+
         await browser.close();
         return pdfBuffer;
 

@@ -231,6 +231,25 @@ const getInvitees = async (req, res, next) => {
     }
 };
 
+const getInviteesEmails = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query(`
+            SELECT i.id, i.name, i.email, i.designation,
+                   d.name_bangla as department_name, o.name_bangla as office_name
+            FROM invitees i
+            LEFT JOIN departments d ON i.department_id = d.id
+            LEFT JOIN offices o ON i.office_id = o.id
+            WHERE i.meeting_id = $1
+            ORDER BY i.created_at ASC
+        `, [id]);
+        res.status(200).json({ success: true, data: result.rows });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
 const removeInvitee = async (req, res, next) => {
     try {
         const { id, inviteeId } = req.params;
@@ -573,5 +592,6 @@ module.exports = {
     completeMeeting,
     uploadMaterial,
     toggleLock,
-    bulkImportMeeting
+    bulkImportMeeting,
+    getInviteesEmails
 };
