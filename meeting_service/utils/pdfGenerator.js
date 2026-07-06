@@ -20,12 +20,7 @@ const getFontBase64 = () => {
     return null;
 };
 
-const generateAgendaPdf = async (meetingData) => {
-    // Left untouched for now, or just return empty buffer
-    return Buffer.from('');
-};
-
-const generateResolutionPdf = async (meetingId) => {
+const generatePdf = async (meetingId, isResolution) => {
     try {
         const meetingQuery = `SELECT * FROM meetings WHERE id = $1`;
         const { rows: meetings } = await pool.query(meetingQuery, [meetingId]);
@@ -75,7 +70,8 @@ const generateResolutionPdf = async (meetingId) => {
             }
             if (!extractedName) extractedName = 'Unknown';
 
-            const pObj = { name: extractedName, office: officeStr, designation: p.designation };
+            const departmentName = normalize(p.department_name || '');
+            const pObj = { name: extractedName, office: officeStr, designation: p.designation, department: departmentName };
 
             let classifiedOffice = null;
 
@@ -83,10 +79,12 @@ const generateResolutionPdf = async (meetingId) => {
                 admins.push(pObj);
                 classifiedOffice = officeStr;
             } else if (officeStr.includes(normalize('ডিন')) || officeStr.includes(normalize('ডীন'))) {
-                deans.push(pObj);
+                // Dean rows also show their specific office (e.g. which faculty they're dean of).
+                deans.push({ ...pObj, extraLabel: officeStr || null });
                 classifiedOffice = officeStr;
             } else if (officeStr.includes(normalize('বিভাগীয় প্রধান'))) {
-                heads.push(pObj);
+                // Head rows also show the specific department they head.
+                heads.push({ ...pObj, extraLabel: departmentName || null });
                 classifiedOffice = officeStr;
             }
 
@@ -96,7 +94,7 @@ const generateResolutionPdf = async (meetingId) => {
                 if (!depts[p.department_name]) depts[p.department_name] = [];
                 depts[p.department_name].push({
                     ...pObj,
-                    extraOfficeLabel: classifiedOffice ? getShortOfficeLabel(classifiedOffice) : null
+                    extraLabel: classifiedOffice ? getShortOfficeLabel(classifiedOffice) : null
                 });
             } else if (!classifiedOffice) {
                 others.push(pObj);
@@ -127,15 +125,16 @@ const generateResolutionPdf = async (meetingId) => {
 
         // Builds the visible name text: appends "সহযোগী অধ্যাপক" when the designation is
         // Associate Professor and the name doesn't already start with "অধ্যাপক" (i.e. Professor
-        // names already carry their own title, e.g. "অধ্যাপক ডঃ ..."), and appends the
-        // dean/head office label (if any) for members also shown in a dept section.
+        // names already carry their own title, e.g. "অধ্যাপক ডঃ ..."), and appends an
+        // extraLabel when present (dean's specific office, head's specific department, or the
+        // short office label for a dean/head also shown within a dept section).
         const getDisplayName = (item) => {
             let displayName = item.name;
             if (item.designation && normalize(item.designation).includes(normalize('সহযোগী অধ্যাপক')) && !normalize(displayName).startsWith(normalize('অধ্যাপক'))) {
                 displayName = `${displayName}, সহযোগী অধ্যাপক`;
             }
-            if (item.extraOfficeLabel) {
-                displayName = `${displayName} (${item.extraOfficeLabel})`;
+            if (item.extraLabel) {
+                displayName = `${displayName} (${item.extraLabel})`;
             }
             return displayName;
         };
@@ -177,21 +176,24 @@ const generateResolutionPdf = async (meetingId) => {
                 .columns-container {
                     column-count: 2;
                     column-gap: 40px;
+                    column-fill: auto;
                     font-size: 12px;
                     margin-bottom: 30px;
                 }
                 .presentee-section {
-                    break-inside: avoid;
                     margin-bottom: 15px;
                 }
                 .section-title {
                     font-weight: bold;
                     margin-bottom: 5px;
+                    break-inside: avoid;
+                    break-after: avoid;
                 }
                 .presentee-row {
                     display: flex;
                     justify-content: space-between;
                     margin-bottom: 3px;
+                    break-inside: avoid;
                 }
                 .p-name { width: 75%; text-align: left; }
                 .p-suffix { width: 25%; text-align: right; }
@@ -231,8 +233,10 @@ const generateResolutionPdf = async (meetingId) => {
                 <div class="agenda-block">
                     <div class="agenda-title">প্রস্তাব নং: ${ag.agenda_serial || ''}</div>
                     <div class="agenda-content">${ag.content || ''}</div>
+                    ${isResolution ? `
                     <div class="agenda-title" style="margin-top:15px;">সিদ্ধান্ত:</div>
                     <div class="agenda-resolution">${ag.resolution || ''}</div>
+                    ` : ''}
                 </div>
             `).join('')}
         </body>
@@ -433,7 +437,6 @@ const generateAttendanceSheet = async (meetingId) => {
 };
 
 module.exports = {
-    generateAgendaPdf,
-    generateResolutionPdf,
+    generatePdf,
     generateAttendanceSheet
 };

@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
-import { fetcher } from "../../lib/api";
-import { X, Mail, Send, Search, CheckCircle2 } from "lucide-react";
-import RichTextEditor from "../RichTextEditor";
+import api, { fetcher } from "../../lib/api";
+import { X, Mail, Send, Search, CheckCircle2, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface SendAgendaModalProps {
@@ -16,6 +15,20 @@ interface SendAgendaModalProps {
 
 type Tab = "invitees" | "email";
 
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
 export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserEmail }: SendAgendaModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("invitees");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -23,6 +36,8 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [attachAgendaPdf, setAttachAgendaPdf] = useState(true);
+  const [extraAttachments, setExtraAttachments] = useState<File[]>([]);
 
   // Lightweight "invitees with email" fetch — only while the modal is open.
   // Backed by GET /meetings/:id/invitees/emails (see meetingController.getInviteesEmails)
@@ -50,6 +65,8 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
       setSelectedIds([]);
       setSearchQuery("");
       setBody("");
+      setAttachAgendaPdf(true);
+      setExtraAttachments([]);
     }
   }, [isOpen, meeting]);
 
@@ -65,26 +82,48 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
     }
   };
 
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    setExtraAttachments((prev) => [...prev, ...Array.from(files)]);
+  };
+
+  const removeExtraAttachment = (index: number) => {
+    setExtraAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSend = async () => {
     setIsSending(true);
     try {
-      // ------------------------------------------------------------------
-      // TODO: implement the actual send-agenda API call here, e.g.
-      //
-      // await api.post(`/meetings/${meeting.id}/invitees/send-agenda`, {
-      //   invitee_ids: selectedIds,
-      //   from: currentUserEmail,
-      //   subject,
-      //   body,
-      // });
-      //
-      // Intentionally left as a placeholder per requirements — no backend
-      // sending logic has been implemented yet.
-      // ------------------------------------------------------------------
-      toast.success(`Agenda queued for ${selectedIds.length} recipient(s)`);
+      const attachments = await Promise.all(
+        extraAttachments.map(async (file) => ({
+          filename: file.name,
+          content: await fileToBase64(file),
+          contentType: file.type || "application/octet-stream",
+        }))
+      );
+
+      const res = await api.post(`/meetings/${meeting.id}/send-email`, {
+        invitee_ids: selectedIds,
+        from: currentUserEmail,
+        subject,
+        content: body,
+        attach_agenda: attachAgendaPdf,
+        attachments,
+      });
+
+      const sent = res.data?.data?.sent || [];
+      const failed = res.data?.data?.failed || [];
+
+      if (sent.length > 0 && failed.length > 0) {
+        toast.warning(res.data?.message || `Sent to ${sent.length} recipient(s), ${failed.length} failed`);
+      } else if (sent.length > 0) {
+        toast.success(res.data?.message || `Agenda emailed to ${sent.length} recipient(s)`);
+      } else {
+        toast.error(res.data?.message || "Failed to send agenda");
+      }
       onClose();
     } catch (err: any) {
-      toast.error("Failed to send agenda");
+      toast.error(err.response?.data?.message || "Failed to send agenda");
     } finally {
       setIsSending(false);
     }
@@ -232,13 +271,65 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
                 />
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Attachments</label>
+                  <label className="text-sm font-medium text-primary hover:underline cursor-pointer flex items-center gap-1">
+                    <Paperclip className="w-4 h-4" /> Add files
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        addFiles(e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-2.5 rounded-md border border-border bg-muted/20">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-input"
+                      checked={attachAgendaPdf}
+                      onChange={(e) => setAttachAgendaPdf(e.target.checked)}
+                    />
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                    <span className="flex-1 text-sm">Meeting Agenda.pdf</span>
+                    <span className="text-xs text-muted-foreground">Generated automatically</span>
+                  </label>
+
+                  {extraAttachments.map((file, idx) => (
+                    <div
+                      key={`${file.name}-${idx}`}
+                      className="flex items-center gap-3 p-2.5 rounded-md border border-border"
+                    >
+                      <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatBytes(file.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeExtraAttachment(idx)}
+                        className="text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Message</label>
-                {/* Reuses the project's existing rich text editor. If RichTextEditor's
-                    prop names differ from value/onChange, adjust the line below. */}
-                <div className="border border-input rounded-md min-h-[200px] overflow-hidden">
-                  <RichTextEditor content={body} onChange={setBody} />
-                </div>
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Write your message..."
+                  rows={10}
+                  className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm focus:ring-1 focus:ring-ring resize-y font-sans"
+                />
               </div>
             </div>
           )}

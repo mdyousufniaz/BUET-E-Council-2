@@ -35,6 +35,9 @@ router.put('/:id/attendance', meetingController.saveAttendance);
 // Unified endpoint for generating PDFs
 router.get('/:id/pdf/:type', meetingController.generatePdf);
 
+// Send agenda (or any ad-hoc message) via email to selected invitees
+router.post('/:id/send-email', meetingController.sendAgendaEmail);
+
 // Endpoint for uploading material PDFs
 router.post('/:id/materials/upload', upload.single('file'), meetingController.uploadMaterial);
 

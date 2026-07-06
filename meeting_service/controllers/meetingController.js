@@ -1,7 +1,8 @@
 const CustomError = require('../errors/CustomError');
 const db = require('../db');
-const { generateAgendaPdf, generateResolutionPdf, generateAttendanceSheet } = require('../utils/pdfGenerator');
+const { generatePdf: generateMeetingPdf, generateAttendanceSheet } = require('../utils/pdfGenerator');
 const storageService = require('../utils/storageService');
+const { sendMail } = require('../utils/mailer');
 const crypto = require('crypto');
 
 const getMeetings = async (req, res, next) => {
@@ -410,13 +411,13 @@ const generatePdf = async (req, res, next) => {
         if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
 
         if (type === 'agenda') {
-            pdfBuffer = await generateAgendaPdf(id);
+            pdfBuffer = await generateMeetingPdf(id, false);
         } else if (type === 'resolution') {
-            pdfBuffer = await generateResolutionPdf(id);
+            pdfBuffer = await generateMeetingPdf(id, true);
         } else if (type === 'attendance') {
             pdfBuffer = await generateAttendanceSheet(id);
         } else if (type === 'resolution-status') {
-            pdfBuffer = await generateResolutionPdf(id, true); // true indicates includeStatus
+            pdfBuffer = await generateMeetingPdf(id, true);
         } else {
             return next(new CustomError('Invalid pdf type requested', 400));
         }
@@ -464,6 +465,86 @@ const uploadMaterial = async (req, res, next) => {
         );
 
         res.status(200).json({ success: true, message: 'Material uploaded successfully', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const sendAgendaEmail = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { invitee_ids, from, subject, content, attach_agenda = true, attachments = [] } = req.body;
+
+        if (!Array.isArray(invitee_ids) || invitee_ids.length === 0) {
+            return next(new CustomError('invitee_ids must be a non-empty array', 400));
+        }
+        if (!from) return next(new CustomError('from is required', 400));
+        if (!subject) return next(new CustomError('subject is required', 400));
+        if (!content) return next(new CustomError('content is required', 400));
+
+        const meetingCheck = await db.query('SELECT * FROM meetings WHERE id = $1', [id]);
+        if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+
+        const inviteesResult = await db.query(
+            `SELECT id, name, email FROM invitees WHERE meeting_id = $1 AND id = ANY($2::uuid[])`,
+            [id, invitee_ids]
+        );
+        const foundInvitees = inviteesResult.rows;
+
+        const recipients = foundInvitees.filter(i => !!i.email);
+        const failed = foundInvitees
+            .filter(i => !i.email)
+            .map(i => ({ invitee_id: i.id, name: i.name, reason: 'No email address on file' }));
+
+        const foundIds = new Set(foundInvitees.map(i => i.id));
+        invitee_ids
+            .filter(iid => !foundIds.has(iid))
+            .forEach(iid => failed.push({ invitee_id: iid, reason: 'Invitee not found for this meeting' }));
+
+        if (recipients.length === 0) {
+            return next(new CustomError('None of the selected invitees have a valid email address', 400));
+        }
+
+        const mailAttachments = [...attachments];
+        if (attach_agenda) {
+            const pdfBuffer = await generateMeetingPdf(id, false);
+            mailAttachments.push({
+                filename: `agenda-${id}.pdf`,
+                content: pdfBuffer.toString('base64'),
+                contentType: 'application/pdf'
+            });
+        }
+
+        const results = await Promise.allSettled(
+            recipients.map(r => sendMail({
+                from,
+                to: r.email,
+                subject,
+                html: content,
+                attachments: mailAttachments
+            }))
+        );
+
+        const sent = [];
+        results.forEach((r, idx) => {
+            const recipient = recipients[idx];
+            if (r.status === 'fulfilled') {
+                sent.push({ invitee_id: recipient.id, email: recipient.email });
+            } else {
+                failed.push({ invitee_id: recipient.id, email: recipient.email, reason: r.reason?.message || 'Failed to send' });
+            }
+        });
+
+        const statusCode = sent.length === 0 ? 502 : (failed.length > 0 ? 207 : 200);
+        res.status(statusCode).json({
+            success: sent.length > 0,
+            message: sent.length === 0
+                ? 'Failed to send email to all recipients'
+                : failed.length > 0
+                    ? `Sent to ${sent.length} recipient(s), ${failed.length} failed`
+                    : `Email sent to ${sent.length} recipient(s)`,
+            data: { sent, failed }
+        });
     } catch (error) {
         next(error);
     }
@@ -593,5 +674,6 @@ module.exports = {
     uploadMaterial,
     toggleLock,
     bulkImportMeeting,
-    getInviteesEmails
+    getInviteesEmails,
+    sendAgendaEmail
 };
