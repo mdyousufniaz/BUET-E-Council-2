@@ -153,7 +153,7 @@ export default function ManageTemplatesPage() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6 flex-1">
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Template Type</label>
                   <CustomSelect

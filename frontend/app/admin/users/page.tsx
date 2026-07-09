@@ -185,7 +185,7 @@ export default function ManageUsersPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Role</label>
                   <SearchableSelect

@@ -141,7 +141,7 @@ export default function ManageDepartmentsPage() {
             <h3 className="text-lg font-semibold mb-4">{isEditMode ? "Edit Department" : "Add New Department"}</h3>
             <form onSubmit={handleAddSubmit} className="space-y-4">
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Name (Bangla)</label>
                   <input required value={newDepartment.name_bangla} onChange={e => setNewDepartment({...newDepartment, name_bangla: e.target.value})} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
@@ -152,7 +152,7 @@ export default function ManageDepartmentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Alias (Bangla)</label>
                   <input required value={newDepartment.alias_bangla} onChange={e => setNewDepartment({...newDepartment, alias_bangla: e.target.value})} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
@@ -163,7 +163,7 @@ export default function ManageDepartmentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Faculty</label>
                   <SearchableSelect 

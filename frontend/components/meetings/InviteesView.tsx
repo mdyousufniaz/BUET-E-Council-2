@@ -455,7 +455,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm"
               />
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <SearchableSelect 
                   options={[
                     { value: "", label: "All Designations" },
@@ -565,7 +565,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
           <div className="bg-card w-full max-w-lg rounded-lg shadow-xl border border-border p-6 relative max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Create Custom {isPast ? 'Presentee' : 'Invitee'}</h3>
             <form onSubmit={handleCreateCustomPresentee} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Name</label>
                   <input 
@@ -658,7 +658,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
           <div className="bg-card w-full max-w-lg rounded-lg shadow-xl border border-border p-6 relative max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Edit {isPast ? 'Presentee' : 'Invitee'}</h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Name</label>
                   <input 
