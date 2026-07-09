@@ -8,6 +8,7 @@ const { Readable } = require('stream');
 const db = require('./db');
 const { requireAuth, requireAdmin } = require('./middleware');
 const { getDeviceInfo } = require('./utils');
+const { sendAccountCreatedEmail } = require('./email');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -81,11 +82,14 @@ router.post('/signup', requireAuth, requireAdmin, async (req, res) => {
             [username, email, hashedPassword, role, member_type]
         );
 
+        const emailSent = await sendAccountCreatedEmail(email, username, password);
+
         res.status(201).json({
             success: true,
             message: 'User created successfully',
             data: result.rows[0],
-            generated_password: generatedPassword
+            generated_password: generatedPassword,
+            email_sent: emailSent
         });
     } catch (err) {
         console.error('Signup error:', err);

@@ -2,6 +2,7 @@
 node_modules
 *venv
 ACQ.sql
+cookies.txt
 # --- Frontend (Vue/Vite/Node) ---
 node_modules/
 dist/

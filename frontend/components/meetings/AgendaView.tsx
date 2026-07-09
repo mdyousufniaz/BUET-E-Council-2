@@ -6,6 +6,7 @@ import RichTextEditor from "../RichTextEditor";
 import AnnexureList from "./AnnexureList";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
+import { sanitizeHtml } from "../../lib/sanitize";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
@@ -216,7 +217,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               ) : (
                 <div 
                   className="prose prose-sm dark:prose-invert max-w-none text-foreground"
-                  dangerouslySetInnerHTML={{ __html: agenda.content || "<p class='text-muted-foreground italic'>Empty content...</p>" }} 
+                  dangerouslySetInnerHTML={{ __html: agenda.content ? sanitizeHtml(agenda.content) : "<p class='text-muted-foreground italic'>Empty content...</p>" }}
                 />
               )}
 

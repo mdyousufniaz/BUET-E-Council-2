@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "../../../lib/api";
+import { sanitizeHtml } from "../../../lib/sanitize";
 import Header from "../../../components/Header";
 
 // Component to render a single agenda and its annexures
@@ -17,7 +18,7 @@ function AgendaItem({ agenda, meetingStatus }: { agenda: any, meetingStatus: str
       </h3>
       <div
         className="prose prose-sm dark:prose-invert max-w-none mb-4 text-muted-foreground"
-        dangerouslySetInnerHTML={{ __html: agenda.content }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.content) }}
       />
 
       {meetingStatus === 'past' && agenda.resolution && (
@@ -25,7 +26,7 @@ function AgendaItem({ agenda, meetingStatus }: { agenda: any, meetingStatus: str
           <h4 className="font-semibold mb-2 text-foreground">সিদ্ধান্ত:</h4>
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: agenda.resolution }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.resolution) }}
           />
         </div>
       )}
@@ -187,7 +188,7 @@ export default function PublicMeetingView() {
               <section>
                 <div
                   className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: meeting.description }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(meeting.description) }}
                 />
               </section>
             )}
@@ -264,7 +265,7 @@ export default function PublicMeetingView() {
               <section>
                 <div
                   className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: meeting.conclusion }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(meeting.conclusion) }}
                 />
               </section>
             )}

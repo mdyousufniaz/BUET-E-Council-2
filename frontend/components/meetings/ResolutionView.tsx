@@ -6,6 +6,7 @@ import RichTextEditor from "../RichTextEditor";
 import AnnexureList from "./AnnexureList";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
+import { sanitizeHtml } from "../../lib/sanitize";
 import { toast } from "sonner";
 import TemplateDrawer from "../TemplateDrawer";
 import { useAuth } from "../../hooks/useAuth";
@@ -108,7 +109,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                 {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
               </h3>
               <div className="text-muted-foreground bg-muted/30 p-4 rounded-md border-l-4 border-muted/50 prose prose-sm dark:prose-invert max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: agenda.content || "<p class='italic opacity-50'>Empty agenda...</p>" }} />
+                <div dangerouslySetInnerHTML={{ __html: agenda.content ? sanitizeHtml(agenda.content) : "<p class='italic opacity-50'>Empty agenda...</p>" }} />
               </div>
 
               {/* Agenda Annexures (Read-Only) */}
@@ -158,7 +159,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                   )}
                   <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground bg-background border border-border p-5 rounded-md shadow-inner"
-                    dangerouslySetInnerHTML={{ __html: agenda.resolution }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.resolution) }}
                   />
                 </div>
               ) : (
@@ -238,7 +239,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                       )}
                       <div
                         className="prose prose-sm dark:prose-invert max-w-none text-foreground bg-emerald-200/30 border border-emerald-100 p-4 rounded-md shadow-sm"
-                        dangerouslySetInnerHTML={{ __html: agenda.execution_status }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.execution_status) }}
                       />
                     </div>
                   ) : (

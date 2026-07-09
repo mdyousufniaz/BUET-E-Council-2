@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../lib/api";
+import { sanitizeHtml } from "../lib/sanitize";
 import { Search, X, Filter } from "lucide-react";
 import { toast } from "sonner";
 
@@ -126,7 +127,7 @@ export default function TemplateDrawer({ isOpen, onClose, type, onSelect }: Temp
               </div>
               <div 
                 className="text-sm text-foreground prose prose-sm dark:prose-invert max-w-none line-clamp-4 overflow-hidden relative"
-                dangerouslySetInnerHTML={{ __html: template.text_content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(template.text_content) }}
               />
               
               <div className="mt-3 pt-3 border-t border-border/50 text-center">
