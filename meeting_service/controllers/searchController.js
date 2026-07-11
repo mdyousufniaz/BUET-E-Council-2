@@ -255,7 +255,74 @@ const search = async (req, res, next) => {
     try {
         const filters = parseFilters(req);
         if (!filters.q) {
-            return next(new CustomError('Search query (q) is required', 400));
+            if (filters.tags && filters.tags.length > 0) {
+                // Cleanup search cache periodically
+                db.query("DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours'").catch(() => {});
+
+                const cacheKey = crypto.createHash('sha256').update(JSON.stringify(filters)).digest('hex');
+                const cached = await db.query('SELECT results FROM search_cache WHERE cache_key = $1', [cacheKey]);
+                if (cached.rows.length > 0) {
+                    return res.status(200).json({ success: true, data: cached.rows[0].results, cached: true });
+                }
+
+                const filterSql = `
+                    AND ($1::uuid[] IS NULL OR EXISTS (SELECT 1 FROM agenda_tags at2 WHERE at2.agenda_id = a.id AND at2.tag_id = ANY($1::uuid[])))
+                    AND ($2::date IS NULL OR m.meeting_date >= $2::date)
+                    AND ($3::date IS NULL OR m.meeting_date <= $3::date)
+                `;
+
+                const agendaParams = [filters.tags, filters.dateFrom, filters.dateTo];
+                const agendaQuery = `
+                    SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
+                           'agenda' as matched_in,
+                           'tag' as match_type,
+                           coalesce(substring(a.content_plain from 1 for 200), '') as snippet
+                    FROM agenda a
+                    JOIN meetings m ON m.id = a.meeting_id
+                    WHERE 1=1
+                    ${filterSql}
+                    ORDER BY m.meeting_date DESC
+                    LIMIT ${RESULT_LIMIT}
+                `;
+                
+                const queries = [db.query(agendaQuery, agendaParams)];
+                
+                if (filters.scope === 'both') {
+                    const resolutionQuery = `
+                        SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
+                               'resolution' as matched_in,
+                               'tag' as match_type,
+                               coalesce(substring(a.resolution_plain from 1 for 200), '') as snippet
+                        FROM agenda a
+                        JOIN meetings m ON m.id = a.meeting_id
+                        WHERE 1=1
+                        ${filterSql}
+                        ORDER BY m.meeting_date DESC
+                        LIMIT ${RESULT_LIMIT}
+                    `;
+                    queries.push(db.query(resolutionQuery, agendaParams));
+                }
+
+                const queryResults = await Promise.all(queries);
+                const results = queryResults.flatMap(r => r.rows).map(row => ({
+                    ...row,
+                    score: 1.0
+                }));
+
+                // Sort results by date desc
+                results.sort((a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime());
+
+                await db.query(
+                    `INSERT INTO search_cache (cache_key, query, filters, results)
+                     VALUES ($1, $2, $3, $4)
+                     ON CONFLICT (cache_key) DO UPDATE SET results = EXCLUDED.results, created_at = CURRENT_TIMESTAMP`,
+                    [cacheKey, '', JSON.stringify(filters), JSON.stringify(results)]
+                );
+
+                return res.status(200).json({ success: true, data: results, cached: false });
+            } else {
+                return next(new CustomError('Search query (q) is required', 400));
+            }
         }
 
         // Cleanup search cache periodically

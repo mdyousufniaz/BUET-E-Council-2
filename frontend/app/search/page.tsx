@@ -15,12 +15,14 @@ const MATCH_TYPE_STYLES: Record<string, string> = {
   keyword: "bg-primary/10 text-primary",
   entity: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   semantic: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  tag: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
 };
 
 const MATCH_TYPE_LABELS: Record<string, string> = {
   keyword: "Keyword match",
   entity: "Related entity",
   semantic: "Semantic match",
+  tag: "Tag match",
 };
 
 function formatMeetingTitle(result: any) {
@@ -72,6 +74,7 @@ function SearchPageInner() {
   const allTags = tagsResponse?.data || [];
 
   const activeQuery = searchParams.get("q") || "";
+  const hasSearchCriteria = !!activeQuery.trim() || tagIds.length > 0;
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -85,8 +88,10 @@ function SearchPageInner() {
   }, [query, scope, tagIds, dateFrom, dateTo]);
 
   const searchKey = useMemo(() => {
-    if (!activeQuery) return null;
-    const params = new URLSearchParams({ q: activeQuery, scope });
+    if (!activeQuery.trim() && tagIds.length === 0) return null;
+    const params = new URLSearchParams();
+    if (activeQuery.trim()) params.set("q", activeQuery.trim());
+    params.set("scope", scope);
     if (tagIds.length > 0) params.set("tags", tagIds.join(","));
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
@@ -162,19 +167,21 @@ function SearchPageInner() {
           </div>
         </div>
 
-        {!activeQuery ? (
+        {!hasSearchCriteria ? (
           <div className="text-center text-muted-foreground py-16">
-            Type a search term above to find agendas, resolutions, departments, offices, or members.
+            Type a search term or select one or more tags above to find agendas, resolutions, departments, offices, or members.
           </div>
         ) : isLoading && !data ? (
           <div className="text-center text-muted-foreground py-16">Searching...</div>
         ) : results.length === 0 ? (
           <div className="text-center text-muted-foreground py-16">
-            No results found for &quot;{activeQuery}&quot;.
+            No results found.
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">{results.length} result{results.length === 1 ? '' : 's'} for &quot;{activeQuery}&quot;</p>
+            <p className="text-sm text-muted-foreground">
+              {results.length} result{results.length === 1 ? '' : 's'} found {activeQuery && <>for &quot;{activeQuery}&quot;</>}
+            </p>
             {results.map((result: any) => (
               <ResultCard key={`${result.agenda_id}-${result.matched_in}`} result={result} />
             ))}
