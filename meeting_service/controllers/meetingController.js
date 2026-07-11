@@ -4,6 +4,7 @@ const { generatePdf: generateMeetingPdf, generateAttendanceSheet } = require('..
 const storageService = require('../utils/storageService');
 const { sendMail } = require('../utils/mailer');
 const crypto = require('crypto');
+const { indexAgendaContent, indexResolutionContent } = require('../utils/searchIndexer');
 
 const getMeetings = async (req, res, next) => {
     try {
@@ -631,10 +632,10 @@ const bulkImportMeeting = async (req, res, next) => {
         // 3. Insert Agendas
         if (agendas && Array.isArray(agendas)) {
             for (const a of agendas) {
-                await client.query(
+                const res = await client.query(
                     `INSERT INTO agenda 
                     (content, resolution, agenda_serial, meeting_id) 
-                    VALUES ($1, $2, $3, $4)`,
+                    VALUES ($1, $2, $3, $4) RETURNING id`,
                     [
                         a.content,
                         a.resolution,
@@ -642,6 +643,14 @@ const bulkImportMeeting = async (req, res, next) => {
                         meetingId
                     ]
                 );
+                const agendaId = res.rows[0].id;
+                
+                if (a.content) {
+                    indexAgendaContent(agendaId, a.content).catch(() => {});
+                }
+                if (a.resolution) {
+                    indexResolutionContent(agendaId, a.resolution).catch(() => {});
+                }
             }
         }
 

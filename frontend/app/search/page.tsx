@@ -147,14 +147,14 @@ function SearchPageInner() {
               <button
                 type="button"
                 onClick={() => setScope("agenda")}
-                className={`px-3 py-2 flex items-center gap-1.5 transition-colors ${scope === "agenda" ? "bg-primary text-primary-foreground" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
+                className={`px-3 py-2 flex items-center gap-1.5 transition-colors ${scope === "agenda" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
               >
                 <FileText className="w-3.5 h-3.5" /> Agenda only
               </button>
               <button
                 type="button"
                 onClick={() => setScope("both")}
-                className={`px-3 py-2 flex items-center gap-1.5 transition-colors border-l border-input ${scope === "both" ? "bg-primary text-primary-foreground" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
+                className={`px-3 py-2 flex items-center gap-1.5 transition-colors border-l border-input ${scope === "both" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
               >
                 <Sparkles className="w-3.5 h-3.5" /> Agenda + Resolution
               </button>

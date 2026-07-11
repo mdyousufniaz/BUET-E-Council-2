@@ -272,6 +272,10 @@ CREATE INDEX idx_offices_trgm ON offices USING GIN (
     (name_bangla || ' ' || coalesce(name_english, '')) gin_trgm_ops
 );
 CREATE INDEX idx_members_name_trgm ON members USING GIN (name gin_trgm_ops);
+CREATE INDEX idx_faculties_trgm ON faculties USING GIN (
+    (name_bangla || ' ' || coalesce(name_english, '')) gin_trgm_ops
+);
+CREATE INDEX idx_presentees_name_trgm ON presentees USING GIN (name gin_trgm_ops);
 
 INSERT INTO
     users (
