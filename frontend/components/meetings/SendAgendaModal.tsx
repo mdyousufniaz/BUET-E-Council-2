@@ -5,6 +5,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { X, Mail, Send, Search, CheckCircle2, Paperclip, FileText } from "lucide-react";
 import { toast } from "sonner";
+import RichTextEditor from "../RichTextEditor";
 
 interface SendAgendaModalProps {
   isOpen: boolean;
@@ -323,13 +324,13 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
 
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Message</label>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  placeholder="Write your message..."
-                  rows={10}
-                  className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm focus:ring-1 focus:ring-ring resize-y font-sans"
-                />
+                <div className="border border-input rounded-md overflow-hidden">
+                  <RichTextEditor
+                    content={body}
+                    onChange={setBody}
+                    className="p-4 min-h-[200px]"
+                  />
+                </div>
               </div>
             </div>
           )}

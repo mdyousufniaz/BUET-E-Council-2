@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import useSWR from "swr";
+import { useRouter } from "next/navigation";
 import api, { fetcher } from "../../lib/api";
 import { toast } from "sonner";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { data: response, error, mutate } = useSWR('/auth/me', fetcher);
   
   const [formData, setFormData] = useState({
@@ -46,7 +48,14 @@ export default function ProfilePage() {
         return toast.info("No changes to save");
       }
 
-      await api.put('/auth/me', payload);
+      const res = await api.put('/auth/me', payload);
+
+      if (res.data?.passwordChanged) {
+        toast.success("Password changed. You've been signed out from all devices.");
+        router.push('/login');
+        return;
+      }
+
       toast.success("Profile updated successfully");
       setFormData(prev => ({ ...prev, currentPassword: "", newPassword: "", confirmPassword: "" }));
       mutate();
