@@ -535,10 +535,11 @@ router.put('/me', requireAuth, async (req, res) => {
         }
 
         const user = userResult.rows[0];
-        
+
         let updateQueries = [];
         let queryParams = [];
         let paramIndex = 1;
+        let passwordChanged = false;
 
         if (email) {
             // Check if email is already taken by someone else
@@ -559,6 +560,7 @@ router.put('/me', requireAuth, async (req, res) => {
             const hashedPassword = await bcrypt.hash(newPassword, salt);
             updateQueries.push(`password = $${paramIndex++}`);
             queryParams.push(hashedPassword);
+            passwordChanged = true;
         }
 
         if (updateQueries.length === 0) {
@@ -571,10 +573,19 @@ router.put('/me', requireAuth, async (req, res) => {
             queryParams
         );
 
+        if (passwordChanged) {
+            // Password changed: invalidate every session for this user, including the current one
+            await db.query('UPDATE sessions SET is_active = FALSE WHERE user_id = $1', [req.user.id]);
+            res.clearCookie('session_token');
+        }
+
         res.status(200).json({
             success: true,
-            message: 'Profile updated successfully',
-            data: result.rows[0]
+            message: passwordChanged
+                ? 'Profile updated successfully. You have been signed out from all devices.'
+                : 'Profile updated successfully',
+            data: result.rows[0],
+            passwordChanged
         });
 
     } catch (err) {
