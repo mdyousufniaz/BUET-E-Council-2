@@ -16,6 +16,10 @@ const MATCH_TYPE_STYLES: Record<string, string> = {
   entity: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   semantic: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
   tag: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  "hybrid (all)": "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  "hybrid (keyword + entity)": "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  "hybrid (semantic + entity)": "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  "hybrid (keyword + semantic)": "bg-violet-500/10 text-violet-600 dark:text-violet-400",
 };
 
 const MATCH_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +27,10 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
   entity: "Related entity",
   semantic: "Semantic match",
   tag: "Tag match",
+  "hybrid (all)": "Strong match",
+  "hybrid (keyword + entity)": "Keyword + entity",
+  "hybrid (semantic + entity)": "Semantic + entity",
+  "hybrid (keyword + semantic)": "Keyword + semantic",
 };
 
 function formatMeetingTitle(result: any) {

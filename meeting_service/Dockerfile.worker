@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1
+# Same codebase as the main meeting_service API, but the embedding worker
+# (worker.js) never touches Puppeteer/PDF generation, so this image skips
+# the ~188-package Chromium install entirely - it's a straight npm-only
+# build and stays a fraction of the size and build time.
+FROM node:23-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm npm install
+
+COPY . .
+
+CMD ["npm", "run", "start:worker"]

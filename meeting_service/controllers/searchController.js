@@ -87,46 +87,87 @@ const runKeywordSearch = async (tsqueryText, { scope, tags, dateFrom, dateTo }, 
     return results.flatMap(r => r.rows).sort((a, b) => b.rank - a.rank);
 };
 
-// Entity bucket: fuzzy-match the query against department/office/member
-// names & aliases, then re-run the keyword search using their canonical
-// terms. Entities are looked up live against their own tables, so matching
-// is always current with no separate sync step.
+// Trigram similarity degrades fast once the compared string gets long -
+// comparing a whole multi-word query against a short entity name almost
+// never scores above the threshold, even for an exact substring match. So
+// entity matching runs per-token (unigrams + bigrams) instead of against
+// the raw query string.
+const generateNGrams = (query) => {
+    const words = query.split(/\s+/).filter(w => w.length > 2);
+    const ngrams = [...words];
+    for (let i = 0; i < words.length - 1; i++) {
+        ngrams.push(`${words[i]} ${words[i + 1]}`);
+    }
+    return ngrams;
+};
+
+// Entity bucket: fuzzy-match the query's tokens against department/office/
+// member names & aliases, then re-run the keyword search using their
+// canonical terms. Entities are looked up live against their own tables, so
+// matching is always current with no separate sync step.
 const findMatchingEntityTerms = async (q) => {
+    const tokens = generateNGrams(q);
+    if (tokens.length === 0) return [];
+
+    // Person names share extremely common fragments in Bangla (surnames
+    // like আলম/রহমান/ইসলাম/হাসান appear in hundreds of unrelated records),
+    // so a single-word token is nearly useless as a person identifier and
+    // floods the entity bucket with false positives - e.g. querying for
+    // "... আলম ..." would fuzzy-match every unrelated person whose name
+    // happens to end in "আলম". Bigrams (two consecutive words) are far more
+    // specific, so member/presentee name matching only uses those, and at a
+    // higher similarity threshold than the org-name lookups below.
+    const bigramTokens = tokens.filter(t => t.includes(' '));
+
     const [departments, offices, members, faculties, presentees] = await Promise.all([
         db.query(
-            `SELECT name_bangla, name_english, alias_bangla, alias_english FROM departments
-             WHERE similarity(name_bangla || ' ' || coalesce(name_english,'') || ' ' || coalesce(alias_bangla,'') || ' ' || coalesce(alias_english,''), $1) > 0.2
-                OR name_bangla ILIKE '%' || $1 || '%' OR name_english ILIKE '%' || $1 || '%'
-                OR alias_bangla ILIKE '%' || $1 || '%' OR alias_english ILIKE '%' || $1 || '%'
-             LIMIT 5`,
-            [q]
+            `SELECT DISTINCT d.name_bangla, d.name_english, d.alias_bangla, d.alias_english
+             FROM departments d, unnest($1::text[]) AS token
+             WHERE similarity(d.name_bangla, token) > 0.3
+                OR similarity(coalesce(d.name_english,''), token) > 0.3
+                OR similarity(coalesce(d.alias_bangla,''), token) > 0.3
+                OR similarity(coalesce(d.alias_english,''), token) > 0.3
+                OR d.name_bangla ILIKE '%' || token || '%' OR d.name_english ILIKE '%' || token || '%'
+                OR d.alias_bangla ILIKE '%' || token || '%' OR d.alias_english ILIKE '%' || token || '%'
+             LIMIT 10`,
+            [tokens]
         ),
         db.query(
-            `SELECT name_bangla, name_english FROM offices
-             WHERE similarity(name_bangla || ' ' || coalesce(name_english,''), $1) > 0.2
-                OR name_bangla ILIKE '%' || $1 || '%' OR name_english ILIKE '%' || $1 || '%'
-             LIMIT 5`,
-            [q]
+            `SELECT DISTINCT o.name_bangla, o.name_english
+             FROM offices o, unnest($1::text[]) AS token
+             WHERE similarity(o.name_bangla, token) > 0.3
+                OR similarity(coalesce(o.name_english,''), token) > 0.3
+                OR o.name_bangla ILIKE '%' || token || '%' OR o.name_english ILIKE '%' || token || '%'
+             LIMIT 10`,
+            [tokens]
         ),
+        bigramTokens.length > 0
+            ? db.query(
+                `SELECT DISTINCT m.name
+                 FROM members m, unnest($1::text[]) AS token
+                 WHERE similarity(m.name, token) > 0.45 OR m.name ILIKE '%' || token || '%'
+                 LIMIT 10`,
+                [bigramTokens]
+            )
+            : Promise.resolve({ rows: [] }),
         db.query(
-            `SELECT name FROM members
-             WHERE similarity(name, $1) > 0.2 OR name ILIKE '%' || $1 || '%'
-             LIMIT 5`,
-            [q]
+            `SELECT DISTINCT f.name_bangla, f.name_english
+             FROM faculties f, unnest($1::text[]) AS token
+             WHERE similarity(f.name_bangla, token) > 0.3
+                OR similarity(coalesce(f.name_english,''), token) > 0.3
+                OR f.name_bangla ILIKE '%' || token || '%' OR f.name_english ILIKE '%' || token || '%'
+             LIMIT 10`,
+            [tokens]
         ),
-        db.query(
-            `SELECT name_bangla, name_english FROM faculties
-             WHERE similarity(name_bangla || ' ' || coalesce(name_english,''), $1) > 0.2
-                OR name_bangla ILIKE '%' || $1 || '%' OR name_english ILIKE '%' || $1 || '%'
-             LIMIT 5`,
-            [q]
-        ),
-        db.query(
-            `SELECT name FROM presentees
-             WHERE similarity(name, $1) > 0.2 OR name ILIKE '%' || $1 || '%'
-             LIMIT 5`,
-            [q]
-        )
+        bigramTokens.length > 0
+            ? db.query(
+                `SELECT DISTINCT p.name
+                 FROM presentees p, unnest($1::text[]) AS token
+                 WHERE similarity(p.name, token) > 0.45 OR p.name ILIKE '%' || token || '%'
+                 LIMIT 10`,
+                [bigramTokens]
+            )
+            : Promise.resolve({ rows: [] })
     ]);
 
     const terms = new Set();
@@ -398,6 +439,23 @@ const search = async (req, res, next) => {
             semanticRemainingResults
         ] = await Promise.all(tasks);
 
+        // Reciprocal Rank Fusion: ts_rank (BM25-ish) and cosine distance live
+        // on incomparable scales, so adding them directly as magic-number
+        // weights lets a mediocre keyword match drown out a great semantic
+        // one. RRF sidesteps that by scoring on each list's rank *position*
+        // instead of its raw value, and summing contributions from every
+        // list a candidate appears in.
+        const RRF_K = 60;
+        const rrfContribution = (positionRank) => positionRank ? 1.0 / (RRF_K + positionRank) : 0;
+        const assignPositionRanks = (rows, sortField, ascending) => {
+            const sorted = [...rows].sort((a, b) => ascending ? a[sortField] - b[sortField] : b[sortField] - a[sortField]);
+            sorted.forEach((row, i) => { row.positionRank = i + 1; });
+        };
+        assignPositionRanks(keywordFullResults, 'rank', false);
+        assignPositionRanks(keywordRemainingResults, 'rank', false);
+        assignPositionRanks(semanticFullResults, 'distance', true);
+        assignPositionRanks(semanticRemainingResults, 'distance', true);
+
         const candidates = new Map();
         const getOrSetCandidate = (row) => {
             const key = `${row.agenda_id}:${row.matched_in}`;
@@ -405,10 +463,9 @@ const search = async (req, res, next) => {
                 candidates.set(key, {
                     ...row,
                     isKeywordMatch: false,
-                    keywordRank: 0.0,
                     isSemanticMatch: false,
-                    semanticDistance: 1.0,
                     isEntityMatch: false,
+                    rrfScore: 0.0,
                     matchTypes: []
                 });
             }
@@ -419,7 +476,7 @@ const search = async (req, res, next) => {
         const processKeywordRow = (row) => {
             const cand = getOrSetCandidate(row);
             cand.isKeywordMatch = true;
-            cand.keywordRank = Math.max(cand.keywordRank, row.rank || 0.0);
+            cand.rrfScore += rrfContribution(row.positionRank);
             if (!cand.matchTypes.includes('keyword')) {
                 cand.matchTypes.push('keyword');
             }
@@ -447,7 +504,7 @@ const search = async (req, res, next) => {
         const processSemanticRow = (row) => {
             const cand = getOrSetCandidate(row);
             cand.isSemanticMatch = true;
-            cand.semanticDistance = Math.min(cand.semanticDistance, row.distance);
+            cand.rrfScore += rrfContribution(row.positionRank);
             if (!cand.matchTypes.includes('semantic')) {
                 cand.matchTypes.push('semantic');
             }
@@ -477,8 +534,6 @@ const search = async (req, res, next) => {
 
         const scoredResults = [];
         for (const cand of candidates.values()) {
-            let score = 0.0;
-
             // 1. Entity Match determination
             let isEntity = cand.isEntityMatch;
             if (!isEntity && entityTerms.length > 0) {
@@ -496,38 +551,36 @@ const search = async (req, res, next) => {
                 }
             }
 
-            // 2. Score Calculation
-            if (cand.isKeywordMatch) {
-                score += cand.keywordRank > 0 ? (cand.keywordRank * 10) : 2.0;
-            }
-
-            if (cand.isSemanticMatch) {
-                const similarity = 1.0 - cand.semanticDistance;
-                score += similarity * 10;
-            }
-
+            // 2. Score: RRF over keyword/semantic rank positions, with a
+            // small flat tiebreaker for an entity match (never enough on
+            // its own to outrank a genuine keyword/semantic hit).
+            let score = cand.rrfScore;
             if (isEntity) {
-                score += 5.0;
+                score += 0.02;
             }
 
             // Hybrid bonuses
             if (cand.isKeywordMatch && isEntity && cand.isSemanticMatch) {
-                score += 30.0;
                 cand.match_type = 'hybrid (all)';
             } else if (cand.isKeywordMatch && isEntity) {
-                score += 15.0;
                 cand.match_type = 'hybrid (keyword + entity)';
             } else if (cand.isSemanticMatch && isEntity) {
-                score += 15.0;
                 cand.match_type = 'hybrid (semantic + entity)';
             } else if (cand.isKeywordMatch && cand.isSemanticMatch) {
-                score += 10.0;
                 cand.match_type = 'hybrid (keyword + semantic)';
             } else {
                 if (cand.isKeywordMatch) cand.match_type = 'keyword';
                 else if (isEntity) cand.match_type = 'entity';
                 else if (cand.isSemanticMatch) cand.match_type = 'semantic';
             }
+
+            // A candidate's tier is decided by the *best* bucket it landed
+            // in - keyword first, then entity, then semantic-only - and
+            // tiers are never crossed by score. Otherwise a mediocre
+            // semantic hit that also picked up the flat entity bonus could
+            // still outrank a genuine, complete keyword match, which is
+            // exactly the "garbage above the real match" bug this fixes.
+            const tier = cand.isKeywordMatch ? 0 : (isEntity ? 1 : 2);
 
             scoredResults.push({
                 agenda_id: cand.agenda_id,
@@ -540,12 +593,13 @@ const search = async (req, res, next) => {
                 matched_in: cand.matched_in,
                 match_type: cand.match_type,
                 snippet: cand.snippet,
-                score: score
+                tier,
+                score
             });
         }
 
-        scoredResults.sort((a, b) => b.score - a.score);
-        const finalResults = scoredResults.slice(0, RESULT_LIMIT);
+        scoredResults.sort((a, b) => a.tier - b.tier || b.score - a.score);
+        const finalResults = scoredResults.slice(0, RESULT_LIMIT).map(({ tier, ...rest }) => rest);
 
         await db.query(
             `INSERT INTO search_cache (cache_key, query, filters, results)

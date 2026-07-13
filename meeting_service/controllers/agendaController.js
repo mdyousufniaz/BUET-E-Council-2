@@ -258,7 +258,7 @@ const createResolution = async (req, res, next) => {
     try {
         // Since resolution is on the agenda table, we just update the resolution column
         const agendamId = req.params.id; // Expecting the URL to be POST /:id/resolutions where id is agenda_id
-        const { resolution } = req.body;
+        const { resolution, tag_ids } = req.body;
 
         if (!resolution) return next(new CustomError('Resolution text is required', 400));
 
@@ -270,6 +270,8 @@ const createResolution = async (req, res, next) => {
         );
 
         if (result.rows.length === 0) return next(new CustomError('Agendam not found', 404));
+
+        await setAgendaTags(agendamId, tag_ids);
 
         res.status(201).json({ success: true, message: 'Resolution created', data: result.rows[0] });
 
@@ -283,7 +285,7 @@ const updateResolution = async (req, res, next) => {
     try {
         // Similar to create, we just update the resolution text
         const agendamId = req.params.resId; // from PUT /resolutions/:resId
-        const { resolution } = req.body;
+        const { resolution, tag_ids } = req.body;
 
         if (!resolution) return next(new CustomError('Resolution text is required', 400));
 
@@ -295,6 +297,8 @@ const updateResolution = async (req, res, next) => {
         );
 
         if (result.rows.length === 0) return next(new CustomError('Resolution/Agendam not found', 404));
+
+        await setAgendaTags(agendamId, tag_ids);
 
         res.status(200).json({ success: true, message: 'Resolution updated', data: result.rows[0] });
 

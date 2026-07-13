@@ -5,6 +5,7 @@ import { Edit3, FileText, FileCheck, Plus } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
 import AnnexureList from "./AnnexureList";
 import RevisionHistory from "./RevisionHistory";
+import TagMultiSelect from "../TagMultiSelect";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import { sanitizeHtml } from "../../lib/sanitize";
@@ -26,8 +27,12 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
     return a.is_suppli ? 1 : -1;
   });
 
+  const { data: tagsResponse, mutate: mutateTags } = useSWR('/tags', fetcher, { fallbackData: { data: [] } });
+  const allTags = tagsResponse?.data || [];
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [editTagIds, setEditTagIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [targetAgendaId, setTargetAgendaId] = useState<string | null>(null);
@@ -35,10 +40,21 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
   const [executionContent, setExecutionContent] = useState("");
   const [isSavingExecution, setIsSavingExecution] = useState(false);
 
+  const handleAddNewTag = async (name: string) => {
+    try {
+      const res = await api.post('/tags', { name });
+      const tag = res.data.data;
+      mutateTags();
+      setEditTagIds(prev => [...prev, tag.id]);
+    } catch (err) {
+      toast.error("Failed to create tag");
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await api.put(`/agendas/resolutions/${editingId}`, { resolution: editContent });
+      await api.put(`/agendas/resolutions/${editingId}`, { resolution: editContent, tag_ids: editTagIds });
       mutate();
       setEditingId(null);
       toast.success("Resolution saved successfully");
@@ -52,6 +68,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
   const handleEditClick = (agenda: any) => {
     setEditingId(agenda.id);
     setEditContent(agenda.resolution || "");
+    setEditTagIds((agenda.tags || []).map((t: any) => t.id));
   };
 
   const handleToggleExecuted = async (agenda: any) => {
@@ -109,6 +126,15 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
               <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-2">
                 {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
               </h3>
+              {agenda.tags && agenda.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {agenda.tags.map((tag: any) => (
+                    <span key={tag.id} className="bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="text-muted-foreground bg-muted/30 p-4 rounded-md border-l-4 border-muted/50 prose prose-sm dark:prose-invert max-w-none">
                 <div dangerouslySetInnerHTML={{ __html: agenda.content ? sanitizeHtml(agenda.content) : "<p class='italic opacity-50'>Empty agenda...</p>" }} />
               </div>
@@ -133,6 +159,15 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
               {editingId === agenda.id ? (
                 <div className="border border-primary/50 rounded-md overflow-hidden ring-4 ring-primary/10">
+                  <div className="p-3 border-b border-border bg-muted/30">
+                    <TagMultiSelect
+                      options={allTags}
+                      value={editTagIds}
+                      onChange={setEditTagIds}
+                      onAddNew={handleAddNewTag}
+                      placeholder="Add tags..."
+                    />
+                  </div>
                   <RichTextEditor
                     content={editContent}
                     onChange={setEditContent}

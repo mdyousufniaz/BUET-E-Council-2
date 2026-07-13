@@ -1,6 +1,7 @@
 const db = require('../db');
 const { htmlToText } = require('./htmlToText');
 const { embedTexts } = require('./embeddingClient');
+const { embeddingQueue } = require('../queue');
 
 const MAX_CHUNK_WORDS = 180; // LaBSE's effective limit is ~256 wordpieces; this keeps chunks well under that.
 
@@ -68,10 +69,22 @@ const clearSearchCache = async () => {
     await db.query('DELETE FROM search_cache');
 };
 
-const reindex = async ({ agendaId, html, plainColumn, tableName }) => {
+// Cheap part: strip HTML and update the plain-text mirror column, which is
+// all keyword search (content_tsv/resolution_tsv) depends on. Runs
+// synchronously in the API process - there's no reason keyword search
+// freshness should wait on the embedding queue.
+const updatePlainText = async (agendaId, html, plainColumn) => {
     const plainText = htmlToText(html);
     await db.query(`UPDATE agenda SET ${plainColumn} = $1 WHERE id = $2`, [plainText, agendaId]);
+    await clearSearchCache();
+    return plainText;
+};
 
+// Heavy part: chunk + embed + store. This is the CPU/RAM-intensive step
+// (calls out to the embedding_service and does N inserts), so it's the part
+// deferred to the embedding-jobs queue and run by the resource-aware worker
+// (see worker.js), never inline in an Express request handler.
+const embedAndStoreChunks = async (agendaId, plainText, tableName) => {
     await db.query(`DELETE FROM ${tableName} WHERE agenda_id = $1`, [agendaId]);
 
     const chunks = chunkText(plainText);
@@ -88,11 +101,14 @@ const reindex = async ({ agendaId, html, plainColumn, tableName }) => {
     await clearSearchCache();
 };
 
-// Fire-and-forget from controllers: never let embedding-service latency or
-// downtime block saving an agenda/resolution.
+// Fire-and-forget from controllers: never let embedding-queue latency or
+// downtime block saving an agenda/resolution. The plain-text/keyword-search
+// update happens immediately; the embedding rebuild is queued for the
+// worker.
 const indexAgendaContent = async (agendaId, html) => {
     try {
-        await reindex({ agendaId, html, plainColumn: 'content_plain', tableName: 'agenda_chunks' });
+        const plainText = await updatePlainText(agendaId, html, 'content_plain');
+        await embeddingQueue.add('embed', { kind: 'agenda', agendaId, plainText, tableName: 'agenda_chunks' });
     } catch (err) {
         console.error(`Failed to index agenda content for ${agendaId}:`, err.message);
     }
@@ -100,10 +116,11 @@ const indexAgendaContent = async (agendaId, html) => {
 
 const indexResolutionContent = async (agendaId, html) => {
     try {
-        await reindex({ agendaId, html, plainColumn: 'resolution_plain', tableName: 'resolution_chunks' });
+        const plainText = await updatePlainText(agendaId, html, 'resolution_plain');
+        await embeddingQueue.add('embed', { kind: 'resolution', agendaId, plainText, tableName: 'resolution_chunks' });
     } catch (err) {
         console.error(`Failed to index resolution content for ${agendaId}:`, err.message);
     }
 };
 
-module.exports = { chunkText, indexAgendaContent, indexResolutionContent, clearSearchCache };
+module.exports = { chunkText, embedAndStoreChunks, indexAgendaContent, indexResolutionContent, clearSearchCache };
