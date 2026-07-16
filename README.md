@@ -50,7 +50,7 @@ The easiest way to run the entire system locally is by using Docker Compose.
 ### Default Admin Credentials
 When the database is initialized, a default admin account is created:
 - **Username**: `admin`
-- **Password**: `buet_admin_pass`
+- **Password**: `123456`
 
 ## Development Services
 

@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Users, Building2, Briefcase, Calendar,
-  Settings, Shield, LogOut, LayoutGrid, FileText
+  Settings, Shield, LogOut, LayoutGrid, FileText, ScrollText
 } from 'lucide-react';
 import type { Role } from '../hooks/useAuth';
 
 interface SidebarProps {
   type?: 'admin' | 'profile';
   role?: Role | null;
-  // Mobile off-canvas drawer control; ignored (always visible) at md+ widths.
+  // Off-canvas drawer control, at every width - hidden until toggled open.
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -26,8 +26,11 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
     { name: 'Faculties', href: '/admin/faculties', icon: Building2 },
     { name: 'Departments', href: '/admin/departments', icon: Briefcase },
     { name: 'Offices', href: '/admin/offices', icon: Building2 },
-    // User management is admin-only.
-    ...(role === 'admin' ? [{ name: 'Users', href: '/admin/users', icon: Users }] : []),
+    // User management and the audit log are admin-only.
+    ...(role === 'admin' ? [
+      { name: 'Users', href: '/admin/users', icon: Users },
+      { name: 'Audit Log', href: '/admin/audit-log', icon: ScrollText },
+    ] : []),
   ];
 
   const profileLinks = [
@@ -37,25 +40,25 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
 
   const links = type === 'admin' ? adminLinks : profileLinks;
 
+  // Prefer an exact match when one exists (e.g. /profile/sessions matches
+  // "Sessions" exactly), so a shorter sibling href like /profile doesn't
+  // also light up via prefix-matching. Only fall back to prefix-matching
+  // (for nested routes like /admin/meetings/<id>) when nothing matches exactly.
+  const hasExactMatch = links.some(l => l.href === pathname);
+  const isLinkActive = (href: string) =>
+    hasExactMatch ? href === pathname : pathname === href || pathname.startsWith(`${href}/`);
+
   return (
     <>
-      {/* Backdrop, mobile only, shown while the drawer is open */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
-
+      {/* No backdrop: the drawer overlays the page without blocking
+          interaction with content beside/behind it while open. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0 transform transition-transform duration-200 ease-in-out
-          md:static md:z-auto md:min-h-[calc(100vh-4rem)] md:translate-x-0
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border shadow-xl flex-shrink-0 transform transition-transform duration-200 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="p-4 space-y-2">
+        <div className="p-4 space-y-2 h-full overflow-y-auto">
           {links.map((link) => {
-            const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+            const isActive = isLinkActive(link.href);
             const Icon = link.icon;
 
             return (

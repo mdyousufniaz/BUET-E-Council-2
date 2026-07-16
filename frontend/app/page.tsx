@@ -14,9 +14,9 @@ export default function HomePage() {
   
   const allMeetings = response?.data || [];
   
-  // Filter by type
+  // Filter by type, hiding drafts from the public dashboard
   const meetings = allMeetings
-    .filter((m: any) => m.type === activeTab)
+    .filter((m: any) => m.type === activeTab && m.status !== 'draft')
     .sort((a: any, b: any) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime())
     .map((m: any, idx: number) => ({
       id: m.id,

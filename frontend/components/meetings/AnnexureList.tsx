@@ -194,7 +194,7 @@ export default function AnnexureList({ contentId, type, isLocked = false, readOn
                   </a>
                 )}
                 {!isLocked && !readOnly && (
-                  <button 
+                  <button
                     onClick={() => handleDelete(annexure.id)}
                     className="p-1.5 text-muted-foreground hover:text-destructive bg-muted rounded-md transition-colors"
                     title="Delete Annexure"

@@ -10,7 +10,8 @@ export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { user, error } = useAuth();
+  const { user, role, error } = useAuth();
+  const dashboardHref = role === 'viewer' ? '/viewer/meetings' : '/admin';
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -55,7 +56,7 @@ export default function UserDropdown() {
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
           </div>
 
-          <Link href="/admin" onClick={() => setIsOpen(false)} className="flex items-center px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors">
+          <Link href={dashboardHref} onClick={() => setIsOpen(false)} className="flex items-center px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors">
             <LayoutGrid className="w-4 h-4 mr-2" />
             Dashboard
           </Link>

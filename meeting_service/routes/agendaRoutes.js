@@ -3,16 +3,24 @@ const { authMiddleware } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
 const agendaController = require('../controllers/agendaController');
 const { checkMeetingLock } = require('../middlewares/lockMiddleware');
+const { auditLog } = require('../middlewares/auditMiddleware');
 const multer = require('multer');
+const { fileFilter: annexureFileFilter, MAX_FILE_SIZE_MB } = require('../config/annexureUpload');
 
-// Configure multer for memory storage
-const upload = multer({ storage: multer.memoryStorage() });
+// Annexure uploads only: restricted to the formats/size configured in
+// config/annexureUpload.js.
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_FILE_SIZE_MB * 1024 * 1024 },
+    fileFilter: annexureFileFilter
+});
 
 const router = express.Router();
 const canEdit = requireRole('admin', 'moderator');
 
 router.use(authMiddleware);
 router.use(checkMeetingLock);
+router.use(auditLog('agenda'));
 
 // Agendam routes
 router.get('/', agendaController.getAgendams);

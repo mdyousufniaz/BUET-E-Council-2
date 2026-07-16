@@ -159,10 +159,10 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   };
 
   return (
-    <div className="flex gap-8 h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="flex gap-8 h-full">
       <ConfirmModal />
       {/* Main Left Area (70%) */}
-      <div className="flex-1 w-[70%] max-w-4xl pb-32">
+      <div className="flex-1 w-[70%] max-w-4xl pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">{title}</h2>
         </div>

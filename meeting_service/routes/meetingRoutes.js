@@ -3,22 +3,25 @@ const { authMiddleware } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
 const meetingController = require('../controllers/meetingController');
 const { checkMeetingLock } = require('../middlewares/lockMiddleware');
+const { auditLog } = require('../middlewares/auditMiddleware');
 const multer = require('multer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 const canEdit = requireRole('admin', 'moderator');
+const adminOnly = requireRole('admin');
 
 router.use(authMiddleware);
 router.use(checkMeetingLock);
+router.use(auditLog('meeting'));
 
 router.get('/', meetingController.getMeetings);
 router.post('/', canEdit, meetingController.createMeeting);
 router.post('/bulk-import', canEdit, meetingController.bulkImportMeeting);
 router.get('/:id', meetingController.getMeetingById);
 router.put('/:id', canEdit, meetingController.updateMeeting);
-router.delete('/:id', canEdit, meetingController.deleteMeeting); // critical
+router.delete('/:id', adminOnly, meetingController.deleteMeeting); // critical - admin-only
 router.post('/:id/complete', canEdit, meetingController.completeMeeting);
 router.put('/:id/lock', requireRole('admin'), meetingController.toggleLock);
 

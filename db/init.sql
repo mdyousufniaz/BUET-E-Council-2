@@ -247,9 +247,27 @@ CREATE TABLE annexures (
     upload_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Audit Log Table ("who did what"). user_id is kept nullable and username is
+-- denormalized so a log entry still reads meaningfully after its user is
+-- deleted. Written by both auth_service (login/logout/user management) and
+-- meeting_service (everything else), which share this database.
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    user_id UUID REFERENCES users (id) ON DELETE SET NULL,
+    username VARCHAR(255),
+    action VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id UUID,
+    details JSONB,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 4. Search indexes
 -- None of these foreign-key columns get an automatic index in Postgres, and
 -- all of them are hit by the search/history queries below.
+CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
 CREATE INDEX idx_agenda_meeting_id ON agenda (meeting_id);
 CREATE INDEX idx_agenda_tags_tag_id ON agenda_tags (tag_id);
 CREATE INDEX idx_agenda_chunks_agenda_id ON agenda_chunks (agenda_id);
@@ -288,7 +306,7 @@ INSERT INTO
 VALUES (
         'admin',
         'admin@buet.ac.bd',
-        '$2b$10$BaqfwMRoqUJ2hAAd8Y4jvenpMOIl2n4R65VVz2yzaIDG.01pFnU/y',
+        '$2b$10$Uept771hLFh/Wc0hKa8wZeS9XLVfvXdNYpVUq2oGhq/Fk3K4wvQaq', -- bcrypt hash of '123456' (matches README's documented default)
         'admin',
         'active'
     )

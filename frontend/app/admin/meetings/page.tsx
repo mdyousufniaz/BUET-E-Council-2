@@ -13,11 +13,12 @@ import { FileJson } from "lucide-react";
 import { useAuth } from "../../../hooks/useAuth";
 
 export default function ManageMeetingsPage() {
-  const { canEdit } = useAuth();
+  const { canEdit, isAdmin } = useAuth();
   const router = useRouter();
   const { data: response, error, mutate } = useSWR('/meetings', fetcher);
   const { confirm, ConfirmModal } = useConfirm();
 
+  const [activeTab, setActiveTab] = useState<'academic' | 'syndicate'>('academic');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
 
@@ -86,19 +87,45 @@ export default function ManageMeetingsPage() {
   if (error) return <div className="p-8">Failed to load meetings</div>;
   if (!response) return <div className="p-8">Loading...</div>;
 
+  const meetings = (response.data || []).filter((m: any) => m.type === activeTab);
+
   return (
     <div className="max-w-6xl mx-auto">
       <ConfirmModal />
+
+      <div className="flex space-x-1 mb-4 border-b border-border">
+        <button
+          onClick={() => setActiveTab('academic')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'academic'
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+          }`}
+        >
+          Academic Meeting
+        </button>
+        <button
+          onClick={() => setActiveTab('syndicate')}
+          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'syndicate'
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+          }`}
+        >
+          Syndicate Meeting
+        </button>
+      </div>
+
       <DataTable
         columns={columns}
-        data={response.data || []}
+        data={meetings}
         title="Manage Meetings"
         onAdd={canEdit ? () => {
           setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
           setIsModalOpen(true);
         } : undefined}
         onEdit={handleEdit}
-        onDelete={canEdit ? handleDelete : undefined}
+        onDelete={isAdmin ? handleDelete : undefined}
         onView={(meeting) => window.open(`/meetings/${meeting.id}`, '_blank')}
         customActions={
           canEdit && (

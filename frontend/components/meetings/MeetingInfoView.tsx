@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "../../lib/api";
 import SearchableSelect from "../SearchableSelect";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock, Trash2 } from "lucide-react";
 
 const typeOptions = [
   { value: "syndicate", label: "Syndicate" },
@@ -29,6 +30,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   });
   const { confirm, ConfirmModal } = useConfirm();
   const { isAdmin, canEdit } = useAuth();
+  const router = useRouter();
   const isLocked = meeting.is_locked;
   const isPast = formData.status === 'past';
   const readOnly = isLocked || !canEdit;
@@ -37,6 +39,22 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = () => {
+    confirm("Delete Meeting", "Are you sure you want to delete this meeting? This action cannot be undone.", async () => {
+      setIsDeleting(true);
+      try {
+        await api.delete(`/meetings/${meeting.id}`);
+        toast.success("Meeting deleted successfully.");
+        router.push('/admin/meetings');
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to delete meeting');
+      } finally {
+        setIsDeleting(false);
+      }
+    });
+  };
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -96,24 +114,33 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Meeting Info</h2>
         {isAdmin && (
-          <button 
-            onClick={handleToggleLock}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-              isLocked 
-                ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300"
-                : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
-            }`}
-          >
-            {isLocked ? (
-              <>
-                <Unlock className="w-4 h-4" /> Unlock Meeting
-              </>
-            ) : (
-              <>
-                <Lock className="w-4 h-4" /> Lock Meeting
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggleLock}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                isLocked
+                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300"
+                  : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
+              }`}
+            >
+              {isLocked ? (
+                <>
+                  <Unlock className="w-4 h-4" /> Unlock Meeting
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" /> Lock Meeting
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30 disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" /> {isDeleting ? "Deleting..." : "Delete Meeting"}
+            </button>
+          </div>
         )}
       </div>
       

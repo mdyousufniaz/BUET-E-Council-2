@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // Configure S3 client (compatible with Cloudflare R2, AWS S3, MinIO)
@@ -69,6 +69,17 @@ const getFileMetadata = async (fileName) => {
 };
 
 /**
+ * List files under a key prefix (e.g. "audit-log-archives/"), newest first.
+ */
+const listFiles = async (prefix) => {
+    const command = new ListObjectsV2Command({ Bucket: BUCKET_NAME, Prefix: prefix });
+    const response = await s3Client.send(command);
+    return (response.Contents || [])
+        .map(obj => ({ key: obj.Key, size: obj.Size, lastModified: obj.LastModified }))
+        .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+};
+
+/**
  * Delete a file from R3
  */
 const deleteFile = async (fileName) => {
@@ -85,6 +96,20 @@ const deleteFile = async (fileName) => {
         console.error("Error deleting file from R3:", error);
         throw error;
     }
+};
+
+/**
+ * Get a live object stream (and its content type) for proxying through our own server,
+ * so file access can be gated behind our auth middleware instead of exposed directly.
+ */
+const getFileStream = async (fileName) => {
+    const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: fileName });
+    const response = await s3Client.send(command);
+    return {
+        stream: response.Body,
+        contentType: response.ContentType || 'application/octet-stream',
+        contentLength: response.ContentLength
+    };
 };
 
 /**
@@ -112,5 +137,7 @@ module.exports = {
     deleteFile,
     getFileUrl,
     getFileBuffer,
-    getFileMetadata
+    getFileMetadata,
+    getFileStream,
+    listFiles
 };

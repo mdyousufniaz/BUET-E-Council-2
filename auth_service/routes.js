@@ -9,6 +9,7 @@ const db = require('./db');
 const { requireAuth, requireAdmin } = require('./middleware');
 const { getDeviceInfo } = require('./utils');
 const { sendAccountCreatedEmail } = require('./email');
+const { logAudit } = require('./auditLog');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -84,6 +85,12 @@ router.post('/signup', requireAuth, requireAdmin, async (req, res) => {
 
         const emailSent = await sendAccountCreatedEmail(email, username, password);
 
+        logAudit({
+            userId: req.user.id, username: req.user.username, action: 'create',
+            entityType: 'user', entityId: result.rows[0].id,
+            details: { created_username: username, role }, ip: req.ip
+        });
+
         res.status(201).json({
             success: true,
             message: 'User created successfully',
@@ -143,20 +150,21 @@ router.post('/signin', async (req, res) => {
         // Find user
         const userResult = await db.query('SELECT * FROM users WHERE username = $1 OR email = $1', [username]);
         if (userResult.rows.length === 0) {
+            logAudit({ username, action: 'login_failed', entityType: 'auth', details: { reason: 'user not found' }, ip: req.ip });
             return res.status(401).json({ success: false, message: 'Invalid credentials', error_code: 'INVALID_CREDENTIALS' });
         }
 
         const user = userResult.rows[0];
 
         if (user.status !== 'active') {
+            logAudit({ userId: user.id, username: user.username, action: 'login_failed', entityType: 'auth', details: { reason: 'account inactive' }, ip: req.ip });
             return res.status(403).json({ success: false, message: 'Account is inactive' });
         }
-
-        console.log('Hello')
 
         // Verify password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            logAudit({ userId: user.id, username: user.username, action: 'login_failed', entityType: 'auth', details: { reason: 'wrong password' }, ip: req.ip });
             return res.status(401).json({ success: false, message: 'Invalid credentials', error_code: 'INVALID_CREDENTIALS' });
         }
 
@@ -174,6 +182,8 @@ router.post('/signin', async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
             [user.id, sessionToken, deviceInfo, ipAddress, location || 'Unknown', expiresAt]
         );
+
+        logAudit({ userId: user.id, username: user.username, action: 'login', entityType: 'auth', entityId: user.id, ip: ipAddress });
 
         // Set HttpOnly, Secure Cookie
         res.cookie('session_token', sessionToken, {
@@ -219,6 +229,7 @@ router.post('/signin', async (req, res) => {
 router.post('/signout', requireAuth, async (req, res) => {
     try {
         await db.query('UPDATE sessions SET is_active = FALSE WHERE session_token = $1', [req.session.token]);
+        logAudit({ userId: req.user.id, username: req.user.username, action: 'logout', entityType: 'auth', entityId: req.user.id, ip: req.ip });
         res.clearCookie('session_token');
         res.status(200).json({ success: true, message: 'Logged out successfully' });
     } catch (err) {
@@ -243,6 +254,7 @@ router.post('/signout', requireAuth, async (req, res) => {
 router.post('/signout-all', requireAuth, async (req, res) => {
     try {
         await db.query('UPDATE sessions SET is_active = FALSE WHERE user_id = $1', [req.user.id]);
+        logAudit({ userId: req.user.id, username: req.user.username, action: 'logout_all', entityType: 'auth', entityId: req.user.id, ip: req.ip });
         res.clearCookie('session_token');
         res.status(200).json({ success: true, message: 'Logged out from all devices successfully' });
     } catch (err) {
@@ -452,7 +464,13 @@ router.put('/users/:id', requireAuth, requireAdmin, async (req, res) => {
         );
 
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
-        
+
+        logAudit({
+            userId: req.user.id, username: req.user.username, action: 'update',
+            entityType: 'user', entityId: id,
+            details: { fields_changed: Object.keys(req.body) }, ip: req.ip
+        });
+
         res.status(200).json({ success: true, message: 'User updated successfully', data: result.rows[0] });
     } catch (err) {
         console.error('Update user error:', err);
@@ -491,6 +509,10 @@ router.post('/upload-csv', requireAuth, requireAdmin, upload.single('file'), asy
                         }
                     }
                     await client.query('COMMIT');
+                    logAudit({
+                        userId: req.user.id, username: req.user.username, action: 'create',
+                        entityType: 'user', details: { bulk_import_count: count }, ip: req.ip
+                    });
                     res.status(200).json({ success: true, message: `${count} users uploaded` });
                 } catch (err) {
                     await client.query('ROLLBACK');
@@ -578,6 +600,12 @@ router.put('/me', requireAuth, async (req, res) => {
             await db.query('UPDATE sessions SET is_active = FALSE WHERE user_id = $1', [req.user.id]);
             res.clearCookie('session_token');
         }
+
+        logAudit({
+            userId: req.user.id, username: req.user.username, action: 'update',
+            entityType: 'user', entityId: req.user.id,
+            details: { self_update: true, password_changed: passwordChanged }, ip: req.ip
+        });
 
         res.status(200).json({
             success: true,

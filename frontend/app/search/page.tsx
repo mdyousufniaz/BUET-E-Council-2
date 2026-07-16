@@ -84,16 +84,17 @@ function SearchPageInner() {
   const activeQuery = searchParams.get("q") || "";
   const hasSearchCriteria = !!activeQuery.trim() || tagIds.length > 0;
 
+  // Tag/date/scope filters apply immediately; the text query only applies on submit (Enter).
   useEffect(() => {
     const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
+    if (activeQuery.trim()) params.set("q", activeQuery.trim());
     if (scope !== "both") params.set("scope", scope);
     if (tagIds.length > 0) params.set("tags", tagIds.join(","));
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
     router.replace(`/search?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, scope, tagIds, dateFrom, dateTo]);
+  }, [scope, tagIds, dateFrom, dateTo]);
 
   const searchKey = useMemo(() => {
     if (!activeQuery.trim() && tagIds.length === 0) return null;
@@ -114,7 +115,13 @@ function SearchPageInner() {
       <Header />
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
         <form
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const params = new URLSearchParams(searchParams.toString());
+            if (query.trim()) params.set("q", query.trim());
+            else params.delete("q");
+            router.replace(`/search?${params.toString()}`, { scroll: false });
+          }}
           className="relative mb-6"
         >
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />

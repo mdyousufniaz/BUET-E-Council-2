@@ -3,6 +3,7 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { ChevronDown } from "lucide-react";
 import { fetcher } from "../../../lib/api";
 import { sanitizeHtml } from "../../../lib/sanitize";
 import Header from "../../../components/Header";
@@ -82,6 +83,7 @@ export default function PublicMeetingView() {
   const searchParams = useSearchParams();
   const highlightId = searchParams.get('highlight');
   const highlightType = searchParams.get('type');
+  const [presenteesExpanded, setPresenteesExpanded] = useState(false);
 
   // Fetch the meeting details
   const { data: meetingRes, error: meetingError } = useSWR(`/meetings/${params.id}`, fetcher);
@@ -221,13 +223,20 @@ export default function PublicMeetingView() {
             {meeting.status === 'past' && (
               <>
                 <section className="space-y-6">
-                  <h2 className="text-xl font-semibold mb-4 text-primary border-b border-border pb-2">উপস্থিত সদস্যবৃন্দ</h2>
+                  <button
+                    type="button"
+                    onClick={() => setPresenteesExpanded(prev => !prev)}
+                    className="w-full flex items-center justify-between text-xl font-semibold mb-4 text-primary border-b border-border pb-2"
+                  >
+                    <span>উপস্থিত সদস্যবৃন্দ ({rawPresentees.length})</span>
+                    <ChevronDown className={`w-5 h-5 transition-transform ${presenteesExpanded ? 'rotate-180' : ''}`} />
+                  </button>
 
-                  {rawPresentees.length === 0 && (
+                  {presenteesExpanded && rawPresentees.length === 0 && (
                     <p className="text-sm text-muted-foreground">এই সভার উপস্থিতির তথ্য সংরক্ষিত নেই।</p>
                   )}
 
-                  {adminGroup.length > 0 && (
+                  {presenteesExpanded && adminGroup.length > 0 && (
                     <div>
                       <h3 className="text-lg font-medium mb-3 text-muted-foreground">প্রশাসন</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -236,7 +245,7 @@ export default function PublicMeetingView() {
                     </div>
                   )}
 
-                  {deansGroup.length > 0 && (
+                  {presenteesExpanded && deansGroup.length > 0 && (
                     <div>
                       <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল ডিন</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,7 +254,7 @@ export default function PublicMeetingView() {
                     </div>
                   )}
 
-                  {headsGroup.length > 0 && (
+                  {presenteesExpanded && headsGroup.length > 0 && (
                     <div>
                       <h3 className="text-lg font-medium mb-3 text-muted-foreground">সকল বিভাগীয় প্রধান</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -254,7 +263,7 @@ export default function PublicMeetingView() {
                     </div>
                   )}
 
-                  {Object.entries(departmentGroups).map(([deptName, members]) => (
+                  {presenteesExpanded && Object.entries(departmentGroups).map(([deptName, members]) => (
                     <div key={deptName}>
                       <h3 className="text-lg font-medium mb-3 text-muted-foreground">{deptName}</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,7 +272,7 @@ export default function PublicMeetingView() {
                     </div>
                   ))}
 
-                  {othersGroup.length > 0 && (
+                  {presenteesExpanded && othersGroup.length > 0 && (
                     <div>
                       <h3 className="text-lg font-medium mb-3 text-muted-foreground">অন্যান্য সদস্য</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

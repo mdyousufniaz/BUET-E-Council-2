@@ -55,6 +55,7 @@ services:
       R3_ACCESS_KEY_ID: ${R3_ACCESS_KEY_ID}
       R3_SECRET_ACCESS_KEY: ${R3_SECRET_ACCESS_KEY}
       R3_BUCKET_NAME: ${R3_BUCKET_NAME}
+      MAX_ANNEXURE_SIZE_MB: ${MAX_ANNEXURE_SIZE_MB:-20}
     ports:
       - "8001:8001"
     depends_on:
@@ -62,10 +63,13 @@ services:
         condition: service_healthy # FIX: Wait until PostgreSQL is fully initialized
       minio:
         condition: service_healthy # FIX: Wait until MinIO is fully initialized
-      embedding_service:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      # embedding_service is intentionally NOT a hard dependency: it's behind
+      # the "embeddings" profile (opt-in, see below) and every code path that
+      # calls it (searchController.js, searchIndexer.js) already degrades to
+      # keyword-only search if it's unreachable. Meeting management, viewing,
+      # and keyword search all work fully without it.
     healthcheck:
       test: [ "CMD-SHELL", "node -e \"require('http').get('http://localhost:8001/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\"" ]
       interval: 10s
@@ -80,6 +84,7 @@ services:
   # a hard backstop; worker.js also self-throttles by polling its own cgroup
   # memory/CPU headroom and delaying jobs when it's tight.
   embedding_worker:
+    profiles: ["embeddings"]
     build:
       context: ./meeting_service
       dockerfile: Dockerfile.worker
@@ -107,6 +112,7 @@ services:
       retries: 5
 
   embedding_service:
+    profiles: ["embeddings"]
     build:
       context: ./embedding_service
       dockerfile: Dockerfile
@@ -152,9 +158,10 @@ services:
   minio:
     image: minio/minio
     # Not published to the host: the app only ever talks to MinIO over the
-    # internal compose network (meeting_service uploads server-side, nginx
-    # proxies public file reads via /storage/). Publishing 9000/9090 would
-    # expose the S3 API and admin console straight to the internet.
+    # internal compose network (meeting_service reads/writes with its own
+    # credentials; nginx proxies /storage/ to meeting_service's authenticated
+    # route, not to MinIO directly). Publishing 9000/9090 would expose the
+    # S3 API and admin console straight to the internet.
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -173,7 +180,7 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; /usr/bin/mc mb myminio/${R3_BUCKET_NAME} --ignore-existing; /usr/bin/mc anonymous set public myminio/${R3_BUCKET_NAME}; tail -f /dev/null; "
+      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; /usr/bin/mc mb myminio/${R3_BUCKET_NAME} --ignore-existing; /usr/bin/mc anonymous set none myminio/${R3_BUCKET_NAME}; tail -f /dev/null; "
 
 volumes:
   pgdata:

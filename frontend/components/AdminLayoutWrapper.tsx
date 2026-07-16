@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
+import SidebarToggleButton from "./SidebarToggleButton";
 import { useAuth } from "../hooks/useAuth";
 import { useEffect, useState } from "react";
 
@@ -16,10 +16,14 @@ export default function AdminLayoutWrapper({ children }: { children: React.React
   useEffect(() => {
     if (error) {
       router.push('/login');
+    } else if (role === 'viewer') {
+      // Viewers get a read-only equivalent under /viewer instead of the
+      // admin management UI.
+      router.push('/viewer/meetings');
     }
-  }, [error, router]);
+  }, [error, role, router]);
 
-  if (isLoading || !role) {
+  if (isLoading || !role || role === 'viewer') {
     return <div className="flex flex-1 items-center justify-center min-h-screen">Loading...</div>;
   }
 
@@ -40,13 +44,7 @@ export default function AdminLayoutWrapper({ children }: { children: React.React
     <div className="flex flex-1 overflow-hidden">
       <Sidebar type="admin" role={role} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-background">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="md:hidden mb-4 p-2 -ml-2 text-foreground hover:bg-accent rounded-md"
-          aria-label="Open menu"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
+        <SidebarToggleButton isOpen={sidebarOpen} onClick={() => setSidebarOpen(prev => !prev)} />
         {children}
       </main>
     </div>
