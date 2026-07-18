@@ -114,12 +114,12 @@ export default function ManageTemplatesPage() {
   if (!response) return <div className="p-8 text-muted-foreground animate-pulse">Loading templates...</div>;
 
   return (
-    <div className="p-8 max-w-6xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <ConfirmModal />
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Manage Templates</h1>
-          <p className="text-muted-foreground mt-1 text-lg">Create reusable content templates for agendas, resolutions, and more.</p>
+          <h2 className="text-2xl font-semibold text-foreground tracking-tight">Manage Templates</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Create reusable content templates for agendas, resolutions, and more.</p>
         </div>
         {canEdit && (
           <button
@@ -143,7 +143,7 @@ export default function ManageTemplatesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="bg-card w-full max-w-3xl rounded-lg shadow-xl border border-border flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-border shrink-0 flex justify-between items-center">
-              <h2 className="text-2xl font-bold">{isEditMode ? "Edit Template" : "Add New Template"}</h2>
+              <h3 className="text-lg font-semibold">{isEditMode ? "Edit Template" : "Add New Template"}</h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-muted-foreground hover:text-foreground transition-colors"

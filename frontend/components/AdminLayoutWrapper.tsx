@@ -44,7 +44,7 @@ export default function AdminLayoutWrapper({ children }: { children: React.React
     <div className="flex flex-1 overflow-hidden">
       <Sidebar type="admin" role={role} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-background">
-        <SidebarToggleButton isOpen={sidebarOpen} onClick={() => setSidebarOpen(prev => !prev)} />
+        <SidebarToggleButton onClick={() => setSidebarOpen(true)} />
         {children}
       </main>
     </div>
