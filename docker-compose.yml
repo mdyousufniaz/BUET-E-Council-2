@@ -31,6 +31,7 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       MAIL_FROM: ${MAIL_FROM}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:9001}
     ports:
       - "8000:8000"
     depends_on:
@@ -56,6 +57,7 @@ services:
       R3_SECRET_ACCESS_KEY: ${R3_SECRET_ACCESS_KEY}
       R3_BUCKET_NAME: ${R3_BUCKET_NAME}
       MAX_ANNEXURE_SIZE_MB: ${MAX_ANNEXURE_SIZE_MB:-20}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:9001}
     ports:
       - "8001:8001"
     depends_on:

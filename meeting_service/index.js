@@ -7,6 +7,7 @@ const routes = require('./routes');
 
 // Import middlewares
 const errorHandler = require('./middlewares/errorHandler');
+const { verifyOrigin, ALLOWED_ORIGINS } = require('./middlewares/csrfMiddleware');
 
 // PDF service (Chromium warm-up)
 const { warmUp: warmUpPdf } = require('./utils/pdfGenerator');
@@ -22,7 +23,7 @@ const port = process.env.PORT || 8001; // Using 8001 to distinguish from auth_se
 
 app.set('trust proxy', true);
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -31,6 +32,9 @@ app.use(cookieParser());
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
+
+// CSRF defense for the cookie-authenticated routes below (see middlewares/csrfMiddleware.js).
+app.use(verifyOrigin);
 
 // API Routes
 app.use('/api', routes);

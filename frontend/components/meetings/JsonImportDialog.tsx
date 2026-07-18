@@ -6,6 +6,7 @@ import api, { fetcher } from "../../lib/api";
 import useSWR from "swr";
 import { toast } from "sonner";
 import SearchableSelect from "../SearchableSelect";
+import { resolveDepartmentByMergeRule } from "../../lib/departmentMergeRules";
 
 interface ImportItem {
   key: string;
@@ -76,7 +77,12 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
 
       Array.from(depts).forEach(d => {
         const found = departments.find((existing: any) => existing.name_english?.toLowerCase() === d.toLowerCase() || existing.name_bangla?.toLowerCase() === d.toLowerCase());
-        if (found) deptMapping[d] = found.id;
+        if (found) {
+          deptMapping[d] = found.id;
+          return;
+        }
+        const mergeRuleMatch = resolveDepartmentByMergeRule(d, departments);
+        if (mergeRuleMatch) deptMapping[d] = mergeRuleMatch;
         else unresolvedDepts.push(d);
       });
 

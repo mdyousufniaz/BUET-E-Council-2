@@ -49,6 +49,12 @@ A large batch of features, security fixes, and infrastructure hardening across `
 
 ### Security Fixes
 
+**No CSRF protection on cookie-authenticated routes (flagged by GitHub code scanning)**
+- Both `auth_service` and `meeting_service` authenticate via a `session_token` cookie but had no CSRF defense beyond the cookie's `sameSite: 'strict'` attribute, and their CORS config (`cors({ origin: true, credentials: true })`) reflected *any* request origin while allowing credentials — a real weakening of that protection.
+- Added `auth_service/csrfMiddleware.js` and `meeting_service/middlewares/csrfMiddleware.js`: an Origin/Referer allowlist check (OWASP's recommended CSRF defense for cookie-authenticated JSON APIs) applied to every state-changing request (POST/PUT/DELETE/PATCH) in both services. GET/HEAD/OPTIONS are unaffected.
+- Tightened CORS in both services from `origin: true` to the same allowlist (`ALLOWED_ORIGINS` env var, comma-separated, defaults to `http://localhost:9001` matching the nginx-fronted app URL).
+- Verified: legitimate same-origin requests succeed (200/201), forged cross-origin requests are rejected (403), GET requests are unaffected.
+
 **Public file storage was completely unauthenticated**
 - `nginx/nginx.conf` used to proxy `/storage/` straight to MinIO — anyone with a file's URL (materials, annexures) could fetch it, no login required.
 - Added an authenticated streaming route: `meeting_service/routes/storageRoutes.js` + `controllers/storageController.js` (gated by the existing `authMiddleware`), and repointed nginx at that instead of MinIO directly. MinIO's bucket ACL also set back to private (`docker-compose.yml`'s `createbuckets` step).
@@ -86,8 +92,8 @@ A large batch of features, security fixes, and infrastructure hardening across `
 
 **Frontend**: `app/page.tsx`, `app/login/page.tsx`, `app/search/page.tsx`, `app/meetings/[id]/page.tsx`, `app/admin/meetings/page.tsx`, `app/admin/audit-log/page.tsx` (new), `app/viewer/meetings/page.tsx` (new), `app/viewer/meetings/[id]/page.tsx` (new), `app/admin/meetings/[id]/layout.tsx`, `app/profile/layout.tsx`, `components/Header.tsx`, `components/Sidebar.tsx`, `components/SidebarToggleButton.tsx` (new), `components/AdminLayoutWrapper.tsx`, `components/UserDropdown.tsx`, `components/meetings/JsonImportDialog.tsx`, `components/meetings/MeetingInfoView.tsx`, `components/meetings/AgendaView.tsx`, `components/meetings/AnnexureList.tsx`.
 
-**meeting_service**: `routes/storageRoutes.js` (new), `routes/auditLogRoutes.js` (new), `routes/meetingRoutes.js`, `routes/agendaRoutes.js`, `controllers/storageController.js` (new), `controllers/auditLogController.js` (new), `middlewares/auditMiddleware.js` (new), `middlewares/errorHandler.js`, `config/annexureUpload.js` (new), `utils/storageService.js`, `utils/auditArchiver.js` (new), `index.js`, `worker.js`.
+**meeting_service**: `routes/storageRoutes.js` (new), `routes/auditLogRoutes.js` (new), `routes/meetingRoutes.js`, `routes/agendaRoutes.js`, `controllers/storageController.js` (new), `controllers/auditLogController.js` (new), `middlewares/auditMiddleware.js` (new), `middlewares/csrfMiddleware.js` (new), `middlewares/errorHandler.js`, `config/annexureUpload.js` (new), `utils/storageService.js`, `utils/auditArchiver.js` (new), `index.js`, `worker.js`.
 
-**auth_service**: `auditLog.js` (new), `routes.js`.
+**auth_service**: `auditLog.js` (new), `csrfMiddleware.js` (new), `routes.js`, `index.js`.
 
 **Infra**: `nginx/nginx.conf`, `docker-compose.yml`, `db/init.sql`, `.env.example`.
