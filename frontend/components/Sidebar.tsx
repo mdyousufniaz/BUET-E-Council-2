@@ -11,7 +11,7 @@ import type { Role } from '../hooks/useAuth';
 interface SidebarProps {
   type?: 'admin' | 'profile';
   role?: Role | null;
-  // Off-canvas drawer control, at every width - hidden until toggled open.
+  // Mobile off-canvas drawer control; ignored (always visible) at md+ widths.
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -50,13 +50,21 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
 
   return (
     <>
-      {/* No backdrop: the drawer overlays the page without blocking
-          interaction with content beside/behind it while open. */}
+      {/* Backdrop, mobile only, shown while the drawer is open */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border shadow-xl flex-shrink-0 transform transition-transform duration-200 ease-in-out
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0 transform transition-transform duration-200 ease-in-out
+          md:static md:z-auto md:min-h-[calc(100vh-4rem)] md:translate-x-0
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="p-4 space-y-2 h-full overflow-y-auto">
+        <div className="p-4 space-y-2">
           {links.map((link) => {
             const isActive = isLinkActive(link.href);
             const Icon = link.icon;
