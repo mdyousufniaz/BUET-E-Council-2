@@ -10,6 +10,7 @@ router.use(authMiddleware);
 
 router.get('/', membersController.getMembers);
 router.post('/fetch-external', canEdit, membersController.fetchExternalMembers);
+router.put('/reorder', canEdit, membersController.reorderMembers);
 router.post('/', canEdit, membersController.createMember);
 router.put('/:id', canEdit, membersController.updateMember);
 router.delete('/:id', canEdit, membersController.deleteMember);

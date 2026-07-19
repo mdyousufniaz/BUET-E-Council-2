@@ -91,11 +91,13 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   );
 
   const columns = isPast ? [
+    { key: "serial", label: "Serial No" },
     { key: "name", label: "Name" },
     { key: "designation", label: "Designation" },
     { key: "department_name", label: "Department" },
     { key: "office_name", label: "Office" }
   ] : [
+    { key: "serial", label: "Serial No" },
     { key: "name", label: "Name" },
     { key: "designation", label: "Designation" },
     { key: "department_name", label: "Department" },
@@ -203,7 +205,8 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
             email: m.email || '',
             designation: m.designation,
             department_id: m.department_id,
-            office_id: m.office_id
+            office_id: m.office_id,
+            member_id: m.id
         }));
 
       // Delete removed ones

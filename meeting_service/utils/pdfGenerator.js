@@ -161,7 +161,7 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
     try {
         const meetingQuery = `SELECT title, meeting_date, description FROM meetings WHERE id = $1`;
         const presenteesQuery = `
-            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name
+            SELECT p.id, p.name, p.designation, p.serial, d.name_bangla as department_name, d.serial as department_serial, o.name_bangla as office_name
             FROM presentees p
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN offices o ON p.office_id = o.id
@@ -225,7 +225,7 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
             if (!extractedName) extractedName = 'Unknown';
 
             const departmentName = normalize(p.department_name || '');
-            const pObj = { name: extractedName, office: officeStr, designation: p.designation, department: departmentName };
+            const pObj = { name: extractedName, office: officeStr, designation: p.designation, department: departmentName, serial: p.serial };
 
             let classifiedOffice = null;
 
@@ -245,8 +245,8 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
             // Dept-wise membership is independent of the classification above: a dean/head
             // who also belongs to a department still shows up here, with their office noted.
             if (p.department_name) {
-                if (!depts[p.department_name]) depts[p.department_name] = [];
-                depts[p.department_name].push({
+                if (!depts[p.department_name]) depts[p.department_name] = { serial: p.department_serial, members: [] };
+                depts[p.department_name].members.push({
                     ...pObj,
                     extraLabel: classifiedOffice ? getShortOfficeLabel(classifiedOffice) : null
                 });
@@ -254,6 +254,12 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
                 others.push(pObj);
             }
         });
+
+        const bySerial = (a, b) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
+        deans.sort(bySerial);
+        heads.sort(bySerial);
+        others.sort(bySerial);
+        Object.values(depts).forEach(dept => dept.members.sort(bySerial));
 
         admins.sort((a, b) => {
             const aIsVc = a.office === 'উপাচার্য' || (a.office.includes('উপাচার্য') && !a.office.includes('উপ-উপাচার্য') && !a.office.includes('উপউপাচার্য'));
@@ -264,7 +270,7 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
             if (bIsVc) return 1;
             if (aIsPro) return -1;
             if (bIsPro) return 1;
-            return 0;
+            return bySerial(a, b);
         });
 
         const fontBase64 = FONT_BASE64;
@@ -377,7 +383,9 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
                 ${renderSection('প্রশাসন', admins)}
                 ${renderSection('সকল ডিন', deans)}
                 ${renderSection('সকল বিভাগীয় প্রধান', heads)}
-                ${Object.keys(depts).sort().map(dept => renderSection(dept, depts[dept])).join('')}
+                ${Object.entries(depts)
+                    .sort(([, a], [, b]) => (a.serial ?? Infinity) - (b.serial ?? Infinity))
+                    .map(([deptName, dept]) => renderSection(deptName, dept.members)).join('')}
                 ${renderSection('অন্যান্য সদস্য', others)}
             </div>
 
@@ -411,7 +419,7 @@ const generateAttendanceSheet = async (meetingId) => {
     try {
         const meetingQuery = `SELECT title FROM meetings WHERE id = $1`;
         const presenteesQuery = `
-            SELECT p.id, p.name, p.designation, d.name_bangla as department_name, o.name_bangla as office_name
+            SELECT p.id, p.name, p.designation, p.serial, d.name_bangla as department_name, d.serial as department_serial, o.name_bangla as office_name
             FROM invitees p
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN offices o ON p.office_id = o.id
@@ -465,7 +473,8 @@ const generateAttendanceSheet = async (meetingId) => {
                 name: extractedName, 
                 office: officeStr, 
                 designation: p.designation,
-                detailStr: detailStr
+                detailStr: detailStr,
+                serial: p.serial
             };
 
             if (officeStr.includes('উপাচার্য')) {
@@ -475,12 +484,18 @@ const generateAttendanceSheet = async (meetingId) => {
             } else if (officeStr.includes('বিভাগীয় প্রধান')) {
                 heads.push(pObj);
             } else if (p.department_name) {
-                if (!depts[p.department_name]) depts[p.department_name] = [];
-                depts[p.department_name].push(pObj);
+                if (!depts[p.department_name]) depts[p.department_name] = { serial: p.department_serial, members: [] };
+                depts[p.department_name].members.push(pObj);
             } else {
                 others.push(pObj);
             }
         });
+
+        const bySerial = (a, b) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
+        deans.sort(bySerial);
+        heads.sort(bySerial);
+        others.sort(bySerial);
+        Object.values(depts).forEach(dept => dept.members.sort(bySerial));
 
         admins.sort((a, b) => {
             const aIsVc = a.office === 'উপাচার্য' || (a.office.includes('উপাচার্য') && !a.office.includes('উপ-উপাচার্য') && !a.office.includes('উপউপাচার্য'));
@@ -491,7 +506,7 @@ const generateAttendanceSheet = async (meetingId) => {
             if (bIsVc) return 1;
             if (aIsPro) return -1;
             if (bIsPro) return 1;
-            return 0;
+            return bySerial(a, b);
         });
 
         const fontBase64 = FONT_BASE64;
@@ -565,7 +580,9 @@ const generateAttendanceSheet = async (meetingId) => {
             ${renderTableSection('প্রশাসন', admins)}
             ${renderTableSection('সকল ডিন', deans)}
             ${renderTableSection('সকল বিভাগীয় প্রধান', heads)}
-            ${Object.keys(depts).sort().map(dept => renderTableSection(dept, depts[dept])).join('')}
+            ${Object.entries(depts)
+                .sort(([, a], [, b]) => (a.serial ?? Infinity) - (b.serial ?? Infinity))
+                .map(([deptName, dept]) => renderTableSection(deptName, dept.members)).join('')}
             ${renderTableSection('অন্যান্য সদস্য', others)}
         </body>
         </html>

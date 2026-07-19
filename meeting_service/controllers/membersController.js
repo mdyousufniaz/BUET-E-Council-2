@@ -29,19 +29,33 @@ const getMembers = async (req, res, next) => {
 };
 
 const createMember = async (req, res, next) => {
+    const client = await db.pool.connect();
     try {
-        const { name, prefix, designation, department_id, office_id, email, member_type } = req.body;
+        const { name, prefix, designation, department_id, office_id, email, member_type, serial } = req.body;
 
         if (!name) {
+            client.release();
             return next(new CustomError('Name is required', 400));
         }
 
         const processedEmail = (email === "" || email === undefined) ? null : email;
+        const requestedSerial = (serial === "" || serial === undefined || serial === null) ? null : parseInt(serial, 10);
 
-        const maxSerialResult = await db.query('SELECT MAX(serial) as max_serial FROM members');
-        const assignedSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+        await client.query('BEGIN');
 
-        const result = await db.query(
+        let assignedSerial;
+        if (requestedSerial !== null && !Number.isNaN(requestedSerial)) {
+            // Make room at the requested position by pushing everyone at or after
+            // it down by one, so the new member is inserted there instead of
+            // colliding with (and silently losing to) an existing serial.
+            await client.query('UPDATE members SET serial = serial + 1 WHERE serial >= $1', [requestedSerial]);
+            assignedSerial = requestedSerial;
+        } else {
+            const maxSerialResult = await client.query('SELECT MAX(serial) as max_serial FROM members');
+            assignedSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+        }
+
+        const result = await client.query(
             `INSERT INTO members (name, prefix, designation, department_id, office_id, email, member_type, serial)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
             [
@@ -56,11 +70,39 @@ const createMember = async (req, res, next) => {
             ]
         );
 
+        await client.query('COMMIT');
         res.status(201).json({ success: true, message: 'Member created', data: result.rows[0] });
     } catch (error) {
+        await client.query('ROLLBACK');
         if (error.code === '23505') { // unique_violation
             return next(new CustomError('Member email must be unique', 409));
         }
+        next(error);
+    } finally {
+        client.release();
+    }
+};
+
+const reorderMembers = async (req, res, next) => {
+    try {
+        const { items } = req.body;
+        if (!Array.isArray(items)) return next(new CustomError('Items array required', 400));
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const item of items) {
+                await client.query('UPDATE members SET serial = $1 WHERE id = $2', [item.serial, item.id]);
+            }
+            await client.query('COMMIT');
+            res.status(200).json({ success: true, message: 'Members reordered successfully' });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
         next(error);
     }
 };
@@ -166,7 +208,7 @@ const fetchExternalMembers = async (req, res, next) => {
 
             let syncCount = 0;
 
-            for (const u of usersData) {
+            for (const [index, u] of usersData.entries()) {
                 const name = u['Bangla Name:'];
                 let designation = u['designation:'];
                 if (designationMap[designation]) {
@@ -229,10 +271,13 @@ const fetchExternalMembers = async (req, res, next) => {
                         }
                     }
 
+                    // New members take their serial from this array's position, since it
+                    // reflects the academic council's seniority order (index 0 -> serial 1).
+                    // Members that already exist keep whatever serial they currently have.
                     await client.query(
-                        `INSERT INTO members (name, designation, department_id, office_id, email)
-                         VALUES ($1, $2, $3, $4, $5)`,
-                        [name, designation, department_id, office_id, email]
+                        `INSERT INTO members (name, designation, department_id, office_id, email, serial)
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
+                        [name, designation, department_id, office_id, email, index + 1]
                     );
                 }
                 syncCount++;
@@ -258,5 +303,6 @@ module.exports = {
     createMember,
     updateMember,
     deleteMember,
-    fetchExternalMembers
+    fetchExternalMembers,
+    reorderMembers
 };

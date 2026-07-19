@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
-import { X, Mail, Send, Search, CheckCircle2, Paperclip, FileText } from "lucide-react";
+import { X, Mail, Send, Search, CheckCircle2, Paperclip, FileText, Building, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import RichTextEditor from "../RichTextEditor";
 
@@ -57,6 +57,45 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
   const selectedInvitees = invitesWithEmail.filter((i: any) => selectedIds.includes(i.id));
   const toEmails = selectedInvitees.map((i: any) => i.email).join(", ");
 
+  // Group the (search-filtered) invitees the same way TakeAttendanceView does —
+  // VC & Pro-VC, then departments sorted by department_serial, then Others —
+  // so recipients can be picked a whole department at a time.
+  const { vcGroup, deptGroups, othersGroup } = useMemo(() => {
+    const vc: any[] = [];
+    const depts: Record<string, { serial: number; members: any[] }> = {};
+    const others: any[] = [];
+
+    const isVC = (designation: string) => {
+      if (!designation) return false;
+      const lower = designation.toLowerCase();
+      return lower.includes('উপাচার্য') || lower.includes('vc');
+    };
+
+    filtered.forEach((invitee: any) => {
+      if (isVC(invitee.designation)) {
+        vc.push(invitee);
+      } else if (invitee.department_name) {
+        if (!depts[invitee.department_name]) {
+          depts[invitee.department_name] = { serial: invitee.department_serial ?? 9999, members: [] };
+        }
+        depts[invitee.department_name].members.push(invitee);
+      } else {
+        others.push(invitee);
+      }
+    });
+
+    const bySerial = (a: any, b: any) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
+    vc.sort(bySerial);
+    others.sort(bySerial);
+    Object.values(depts).forEach((dept) => dept.members.sort(bySerial));
+
+    const sortedDepts = Object.entries(depts)
+      .sort(([, a], [, b]) => a.serial - b.serial)
+      .map(([name, data]) => ({ name, members: data.members }));
+
+    return { vcGroup: vc, deptGroups: sortedDepts, othersGroup: others };
+  }, [filtered]);
+
   // Reset local state whenever the modal opens/closes, and seed a default subject
   useEffect(() => {
     if (isOpen) {
@@ -81,6 +120,73 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
     } else {
       setSelectedIds(filtered.map((i: any) => i.id));
     }
+  };
+
+  const toggleGroupSelect = (members: any[], isAllSelected: boolean) => {
+    const memberIds = members.map((m) => m.id);
+    setSelectedIds((prev) => {
+      if (isAllSelected) return prev.filter((id) => !memberIds.includes(id));
+      const next = new Set(prev);
+      memberIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  };
+
+  const renderGroup = (title: string, members: any[], icon: React.ReactNode) => {
+    if (members.length === 0) return null;
+
+    const isAllSelected = members.every((m: any) => selectedIds.includes(m.id));
+    const isIndeterminate = members.some((m: any) => selectedIds.includes(m.id)) && !isAllSelected;
+
+    return (
+      <div key={title} className="border border-border rounded-lg overflow-hidden">
+        <div className="bg-muted/50 px-4 py-2.5 flex items-center justify-between border-b border-border">
+          <div className="flex items-center gap-2">
+            {icon}
+            <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              {members.length}
+            </span>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-input"
+              checked={isAllSelected}
+              ref={(input) => { if (input) input.indeterminate = isIndeterminate; }}
+              onChange={() => toggleGroupSelect(members, isAllSelected)}
+            />
+            <span className="text-xs font-medium text-muted-foreground">Select All</span>
+          </label>
+        </div>
+        <div className="divide-y divide-border">
+          {members.map((invitee: any) => (
+            <label
+              key={invitee.id}
+              className="flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-input"
+                checked={selectedIds.includes(invitee.id)}
+                onChange={() => toggleSelect(invitee.id)}
+              />
+              <div className="flex-1">
+                <div className="font-medium text-sm">{invitee.name}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {invitee.designation}
+                  {invitee.office_name ? ` • ${invitee.office_name}` : ""}
+                </div>
+                <div className="text-xs text-primary mt-0.5">{invitee.email}</div>
+              </div>
+              {selectedIds.includes(invitee.id) && (
+                <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+              )}
+            </label>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const addFiles = (files: FileList | null) => {
@@ -202,32 +308,12 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
                   No invitees with an email address found.
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {filtered.map((invitee: any) => (
-                    <label
-                      key={invitee.id}
-                      className="flex items-center gap-3 p-3 rounded-md border border-border hover:bg-muted/30 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 rounded border-input"
-                        checked={selectedIds.includes(invitee.id)}
-                        onChange={() => toggleSelect(invitee.id)}
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{invitee.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {invitee.designation}
-                          {invitee.department_name ? ` • ${invitee.department_name}` : ""}
-                          {invitee.office_name ? ` • ${invitee.office_name}` : ""}
-                        </div>
-                        <div className="text-xs text-primary mt-0.5">{invitee.email}</div>
-                      </div>
-                      {selectedIds.includes(invitee.id) && (
-                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                      )}
-                    </label>
-                  ))}
+                <div className="space-y-4">
+                  {renderGroup("VC & Pro-VC", vcGroup, <ShieldCheck className="w-4 h-4 text-primary" />)}
+                  {deptGroups.map((dept) =>
+                    renderGroup(dept.name, dept.members, <Building className="w-4 h-4 text-blue-500" />)
+                  )}
+                  {renderGroup("Others", othersGroup, <Users className="w-4 h-4 text-muted-foreground" />)}
                 </div>
               )}
 

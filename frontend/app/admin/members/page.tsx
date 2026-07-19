@@ -29,7 +29,8 @@ export default function ManageMembersPage() {
     department_id: "",
     office_id: "",
     email: "",
-    member_type: "academic"
+    member_type: "academic",
+    serial: ""
   });
 
   // Fetch departments and offices for the dropdowns
@@ -52,6 +53,11 @@ export default function ManageMembersPage() {
     (typeFilter === "all" || m.member_type === typeFilter)
   );
 
+  // Drag-reorder recomputes serial from the displayed list's position, so it's
+  // only safe to offer while no filter is narrowing that list — otherwise
+  // members hidden by the filter would get skipped over and lose their serial.
+  const noFiltersActive = designationFilter === "all" && departmentFilter === "all" && officeFilter === "all" && typeFilter === "all";
+
   const columns = [
     { key: "serial", label: "Serial No" },
     { key: "name", label: "Name" },
@@ -71,9 +77,20 @@ export default function ManageMembersPage() {
       department_id: member.department_id || "",
       office_id: member.office_id || "",
       email: member.email || "",
-      member_type: member.member_type || "academic"
+      member_type: member.member_type || "academic",
+      serial: ""
     });
     setIsModalOpen(true);
+  };
+
+  const handleReorder = async (newOrder: any[]) => {
+    try {
+      await api.put('/members/reorder', { items: newOrder });
+      mutate();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reorder members');
+    }
   };
 
   const handleDelete = (member: any) => {
@@ -114,7 +131,7 @@ export default function ManageMembersPage() {
       setIsModalOpen(false);
       setIsEditMode(false);
       setEditingId(null);
-      setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic" });
+      setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic", serial: "" });
       mutate();
       toast.success(isEditMode ? 'Member updated successfully' : 'Member created successfully');
     } catch (err: any) {
@@ -149,6 +166,7 @@ export default function ManageMembersPage() {
         title="Manage Members"
         searchable
         searchPlaceholder="Search by name or designation..."
+        onReorder={canEdit && noFiltersActive ? handleReorder : undefined}
         filters={
           <>
             <div className="w-44">
@@ -197,7 +215,7 @@ export default function ManageMembersPage() {
         onAdd={canEdit ? () => {
           setIsEditMode(false);
           setEditingId(null);
-          setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic" });
+          setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic", serial: "" });
           setIsModalOpen(true);
         } : undefined}
         onEdit={canEdit ? handleEdit : undefined}
@@ -221,6 +239,21 @@ export default function ManageMembersPage() {
                   <input value={newMember.prefix} onChange={e => setNewMember({ ...newMember, prefix: e.target.value })} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
                 </div>
               </div>
+
+              {!isEditMode && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Serial No (optional)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newMember.serial}
+                    onChange={e => setNewMember({ ...newMember, serial: e.target.value })}
+                    placeholder="Leave blank to add at the end"
+                    className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">If this position is already taken, existing members from that serial onward shift down by one.</p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
