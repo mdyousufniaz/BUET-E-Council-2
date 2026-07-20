@@ -15,7 +15,7 @@ import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const isPast = meeting.status === 'past';
   const displayType = isPast ? 'Presentees' : 'Invitees';
   const isLocked = meeting.is_locked;
@@ -29,8 +29,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const [isSendAgendaModalOpen, setIsSendAgendaModalOpen] = useState(false);
 
   const { confirm, ConfirmModal } = useConfirm();
-  // Default "From" shown in the Send Agenda modal — editable there before sending.
-  const currentUserEmail = "admin@buet.ac.bd";
+  const currentUserEmail = user?.email || "";
 
 
   // Fetch members for the Add Presentee modal
