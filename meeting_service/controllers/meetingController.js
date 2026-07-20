@@ -129,13 +129,14 @@ const completeMeeting = async (req, res, next) => {
         await db.query('UPDATE meetings SET status = $1 WHERE id = $2', ['past', id]);
         
         // Get present invitees
-        const invitees = await db.query('SELECT name, designation, department_id, office_id FROM invitees WHERE meeting_id = $1 AND is_present = true', [id]);
-        
-        // Insert into presentees
+        const invitees = await db.query('SELECT name, designation, department_id, office_id, serial FROM invitees WHERE meeting_id = $1 AND is_present = true', [id]);
+
+        // Insert into presentees, freezing each invitee's current serial as the
+        // presentee's permanent seniority order.
         for (const invitee of invitees.rows) {
             await db.query(
-                'INSERT INTO presentees (meeting_id, name, designation, department_id, office_id) VALUES ($1, $2, $3, $4, $5)',
-                [id, invitee.name, invitee.designation, invitee.department_id, invitee.office_id]
+                'INSERT INTO presentees (meeting_id, name, designation, department_id, office_id, serial) VALUES ($1, $2, $3, $4, $5, $6)',
+                [id, invitee.name, invitee.designation, invitee.department_id, invitee.office_id, invitee.serial]
             );
         }
         
@@ -160,10 +161,39 @@ const addInvitees = async (req, res, next) => {
         const client = await db.pool.connect();
         try {
             await client.query('BEGIN');
+
+            // Custom (non-member) invitees are appended after whatever is
+            // already in the meeting's invitee list.
+            const maxSerialResult = await client.query('SELECT MAX(serial) as max_serial FROM invitees WHERE meeting_id = $1', [id]);
+            let nextSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+
             for (const invitee of invitees) {
+                let serial = null;
+                if (invitee.member_id) {
+                    // Trust the DB, not the client, for the linked member's serial.
+                    const memberRes = await client.query('SELECT serial FROM members WHERE id = $1', [invitee.member_id]);
+                    serial = memberRes.rows[0]?.serial ?? null;
+                } else if (invitee.serial !== undefined && invitee.serial !== null && invitee.serial !== '') {
+                    const requestedSerial = parseInt(invitee.serial, 10);
+                    if (!Number.isNaN(requestedSerial)) {
+                        // Only push down other custom invitees — member-linked ones must
+                        // keep the serial their member owns, so leave them in place even
+                        // if that means sharing a serial with the new row.
+                        await client.query(
+                            'UPDATE invitees SET serial = serial + 1 WHERE meeting_id = $1 AND member_id IS NULL AND serial >= $2',
+                            [id, requestedSerial]
+                        );
+                        serial = requestedSerial;
+                        nextSerial = Math.max(nextSerial + 1, requestedSerial + 1);
+                    }
+                }
+                if (serial === null) {
+                    serial = nextSerial++;
+                }
+
                 await client.query(
-                    'INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [invitee.name, invitee.email, invitee.designation, invitee.department_id || null, invitee.office_id || null, id]
+                    'INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id, member_id, serial) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                    [invitee.name, invitee.email, invitee.designation, invitee.department_id || null, invitee.office_id || null, id, invitee.member_id || null, serial]
                 );
             }
             await client.query('COMMIT');
@@ -193,12 +223,12 @@ const bulkFetchInvitees = async (req, res, next) => {
             await client.query('BEGIN');
 
             const insertQuery = `
-                INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id)
-                SELECT m.name, m.email, m.designation, m.department_id, m.office_id, $1
+                INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id, member_id, serial)
+                SELECT m.name, m.email, m.designation, m.department_id, m.office_id, $1, m.id, m.serial
                 FROM members m
                 WHERE m.member_type = $2
                   AND NOT EXISTS (
-                      SELECT 1 FROM invitees i 
+                      SELECT 1 FROM invitees i
                       WHERE i.meeting_id = $1 AND (i.email = m.email OR (i.name = m.name AND m.email IS NULL))
                   )
             `;
@@ -226,7 +256,7 @@ const getInvitees = async (req, res, next) => {
             LEFT JOIN departments d ON i.department_id = d.id
             LEFT JOIN offices o ON i.office_id = o.id
             WHERE i.meeting_id = $1
-            ORDER BY i.created_at ASC
+            ORDER BY i.serial ASC NULLS LAST, i.created_at ASC
         `, [id]);
 
         res.status(200).json({ success: true, data: result.rows });
@@ -239,13 +269,13 @@ const getInviteesEmails = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query(`
-            SELECT i.id, i.name, i.email, i.designation,
-                   d.name_bangla as department_name, o.name_bangla as office_name
+            SELECT i.id, i.name, i.email, i.designation, i.serial,
+                   d.name_bangla as department_name, d.serial as department_serial, o.name_bangla as office_name
             FROM invitees i
             LEFT JOIN departments d ON i.department_id = d.id
             LEFT JOIN offices o ON i.office_id = o.id
             WHERE i.meeting_id = $1
-            ORDER BY i.created_at ASC
+            ORDER BY i.serial ASC NULLS LAST, i.created_at ASC
         `, [id]);
         res.status(200).json({ success: true, data: result.rows });
     } catch (error) {
@@ -291,6 +321,60 @@ const updateInvitee = async (req, res, next) => {
     }
 };
 
+const reorderInvitee = async (req, res, next) => {
+    try {
+        const { id, inviteeId } = req.params;
+        const requestedSerial = parseInt(req.body.serial, 10);
+        if (Number.isNaN(requestedSerial)) return next(new CustomError('serial is required', 400));
+
+        const client = await db.pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const inviteeRes = await client.query(
+                'SELECT serial FROM invitees WHERE id = $1 AND meeting_id = $2',
+                [inviteeId, id]
+            );
+            if (inviteeRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                client.release();
+                return next(new CustomError('Invitee not found', 404));
+            }
+
+            const oldSerial = inviteeRes.rows[0].serial ?? requestedSerial;
+
+            // Meeting-local move only — never touches members.serial, even for
+            // member-linked invitees. This is intentionally decoupled from the
+            // global member order: the sync_invitee_serial trigger still seeds
+            // (and re-syncs) a member-linked invitee's serial whenever that
+            // member's own serial changes elsewhere, but a drag here never
+            // reaches back out to move the member.
+            if (requestedSerial > oldSerial) {
+                await client.query(
+                    'UPDATE invitees SET serial = serial - 1 WHERE meeting_id = $1 AND serial > $2 AND serial <= $3 AND id != $4',
+                    [id, oldSerial, requestedSerial, inviteeId]
+                );
+            } else if (requestedSerial < oldSerial) {
+                await client.query(
+                    'UPDATE invitees SET serial = serial + 1 WHERE meeting_id = $1 AND serial >= $2 AND serial < $3 AND id != $4',
+                    [id, requestedSerial, oldSerial, inviteeId]
+                );
+            }
+            await client.query('UPDATE invitees SET serial = $1 WHERE id = $2', [requestedSerial, inviteeId]);
+
+            await client.query('COMMIT');
+            res.status(200).json({ success: true, message: 'Invitee reordered successfully' });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
 const getPresentees = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -300,6 +384,7 @@ const getPresentees = async (req, res, next) => {
             LEFT JOIN departments d ON p.department_id = d.id
             LEFT JOIN offices o ON p.office_id = o.id
             WHERE p.meeting_id = $1
+            ORDER BY p.serial ASC NULLS LAST
         `, [id]);
 
         res.status(200).json({ success: true, data: result.rows });
@@ -317,10 +402,36 @@ const addPresentees = async (req, res, next) => {
         const client = await db.pool.connect();
         try {
             await client.query('BEGIN');
+
+            // Custom (non-member) presentees are appended after whatever is
+            // already recorded for this meeting.
+            const maxSerialResult = await client.query('SELECT MAX(serial) as max_serial FROM presentees WHERE meeting_id = $1', [id]);
+            let nextSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+
             for (const presentee of presentees) {
+                let serial = null;
+                if (presentee.member_id) {
+                    // Trust the DB, not the client, for the linked member's serial.
+                    const memberRes = await client.query('SELECT serial FROM members WHERE id = $1', [presentee.member_id]);
+                    serial = memberRes.rows[0]?.serial ?? null;
+                } else if (presentee.serial !== undefined && presentee.serial !== null && presentee.serial !== '') {
+                    const requestedSerial = parseInt(presentee.serial, 10);
+                    if (!Number.isNaN(requestedSerial)) {
+                        await client.query(
+                            'UPDATE presentees SET serial = serial + 1 WHERE meeting_id = $1 AND serial >= $2',
+                            [id, requestedSerial]
+                        );
+                        serial = requestedSerial;
+                        nextSerial = Math.max(nextSerial + 1, requestedSerial + 1);
+                    }
+                }
+                if (serial === null) {
+                    serial = nextSerial++;
+                }
+
                 await client.query(
-                    'INSERT INTO presentees (name, designation, department_id, office_id, meeting_id) VALUES ($1, $2, $3, $4, $5)',
-                    [presentee.name, presentee.designation, presentee.department_id || null, presentee.office_id || null, id]
+                    'INSERT INTO presentees (name, designation, department_id, office_id, meeting_id, serial) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [presentee.name, presentee.designation, presentee.department_id || null, presentee.office_id || null, id, serial]
                 );
             }
             await client.query('COMMIT');
@@ -610,20 +721,23 @@ const bulkImportMeeting = async (req, res, next) => {
 
         // 2. Insert Presentees
         if (presentees && Array.isArray(presentees)) {
-            for (const p of presentees) {
+            // Legacy meetings have no serial data of their own — the JSON array's
+            // order *is* the seniority order, so index 0 -> serial 1, etc.
+            for (const [index, p] of presentees.entries()) {
                 // Combine prefix and name if prefix exists
                 const fullName = p.prefix ? `${p.prefix} ${p.name}` : p.name;
-                
+
                 await client.query(
-                    `INSERT INTO presentees 
-                    (name, designation, department_id, office_id, meeting_id) 
-                    VALUES ($1, $2, $3, $4, $5)`,
+                    `INSERT INTO presentees
+                    (name, designation, department_id, office_id, meeting_id, serial)
+                    VALUES ($1, $2, $3, $4, $5, $6)`,
                     [
                         fullName,
                         p.designation,
                         p.department_id || null,
                         p.office_id || null,
-                        meetingId
+                        meetingId,
+                        index + 1
                     ]
                 );
             }
@@ -674,6 +788,7 @@ module.exports = {
     bulkFetchInvitees,
     getInvitees,
     updateInvitee,
+    reorderInvitee,
     removeInvitee,
     getPresentees,
     addPresentees,

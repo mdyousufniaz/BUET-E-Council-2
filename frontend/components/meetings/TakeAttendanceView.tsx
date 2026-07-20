@@ -11,6 +11,7 @@ interface Invitee {
   department_serial: number;
   office_name: string;
   is_present: boolean;
+  serial: number;
 }
 
 interface TakeAttendanceViewProps {
@@ -53,6 +54,12 @@ export default function TakeAttendanceView({ invitees, onSave, onCancel, isSavin
         others.push(invitee);
       }
     });
+
+    // Sort each group's members by seniority (presentee/invitee serial)
+    const bySerial = (a: Invitee, b: Invitee) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
+    vc.sort(bySerial);
+    others.sort(bySerial);
+    Object.values(depts).forEach(dept => dept.members.sort(bySerial));
 
     // Sort departments by serial
     const sortedDepts = Object.entries(depts)

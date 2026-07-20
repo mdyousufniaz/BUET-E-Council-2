@@ -212,7 +212,14 @@ CREATE TABLE invitees (
     office_id UUID REFERENCES offices (id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     meeting_id UUID REFERENCES meetings (id) ON DELETE CASCADE,
-    is_present BOOLEAN DEFAULT false
+    is_present BOOLEAN DEFAULT false,
+    -- Seniority order among invitees. Mirrors the linked member's serial (see
+    -- sync_invitee_serial trigger below) so reordering a member automatically
+    -- reorders their still-pending invitee rows.
+    serial INTEGER,
+    -- The member this invitee was created from, if any. NULL for custom
+    -- (non-member) invitees, which never get their serial auto-synced.
+    member_id UUID REFERENCES members (id) ON DELETE SET NULL
 );
 
 -- Presentees Table (Linking table for attendance)
@@ -222,8 +229,29 @@ CREATE TABLE presentees (
     designation VARCHAR(255),
     department_id UUID REFERENCES departments (id) ON DELETE SET NULL,
     office_id UUID REFERENCES offices (id) ON DELETE SET NULL,
-    meeting_id UUID REFERENCES meetings (id) ON DELETE CASCADE
+    meeting_id UUID REFERENCES meetings (id) ON DELETE CASCADE,
+    -- Seniority order captured at the time attendance was finalized (from the
+    -- source invitee/member's serial at that moment). Frozen from then on —
+    -- unlike invitees, presentees are never resynced to later member changes.
+    serial INTEGER
 );
+
+-- Keeps a pending invitee's serial in lockstep with the seniority-order
+-- serial of the member it was created from, so reordering members (add-time
+-- shift or drag-and-drop reorder) is reflected without touching invitees
+-- directly. Presentees are intentionally excluded — their serial is frozen
+-- once a meeting completes.
+CREATE OR REPLACE FUNCTION sync_invitee_serial () RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE invitees SET serial = NEW.serial WHERE member_id = NEW.id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_invitee_serial
+AFTER UPDATE OF serial ON members FOR EACH ROW
+WHEN (OLD.serial IS DISTINCT FROM NEW.serial)
+EXECUTE FUNCTION sync_invitee_serial ();
 
 -- Revisions Table (Version control for content)
 CREATE TABLE revisions (
@@ -269,6 +297,8 @@ CREATE TABLE audit_logs (
 CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at DESC);
 CREATE INDEX idx_audit_logs_user_id ON audit_logs (user_id);
 CREATE INDEX idx_agenda_meeting_id ON agenda (meeting_id);
+-- Hit by sync_invitee_serial() on every member serial change.
+CREATE INDEX idx_invitees_member_id ON invitees (member_id);
 CREATE INDEX idx_agenda_tags_tag_id ON agenda_tags (tag_id);
 CREATE INDEX idx_agenda_chunks_agenda_id ON agenda_chunks (agenda_id);
 CREATE INDEX idx_resolution_chunks_agenda_id ON resolution_chunks (agenda_id);

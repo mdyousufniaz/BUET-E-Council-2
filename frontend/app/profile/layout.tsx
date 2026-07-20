@@ -18,7 +18,7 @@ export default function ProfileLayout({
       <div className="flex flex-1 overflow-hidden">
         <Sidebar type="profile" isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-background">
-          <SidebarToggleButton isOpen={sidebarOpen} onClick={() => setSidebarOpen(prev => !prev)} />
+          <SidebarToggleButton onClick={() => setSidebarOpen(true)} />
           <div className="max-w-5xl mx-auto">
             {children}
           </div>

@@ -34,11 +34,19 @@ export default function MeetingWorkspaceLayout({
 
   return (
     <div className="flex flex-1 w-full h-full overflow-hidden">
-      {/* Left Sidebar Navigation specifically for Meeting Workspace - hidden
-          until toggled open. No backdrop: overlays without blocking
-          interaction with the workspace content beside/behind it. */}
+      {/* Backdrop, mobile only, shown while the drawer is open */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Left Sidebar Navigation specifically for Meeting Workspace */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border shadow-xl flex-shrink-0 flex flex-col transform transition-transform duration-200 ease-in-out
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border flex-shrink-0 flex flex-col transform transition-transform duration-200 ease-in-out
+          md:static md:z-auto md:h-full md:translate-x-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="p-4 border-b border-sidebar-border">
@@ -77,7 +85,7 @@ export default function MeetingWorkspaceLayout({
 
       {/* Main Workspace Area */}
       <main className="flex-1 bg-background overflow-y-auto p-4 sm:p-8 relative">
-        <SidebarToggleButton isOpen={sidebarOpen} onClick={() => setSidebarOpen(prev => !prev)} />
+        <SidebarToggleButton onClick={() => setSidebarOpen(true)} />
         {children}
       </main>
     </div>

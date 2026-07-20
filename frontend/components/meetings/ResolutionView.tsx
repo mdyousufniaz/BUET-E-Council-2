@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Edit3, FileText, FileCheck, Plus } from "lucide-react";
+import { Edit3, FileText, FileCheck, Plus, Trash2 } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
 import AnnexureList from "./AnnexureList";
 import RevisionHistory from "./RevisionHistory";
@@ -12,11 +12,13 @@ import { sanitizeHtml } from "../../lib/sanitize";
 import { toast } from "sonner";
 import TemplateDrawer from "../TemplateDrawer";
 import { useAuth } from "../../hooks/useAuth";
+import { useConfirm } from "../../hooks/useConfirm";
 
 export default function ResolutionView({ meeting }: { meeting: any }) {
   const { canEdit } = useAuth();
   const isLocked = meeting.is_locked;
   const readOnly = isLocked || !canEdit;
+  const { confirm, ConfirmModal } = useConfirm();
   const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}`, fetcher, { fallbackData: { data: [] } });
 
   // Sort main agendas first, suppli agendas last, then by serial
@@ -71,6 +73,18 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
     setEditTagIds((agenda.tags || []).map((t: any) => t.id));
   };
 
+  const handleDelete = (agendaId: string) => {
+    confirm("Delete Resolution", "Are you sure you want to delete this resolution?", async () => {
+      try {
+        await api.delete(`/agendas/resolutions/${agendaId}`);
+        mutate();
+        toast.success("Resolution deleted");
+      } catch (err) {
+        toast.error("Failed to delete resolution");
+      }
+    });
+  };
+
   const handleToggleExecuted = async (agenda: any) => {
     try {
       await api.put(`/agendas/resolutions/${agenda.id}/execution`, {
@@ -103,6 +117,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
   return (
     <div className="max-w-4xl pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <ConfirmModal />
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Resolutions</h2>
       </div>
@@ -153,7 +168,27 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                   Resolution Outcome
                 </span>
                 {agenda.resolution && (
-                  <RevisionHistory contentId={agenda.id} contentType="resolutionItem" onRestored={() => mutate()} />
+                  <div className="flex gap-2">
+                    <RevisionHistory contentId={agenda.id} contentType="resolutionItem" onRestored={() => mutate()} />
+                    {!readOnly && (
+                      <>
+                        <button
+                          onClick={() => handleEditClick(agenda)}
+                          className="text-primary opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-primary/10 rounded-md hover:bg-primary/20"
+                          title="Edit Resolution"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(agenda.id)}
+                          className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-destructive/10 rounded-md hover:bg-destructive/20"
+                          title="Delete Resolution"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </h4>
 
@@ -189,20 +224,10 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                   </div>
                 </div>
               ) : agenda.resolution ? (
-                <div className="relative group">
-                  {!readOnly && (
-                    <button
-                      onClick={() => handleEditClick(agenda)}
-                      className="absolute top-0 right-0 text-primary opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-primary/10 rounded-md hover:bg-primary/20 flex items-center gap-2 text-xs font-medium z-10"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" /> Edit
-                    </button>
-                  )}
-                  <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground bg-background border border-border p-5 rounded-md shadow-inner"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.resolution) }}
-                  />
-                </div>
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none text-foreground bg-background border border-border p-5 rounded-md shadow-inner"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.resolution) }}
+                />
               ) : (
                 !readOnly && (
                   <div className="flex gap-3">

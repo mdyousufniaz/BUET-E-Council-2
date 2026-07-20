@@ -164,6 +164,20 @@ export default function PublicMeetingView() {
       }
     });
 
+    // Within each group, order members by their own presentee serial (seniority).
+    const bySerial = (a: any, b: any) => (a.serial ?? Infinity) - (b.serial ?? Infinity);
+    adminGroup.sort((a: any, b: any) => {
+      const aIsVc = a.department_name === 'সভাপতি';
+      const bIsVc = b.department_name === 'সভাপতি';
+      if (aIsVc && !bIsVc) return -1;
+      if (bIsVc && !aIsVc) return 1;
+      return bySerial(a, b);
+    });
+    deansGroup.sort(bySerial);
+    headsGroup.sort(bySerial);
+    othersGroup.sort(bySerial);
+    Object.values(departmentGroups).forEach(members => members.sort(bySerial));
+
     // Sort the Department groups based on the first member's department_serial
     const sortedDepartmentEntries = Object.entries(departmentGroups).sort((a, b) => {
       const serialA = a[1][0].department_serial || 999;

@@ -5,6 +5,7 @@ import useSWR from "swr";
 import api, { fetcher } from "../../../lib/api";
 import DataTable from "../../../components/DataTable";
 import SearchableSelect from "../../../components/SearchableSelect";
+import CustomSelect from "../../../components/CustomSelect";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
@@ -18,7 +19,7 @@ export default function ManageMeetingsPage() {
   const { data: response, error, mutate } = useSWR('/meetings', fetcher);
   const { confirm, ConfirmModal } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<'academic' | 'syndicate'>('academic');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'academic' | 'syndicate'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
 
@@ -87,39 +88,31 @@ export default function ManageMeetingsPage() {
   if (error) return <div className="p-8">Failed to load meetings</div>;
   if (!response) return <div className="p-8">Loading...</div>;
 
-  const meetings = (response.data || []).filter((m: any) => m.type === activeTab);
+  const allMeetings = response.data || [];
+  const meetings = allMeetings.filter((m: any) => typeFilter === 'all' || m.type === typeFilter);
 
   return (
     <div className="max-w-6xl mx-auto">
       <ConfirmModal />
 
-      <div className="flex space-x-1 mb-4 border-b border-border">
-        <button
-          onClick={() => setActiveTab('academic')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'academic'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-          }`}
-        >
-          Academic Meeting
-        </button>
-        <button
-          onClick={() => setActiveTab('syndicate')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'syndicate'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-          }`}
-        >
-          Syndicate Meeting
-        </button>
-      </div>
-
       <DataTable
+        key={typeFilter}
         columns={columns}
         data={meetings}
         title="Manage Meetings"
+        filters={
+          <div className="w-44">
+            <CustomSelect
+              value={typeFilter}
+              onChange={(val) => setTypeFilter(val as 'all' | 'academic' | 'syndicate')}
+              options={[
+                { value: "all", label: "All Types" },
+                { value: "academic", label: "Academic" },
+                { value: "syndicate", label: "Syndicate" }
+              ]}
+            />
+          </div>
+        }
         onAdd={canEdit ? () => {
           setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
           setIsModalOpen(true);

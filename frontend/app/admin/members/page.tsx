@@ -29,7 +29,8 @@ export default function ManageMembersPage() {
     department_id: "",
     office_id: "",
     email: "",
-    member_type: "academic"
+    member_type: "academic",
+    serial: ""
   });
 
   // Fetch departments and offices for the dropdowns
@@ -52,6 +53,11 @@ export default function ManageMembersPage() {
     (typeFilter === "all" || m.member_type === typeFilter)
   );
 
+  // Drag-reorder recomputes serial from the displayed list's position, so it's
+  // only safe to offer while no filter is narrowing that list — otherwise
+  // members hidden by the filter would get skipped over and lose their serial.
+  const noFiltersActive = designationFilter === "all" && departmentFilter === "all" && officeFilter === "all" && typeFilter === "all";
+
   const columns = [
     { key: "serial", label: "Serial No" },
     { key: "name", label: "Name" },
@@ -71,9 +77,20 @@ export default function ManageMembersPage() {
       department_id: member.department_id || "",
       office_id: member.office_id || "",
       email: member.email || "",
-      member_type: member.member_type || "academic"
+      member_type: member.member_type || "academic",
+      serial: ""
     });
     setIsModalOpen(true);
+  };
+
+  const handleReorder = async (newOrder: any[]) => {
+    try {
+      await api.put('/members/reorder', { items: newOrder });
+      mutate();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reorder members');
+    }
   };
 
   const handleDelete = (member: any) => {
@@ -90,17 +107,21 @@ export default function ManageMembersPage() {
   };
 
   const handleFetchApi = () => {
-    confirm("Sync from APIs", "This will fetch external data and sync with the database. Are you sure you want to proceed?", async () => {
-      try {
-        const loadingToast = toast.loading("Fetching data from external APIs...");
-        const res = await api.post('/members/fetch-external');
-        toast.dismiss(loadingToast);
-        toast.success(res.data.message || "Synced members successfully");
-        mutate();
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || "Failed to sync members");
+    confirm(
+      "Sync Members",
+      "This will pull the latest official member list from BUET's university records and update names, designations, departments, and offices here to match. No existing members will be removed. Continue?",
+      async () => {
+        try {
+          const loadingToast = toast.loading("Fetching data from external APIs...");
+          const res = await api.post('/members/fetch-external');
+          toast.dismiss(loadingToast);
+          toast.success(res.data.message || "Synced members successfully");
+          mutate();
+        } catch (err: any) {
+          toast.error(err.response?.data?.message || "Failed to sync members");
+        }
       }
-    });
+    );
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -114,7 +135,7 @@ export default function ManageMembersPage() {
       setIsModalOpen(false);
       setIsEditMode(false);
       setEditingId(null);
-      setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic" });
+      setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic", serial: "" });
       mutate();
       toast.success(isEditMode ? 'Member updated successfully' : 'Member created successfully');
     } catch (err: any) {
@@ -149,6 +170,7 @@ export default function ManageMembersPage() {
         title="Manage Members"
         searchable
         searchPlaceholder="Search by name or designation..."
+        onReorder={canEdit && noFiltersActive ? handleReorder : undefined}
         filters={
           <>
             <div className="w-44">
@@ -197,12 +219,13 @@ export default function ManageMembersPage() {
         onAdd={canEdit ? () => {
           setIsEditMode(false);
           setEditingId(null);
-          setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic" });
+          setNewMember({ name: "", prefix: "", designation: "", department_id: "", office_id: "", email: "", member_type: "academic", serial: "" });
           setIsModalOpen(true);
         } : undefined}
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canEdit ? handleDelete : undefined}
         onFetchApi={canEdit ? handleFetchApi : undefined}
+        fetchApiLabel="Sync Members"
       />
 
       {isModalOpen && (
@@ -211,16 +234,45 @@ export default function ManageMembersPage() {
             <h3 className="text-lg font-semibold mb-4">{isEditMode ? "Edit Member" : "Add New Member"}</h3>
             <form onSubmit={handleAddSubmit} className="space-y-4">
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Name</label>
-                  <input required value={newMember.name} onChange={e => setNewMember({ ...newMember, name: e.target.value })} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Name</label>
+                <input required value={newMember.name} onChange={e => setNewMember({ ...newMember, name: e.target.value })} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
+              </div>
+
+              <div className={isEditMode ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-3 gap-4"}>
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Prefix</label>
                   <input value={newMember.prefix} onChange={e => setNewMember({ ...newMember, prefix: e.target.value })} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
                 </div>
+                {!isEditMode && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">Serial No (optional)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={newMember.serial}
+                      onChange={e => setNewMember({ ...newMember, serial: e.target.value })}
+                      placeholder="Add at the end"
+                      className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Type</label>
+                  <SearchableSelect
+                    options={[
+                      { value: "academic", label: "Academic" },
+                      { value: "syndicate", label: "Syndicate" },
+                      { value: "none", label: "None" }
+                    ]}
+                    value={newMember.member_type}
+                    onChange={(val) => setNewMember({ ...newMember, member_type: val })}
+                  />
+                </div>
               </div>
+              {!isEditMode && (
+                <p className="text-xs text-muted-foreground -mt-2">If the chosen serial is already taken, existing members from that serial onward shift down by one.</p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -240,19 +292,6 @@ export default function ManageMembersPage() {
                     placeholder="Select..."
                   />
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Type</label>
-                <SearchableSelect
-                  options={[
-                    { value: "academic", label: "Academic" },
-                    { value: "syndicate", label: "Syndicate" },
-                    { value: "none", label: "None" }
-                  ]}
-                  value={newMember.member_type}
-                  onChange={(val) => setNewMember({ ...newMember, member_type: val })}
-                />
               </div>
 
               <div className="space-y-1">

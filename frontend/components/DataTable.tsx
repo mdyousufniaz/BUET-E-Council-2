@@ -14,6 +14,13 @@ interface DataTableProps {
   data: any[];
   title?: string;
   onReorder?: (newOrder: any[]) => void;
+  // Alternative to onReorder for lists that aren't the complete/unfiltered
+  // dataset (e.g. a meeting's invitees, a subset of all members) — recomputing
+  // every row's serial from its local index would be wrong there. Called with
+  // the moved row's original index and its drop target index instead, so the
+  // caller can derive a serial from its actual new neighbors. Takes priority
+  // over onReorder if both are passed.
+  onReorderItem?: (sourceIndex: number, targetIndex: number) => void;
   onUploadCsv?: (file: File) => void;
   onDownloadCsv?: () => void;
   onAdd?: () => void;
@@ -21,6 +28,7 @@ interface DataTableProps {
   onDelete?: (row: any) => void;
   onView?: (row: any) => void;
   onFetchApi?: () => void;
+  fetchApiLabel?: string;
   customActions?: React.ReactNode;
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -32,6 +40,7 @@ export default function DataTable({
   data: initialData,
   title,
   onReorder,
+  onReorderItem,
   onUploadCsv,
   onDownloadCsv,
   onAdd,
@@ -39,6 +48,7 @@ export default function DataTable({
   onDelete,
   onView,
   onFetchApi,
+  fetchApiLabel,
   customActions,
   searchable,
   searchPlaceholder,
@@ -48,6 +58,7 @@ export default function DataTable({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [query, setQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reorderEnabled = !!(onReorder || onReorderItem);
 
   // Update local state when initialData changes (from SWR)
   // We use a simple effect here just in case, though ideally SWR handles it better if we pass it down
@@ -109,10 +120,12 @@ export default function DataTable({
     const newData = [...data];
     const [movedItem] = newData.splice(sourceIndex, 1);
     newData.splice(targetIndex, 0, movedItem);
-    
+
     setData(newData);
 
-    if (onReorder) {
+    if (onReorderItem) {
+      onReorderItem(sourceIndex, targetIndex);
+    } else if (onReorder) {
       // Re-calculate serials (assuming 1-indexed based on array position)
       const reorderedItems = newData.map((item, index) => ({
         id: item.id,
@@ -163,7 +176,7 @@ export default function DataTable({
             {onFetchApi && (
               <button onClick={onFetchApi} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:opacity-90 font-medium text-sm transition-opacity shadow-sm">
                 <Upload className="w-4 h-4 mr-2" />
-                Fetch API
+                {fetchApiLabel || 'Fetch API'}
               </button>
             )}
 
@@ -203,7 +216,7 @@ export default function DataTable({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-muted text-muted-foreground text-sm border-b border-border">
-                {onReorder && <th className="px-4 py-3 w-12 text-center"></th>}
+                {reorderEnabled && <th className="px-4 py-3 w-12 text-center"></th>}
                 {columns.map(col => (
                   <th key={col.key} className="px-6 py-3 font-semibold">
                     <div 
@@ -230,7 +243,7 @@ export default function DataTable({
               {filteredData.map((row, index) => (
                 <tr 
                   key={row.id || index}
-                  draggable={!!onReorder}
+                  draggable={reorderEnabled}
                   onDragStart={(e) => handleDragStart(e, index)}
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
@@ -238,7 +251,7 @@ export default function DataTable({
                   onClick={() => onEdit && onEdit(row)}
                   className={`hover:bg-accent/50 transition-colors bg-card ${onEdit ? 'cursor-pointer' : ''}`}
                 >
-                  {onReorder && (
+                  {reorderEnabled && (
                     <td className="px-4 py-4 cursor-grab active:cursor-grabbing text-muted-foreground flex items-center justify-center">
                       <GripVertical className="w-4 h-4 opacity-50 hover:opacity-100" />
                     </td>
@@ -286,7 +299,7 @@ export default function DataTable({
               
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={columns.length + (onReorder ? 2 : 1)} className="px-6 py-8 text-center text-muted-foreground">
+                  <td colSpan={columns.length + (reorderEnabled ? 2 : 1)} className="px-6 py-8 text-center text-muted-foreground">
                     No data found.
                   </td>
                 </tr>

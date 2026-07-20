@@ -30,6 +30,7 @@ router.get('/:id/invitees', meetingController.getInvitees);
 router.get('/:id/invitees/emails', meetingController.getInviteesEmails);
 router.delete('/:id/invitees/:inviteeId', canEdit, meetingController.removeInvitee);
 router.put('/:id/invitees/:inviteeId', canEdit, meetingController.updateInvitee);
+router.put('/:id/invitees/:inviteeId/reorder', canEdit, meetingController.reorderInvitee);
 router.post('/:id/invitees/bulk-fetch', canEdit, meetingController.bulkFetchInvitees);
 router.get('/:id/presentees', meetingController.getPresentees);
 router.post('/:id/presentees', canEdit, meetingController.addPresentees);
