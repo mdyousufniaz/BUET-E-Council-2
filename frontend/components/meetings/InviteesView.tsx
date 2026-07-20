@@ -15,7 +15,7 @@ import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const isPast = meeting.status === 'past';
   const displayType = isPast ? 'Presentees' : 'Invitees';
   const isLocked = meeting.is_locked;
@@ -29,9 +29,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const [isSendAgendaModalOpen, setIsSendAgendaModalOpen] = useState(false);
 
   const { confirm, ConfirmModal } = useConfirm();
-  // TODO: Replace with the actual logged-in user's email from your auth/user
-  // context (e.g. a useAuth() hook or a /auth/me call), instead of this stub.
-  const currentUserEmail = "you@example.com";
+  const currentUserEmail = user?.email || "";
 
 
   // Fetch members for the Add Presentee modal

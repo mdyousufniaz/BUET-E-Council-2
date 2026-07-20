@@ -23,6 +23,7 @@
     "ioredis": "^5.4.2",
     "json2csv": "^6.0.0-alpha.2",
     "multer": "^2.2.0",
+    "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "puppeteer-core": "^25.3.0"
   },
