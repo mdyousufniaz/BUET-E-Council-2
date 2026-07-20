@@ -112,7 +112,7 @@ function SearchPageInner() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Header />
+      <Header hideSearch />
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
         <form
           onSubmit={(e) => {
@@ -212,7 +212,7 @@ export default function SearchPage() {
     <SWRConfig value={{ provider: localStorageProvider }}>
       <Suspense fallback={
         <div className="min-h-screen flex flex-col bg-background">
-          <Header />
+          <Header hideSearch />
           <div className="flex-1 text-center text-muted-foreground py-16">Loading search...</div>
         </div>
       }>

@@ -28,6 +28,7 @@ interface DataTableProps {
   onDelete?: (row: any) => void;
   onView?: (row: any) => void;
   onFetchApi?: () => void;
+  fetchApiLabel?: string;
   customActions?: React.ReactNode;
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -47,6 +48,7 @@ export default function DataTable({
   onDelete,
   onView,
   onFetchApi,
+  fetchApiLabel,
   customActions,
   searchable,
   searchPlaceholder,
@@ -174,7 +176,7 @@ export default function DataTable({
             {onFetchApi && (
               <button onClick={onFetchApi} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:opacity-90 font-medium text-sm transition-opacity shadow-sm">
                 <Upload className="w-4 h-4 mr-2" />
-                Fetch API
+                {fetchApiLabel || 'Fetch API'}
               </button>
             )}
 
