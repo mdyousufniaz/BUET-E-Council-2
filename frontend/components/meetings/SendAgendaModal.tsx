@@ -34,6 +34,7 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
   const [activeTab, setActiveTab] = useState<Tab>("invitees");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [fromEmail, setFromEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -100,6 +101,7 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
   useEffect(() => {
     if (isOpen) {
       setSubject(`Meeting Agenda: ${meeting?.title || meeting?.name || "Untitled Meeting"}`);
+      setFromEmail(currentUserEmail || "admin@buet.ac.bd");
     } else {
       setActiveTab("invitees");
       setSelectedIds([]);
@@ -211,7 +213,7 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
 
       const res = await api.post(`/meetings/${meeting.id}/send-email`, {
         invitee_ids: selectedIds,
-        from: currentUserEmail,
+        from: fromEmail,
         subject,
         content: body,
         attach_agenda: attachAgendaPdf,
@@ -331,9 +333,9 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
                 <label className="text-xs font-medium text-muted-foreground">From</label>
                 <input
                   type="email"
-                  value={currentUserEmail || ""}
-                  readOnly
-                  className="w-full px-3 py-2 bg-muted/30 border border-input rounded-md text-sm cursor-not-allowed"
+                  value={fromEmail}
+                  onChange={(e) => setFromEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm focus:ring-1 focus:ring-ring"
                 />
               </div>
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
-import { Mail, Plus, CheckCircle, Clock, Trash2, Users } from "lucide-react";
+import { Mail, Plus, CheckCircle, Clock, Trash2, Users, ShieldCheck, Building } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
 import CustomSelect from "../CustomSelect";
 import DataTable from "../DataTable";
@@ -29,9 +29,8 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const [isSendAgendaModalOpen, setIsSendAgendaModalOpen] = useState(false);
 
   const { confirm, ConfirmModal } = useConfirm();
-  // TODO: Replace with the actual logged-in user's email from your auth/user
-  // context (e.g. a useAuth() hook or a /auth/me call), instead of this stub.
-  const currentUserEmail = "you@example.com";
+  // Default "From" shown in the Send Agenda modal — editable there before sending.
+  const currentUserEmail = "admin@buet.ac.bd";
 
 
   // Fetch members for the Add Presentee modal
@@ -69,6 +68,58 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
     const matchesOffice = filterOffice ? m.office_name === filterOffice : true;
     return matchesSearch && matchesDesignation && matchesDepartment && matchesOffice;
   });
+
+  // Group the (already-filtered) member picker list the same way the public
+  // meeting view and the agenda/resolution PDF do — প্রশাসন (VC & Pro-VC),
+  // সকল ডিন, সকল বিভাগীয় প্রধান, then departments sorted by seniority, then
+  // অন্যান্য সদস্য — so the 3 filters above narrow the pool and grouping just
+  // organizes whatever's left (an empty group simply doesn't render).
+  const departmentSerialMap: Record<string, number> = {};
+  departments.forEach((d: any) => { departmentSerialMap[d.id] = d.serial; });
+
+  const isVCMember = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return (des.includes('উপাচার্য') || office.includes('উপাচার্য')) && !(des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য'));
+  };
+  const isProVCMember = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য');
+  };
+  const isDeanMember = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return office.includes('ডিন') || office.includes('dean') || des.includes('ডিন') || des.includes('dean');
+  };
+  const isHeadMember = (m: any) => (m.office_name || '').toLowerCase().includes('বিভাগীয় প্রধান');
+
+  const adminMembers: any[] = [];
+  const deanMembers: any[] = [];
+  const headMembers: any[] = [];
+  const memberDeptGroups: Record<string, { serial: number, members: any[] }> = {};
+  const otherMembers: any[] = [];
+
+  filteredMembers.forEach((m: any) => {
+    if (isVCMember(m)) {
+      adminMembers.unshift(m);
+    } else if (isProVCMember(m)) {
+      adminMembers.push(m);
+    } else if (isDeanMember(m)) {
+      deanMembers.push(m);
+    } else if (isHeadMember(m)) {
+      headMembers.push(m);
+    } else if (m.department_name) {
+      if (!memberDeptGroups[m.department_name]) {
+        memberDeptGroups[m.department_name] = { serial: departmentSerialMap[m.department_id] ?? 9999, members: [] };
+      }
+      memberDeptGroups[m.department_name].members.push(m);
+    } else {
+      otherMembers.push(m);
+    }
+  });
+
+  const sortedMemberDeptGroups = Object.entries(memberDeptGroups).sort(([, a], [, b]) => a.serial - b.serial);
 
   // Dynamically fetch invitees or presentees
   const fetchUrl = isPast ? `/meetings/${meeting.id}/presentees` : `/meetings/${meeting.id}/invitees`;
@@ -342,6 +393,49 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
     });
   };
 
+  const renderMemberGroup = (title: string, members: any[], icon: React.ReactNode) => {
+    if (members.length === 0) return null;
+    return (
+      <div key={title} className="space-y-2">
+        <div className="flex items-center gap-2 pt-2 first:pt-0">
+          {icon}
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
+          <span className="text-xs text-muted-foreground">({members.length})</span>
+        </div>
+        {members.map((member: any) => {
+          const isAlreadyAdded = invitees.some((p: any) => p.name === member.name && p.designation === member.designation);
+          return (
+            <label key={member.id} className={`flex items-center gap-3 p-3 rounded-md border border-border ${isAlreadyAdded ? 'bg-muted/10' : 'hover:bg-muted/30'} cursor-pointer`}>
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-input"
+                checked={selectedMembers.includes(member.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedMembers(prev => [...prev, member.id]);
+                  } else {
+                    setSelectedMembers(prev => prev.filter(id => id !== member.id));
+                  }
+                }}
+              />
+              <div>
+                <div className="font-medium text-sm flex items-center gap-2">
+                  {member.name}
+                  {isAlreadyAdded && <span className="text-[10px] uppercase font-bold tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded">Added</span>}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {member.designation}
+                  {member.department_name ? ` • ${member.department_name}` : ''}
+                  {member.office_name ? ` • ${member.office_name}` : ''}
+                </div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (isTakingAttendance) {
     return (
       <TakeAttendanceView 
@@ -534,37 +628,12 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
               </div>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-2">
-                {filteredMembers.map((member: any) => {
-                  const isAlreadyAdded = invitees.some((p: any) => p.name === member.name && p.designation === member.designation);
-                  return (
-                    <label key={member.id} className={`flex items-center gap-3 p-3 rounded-md border border-border ${isAlreadyAdded ? 'bg-muted/10' : 'hover:bg-muted/30'} cursor-pointer`}>
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded border-input"
-                        checked={selectedMembers.includes(member.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedMembers(prev => [...prev, member.id]);
-                          } else {
-                            setSelectedMembers(prev => prev.filter(id => id !== member.id));
-                          }
-                        }}
-                      />
-                      <div>
-                        <div className="font-medium text-sm flex items-center gap-2">
-                          {member.name}
-                          {isAlreadyAdded && <span className="text-[10px] uppercase font-bold tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded">Added</span>}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {member.designation} 
-                          {member.department_name ? ` • ${member.department_name}` : ''}
-                          {member.office_name ? ` • ${member.office_name}` : ''}
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
+              <div className="space-y-4">
+                {renderMemberGroup('প্রশাসন', adminMembers, <ShieldCheck className="w-4 h-4 text-primary" />)}
+                {renderMemberGroup('সকল ডিন', deanMembers, <Building className="w-4 h-4 text-blue-500" />)}
+                {renderMemberGroup('সকল বিভাগীয় প্রধান', headMembers, <Building className="w-4 h-4 text-blue-500" />)}
+                {sortedMemberDeptGroups.map(([deptName, data]) => renderMemberGroup(deptName, data.members, <Building className="w-4 h-4 text-blue-500" />))}
+                {renderMemberGroup('অন্যান্য সদস্য', otherMembers, <Users className="w-4 h-4 text-muted-foreground" />)}
                 {filteredMembers.length === 0 && (
                   <div className="text-center text-sm text-muted-foreground py-8">
                     <p className="mb-4">No members match the filters.</p>

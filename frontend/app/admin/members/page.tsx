@@ -107,17 +107,21 @@ export default function ManageMembersPage() {
   };
 
   const handleFetchApi = () => {
-    confirm("Sync from APIs", "This will fetch external data and sync with the database. Are you sure you want to proceed?", async () => {
-      try {
-        const loadingToast = toast.loading("Fetching data from external APIs...");
-        const res = await api.post('/members/fetch-external');
-        toast.dismiss(loadingToast);
-        toast.success(res.data.message || "Synced members successfully");
-        mutate();
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || "Failed to sync members");
+    confirm(
+      "Sync Members",
+      "This will pull the latest official member list from BUET's university records and update names, designations, departments, and offices here to match. No existing members will be removed. Continue?",
+      async () => {
+        try {
+          const loadingToast = toast.loading("Fetching data from external APIs...");
+          const res = await api.post('/members/fetch-external');
+          toast.dismiss(loadingToast);
+          toast.success(res.data.message || "Synced members successfully");
+          mutate();
+        } catch (err: any) {
+          toast.error(err.response?.data?.message || "Failed to sync members");
+        }
       }
-    });
+    );
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -221,6 +225,7 @@ export default function ManageMembersPage() {
         onEdit={canEdit ? handleEdit : undefined}
         onDelete={canEdit ? handleDelete : undefined}
         onFetchApi={canEdit ? handleFetchApi : undefined}
+        fetchApiLabel="Sync Members"
       />
 
       {isModalOpen && (
