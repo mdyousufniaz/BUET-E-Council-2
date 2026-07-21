@@ -201,7 +201,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               <div className="bg-card border border-border p-6 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="font-semibold text-lg text-primary">
-                  {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+                  {agenda.is_suppli ? 'Supplementary Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
                 </h3>
                 <div className="flex gap-2">
                   <RevisionHistory contentId={agenda.id} contentType="agendaItem" onRestored={() => mutate()} />
@@ -274,7 +274,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
 
             {/* Insertion Strip (UX Magic) */}
             {!isCreating && !readOnly && (
-              <div className="h-10 my-2 relative group flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+              <div className="h-10 my-2 relative group flex items-center justify-center cursor-pointer">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t-2 border-dashed border-primary/30"></div>
                 </div>
@@ -297,7 +297,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="font-semibold text-lg text-primary">
-                  New {title === 'Supplementary Agenda' ? 'Suppli Agenda' : 'Agenda'}
+                  New {title}
                 </h3>
               </div>
               <div className="border border-primary/50 rounded-md overflow-hidden ring-2 ring-primary/20">
@@ -348,7 +348,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               >
                 <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="font-medium text-sm">
-                  {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+                  {agenda.is_suppli ? 'Supplementary Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
                 </span>
                 <span className="text-xs text-muted-foreground truncate flex-1 opacity-60">
                   {agenda.content ? agenda.content.replace(/<[^>]*>?/gm, '').substring(0, 20) : '...'}...

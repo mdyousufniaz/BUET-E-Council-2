@@ -13,7 +13,7 @@ const navigation = [
   { name: 'Description', view: 'description', icon: FileText },
   { name: 'Invitees', view: 'invitees', icon: Users },
   { name: 'Agenda', view: 'agenda', icon: LayoutList },
-  { name: 'Suppli Agenda', view: 'suppli-agenda', icon: Layers },
+  { name: 'Supplementary Agenda', view: 'suppli-agenda', icon: Layers },
   { name: 'Resolution', view: 'resolution', icon: FileCheck },
   { name: 'Conclusion', view: 'conclusion', icon: FileText },
   { name: 'Materials', view: 'materials', icon: FileBarChart },

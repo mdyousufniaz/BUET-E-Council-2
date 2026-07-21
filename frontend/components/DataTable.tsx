@@ -33,6 +33,12 @@ interface DataTableProps {
   searchable?: boolean;
   searchPlaceholder?: string;
   filters?: React.ReactNode;
+  // Bulk-selection mode: renders a checkbox column (with a header
+  // "select all") instead of the per-row action buttons.
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: (visibleIds: string[], selectAll: boolean) => void;
 }
 
 export default function DataTable({
@@ -52,13 +58,17 @@ export default function DataTable({
   customActions,
   searchable,
   searchPlaceholder,
-  filters
+  filters,
+  selectable,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll
 }: DataTableProps) {
   const [data, setData] = useState(initialData);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [query, setQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const reorderEnabled = !!(onReorder || onReorderItem);
+  const reorderEnabled = !selectable && !!(onReorder || onReorderItem);
 
   // Update local state when initialData changes (from SWR)
   // We use a simple effect here just in case, though ideally SWR handles it better if we pass it down
@@ -101,6 +111,9 @@ export default function DataTable({
       columns.some(col => String(row[col.key] ?? '').toLowerCase().includes(q))
     );
   }, [sortedData, query, searchable, columns]);
+
+  const isAllSelected = selectable && filteredData.length > 0 && filteredData.every(row => selectedIds?.has(row.id));
+  const isIndeterminate = selectable && !isAllSelected && filteredData.some(row => selectedIds?.has(row.id));
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.setData('text/plain', index.toString());
@@ -217,6 +230,17 @@ export default function DataTable({
             <thead>
               <tr className="bg-muted text-muted-foreground text-sm border-b border-border">
                 {reorderEnabled && <th className="px-4 py-3 w-12 text-center"></th>}
+                {selectable && (
+                  <th className="px-4 py-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={!!isAllSelected}
+                      ref={el => { if (el) el.indeterminate = !!isIndeterminate; }}
+                      onChange={() => onToggleSelectAll && onToggleSelectAll(filteredData.map(row => row.id), !isAllSelected)}
+                      className="cursor-pointer"
+                    />
+                  </th>
+                )}
                 {columns.map(col => (
                   <th key={col.key} className="px-6 py-3 font-semibold">
                     <div 
@@ -248,12 +272,23 @@ export default function DataTable({
                   onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, index)}
-                  onClick={() => onEdit && onEdit(row)}
-                  className={`hover:bg-accent/50 transition-colors bg-card ${onEdit ? 'cursor-pointer' : ''}`}
+                  onClick={() => selectable ? (onToggleSelect && onToggleSelect(row.id)) : (onEdit && onEdit(row))}
+                  className={`hover:bg-accent/50 transition-colors bg-card ${(onEdit || selectable) ? 'cursor-pointer' : ''}`}
                 >
                   {reorderEnabled && (
                     <td className="px-4 py-4 cursor-grab active:cursor-grabbing text-muted-foreground flex items-center justify-center">
                       <GripVertical className="w-4 h-4 opacity-50 hover:opacity-100" />
+                    </td>
+                  )}
+
+                  {selectable && (
+                    <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={!!selectedIds?.has(row.id)}
+                        onChange={() => onToggleSelect && onToggleSelect(row.id)}
+                        className="cursor-pointer"
+                      />
                     </td>
                   )}
 
@@ -265,7 +300,7 @@ export default function DataTable({
 
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end space-x-2">
-                      {onView && (
+                      {onView && !selectable && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onView(row); }}
                           className="p-1 text-muted-foreground hover:text-primary transition-colors"
@@ -274,7 +309,7 @@ export default function DataTable({
                           <Eye className="w-4 h-4" />
                         </button>
                       )}
-                      {onEdit && (
+                      {onEdit && !selectable && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onEdit(row); }}
                           className="p-1 text-muted-foreground hover:text-primary transition-colors"
@@ -283,7 +318,7 @@ export default function DataTable({
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
-                      {onDelete && (
+                      {onDelete && !selectable && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDelete(row); }}
                           className="p-1 text-muted-foreground hover:text-destructive transition-colors"
@@ -299,7 +334,7 @@ export default function DataTable({
               
               {filteredData.length === 0 && (
                 <tr>
-                  <td colSpan={columns.length + (reorderEnabled ? 2 : 1)} className="px-6 py-8 text-center text-muted-foreground">
+                  <td colSpan={columns.length + (reorderEnabled ? 1 : 0) + (selectable ? 1 : 0) + 1} className="px-6 py-8 text-center text-muted-foreground">
                     No data found.
                   </td>
                 </tr>

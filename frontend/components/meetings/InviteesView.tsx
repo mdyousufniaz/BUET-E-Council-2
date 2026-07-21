@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
-import { Mail, Plus, CheckCircle, Clock, Trash2, Users, ShieldCheck, Building } from "lucide-react";
+import { Mail, Plus, CheckCircle, Clock, Trash2, Users, ShieldCheck, Building, Check, X, ChevronDown, LayoutList, Layers, Pencil } from "lucide-react";
 import SearchableSelect from "../SearchableSelect";
 import CustomSelect from "../CustomSelect";
 import DataTable from "../DataTable";
@@ -27,6 +27,10 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const [isTakingAttendance, setIsTakingAttendance] = useState(false);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [isSendAgendaModalOpen, setIsSendAgendaModalOpen] = useState(false);
+  const [isBulkDeleteMode, setIsBulkDeleteMode] = useState(false);
+  const [selectedInviteeIds, setSelectedInviteeIds] = useState<Set<string>>(new Set());
+  const [inviteeViewMode, setInviteeViewMode] = useState<'list' | 'grouped'>('list');
+  const [collapsedInviteeGroups, setCollapsedInviteeGroups] = useState<Set<string>>(new Set());
 
   const { confirm, ConfirmModal } = useConfirm();
   const currentUserEmail = user?.email || "";
@@ -140,6 +144,155 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
     (tableOffice === "all" || m.office_name === tableOffice)
   );
 
+  // Grid-view grouping — mirrors the categorization used for the Add
+  // Invitee/Presentee member picker (VC/Pro-VC, Deans, Dept Heads, then
+  // departments sorted by seniority, then everyone else).
+  const isInviteeVC = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return (des.includes('উপাচার্য') || office.includes('উপাচার্য')) && !(des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য'));
+  };
+  const isInviteeProVC = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return des.includes('উপ-উপাচার্য') || office.includes('উপ-উপাচার্য');
+  };
+  const isInviteeDean = (m: any) => {
+    const des = (m.designation || '').toLowerCase();
+    const office = (m.office_name || '').toLowerCase();
+    return office.includes('ডিন') || office.includes('dean') || des.includes('ডিন') || des.includes('dean');
+  };
+  const isInviteeHead = (m: any) => (m.office_name || '').toLowerCase().includes('বিভাগীয় প্রধান');
+
+  const inviteeGroups = useMemo(() => {
+    const admin: any[] = [];
+    const deans: any[] = [];
+    const heads: any[] = [];
+    const deptGroups: Record<string, { serial: number, members: any[] }> = {};
+    const others: any[] = [];
+
+    displayedInvitees.forEach((m: any) => {
+      if (isInviteeVC(m)) admin.unshift(m);
+      else if (isInviteeProVC(m)) admin.push(m);
+      else if (isInviteeDean(m)) deans.push(m);
+      else if (isInviteeHead(m)) heads.push(m);
+      else if (m.department_name) {
+        if (!deptGroups[m.department_name]) {
+          deptGroups[m.department_name] = { serial: m.department_serial ?? 9999, members: [] };
+        }
+        deptGroups[m.department_name].members.push(m);
+      } else {
+        others.push(m);
+      }
+    });
+
+    const sortedDeptGroups = Object.entries(deptGroups).sort(([, a], [, b]) => a.serial - b.serial);
+    return { admin, deans, heads, sortedDeptGroups, others };
+  }, [displayedInvitees]);
+
+  const toggleInviteeGroupCollapse = (key: string) => {
+    setCollapsedInviteeGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const renderInviteeGroup = (key: string, title: string, members: any[], icon: React.ReactNode) => {
+    if (members.length === 0) return null;
+    const isCollapsed = collapsedInviteeGroups.has(key);
+    const isGroupAllSelected = isBulkDeleteMode && members.length > 0 && members.every(m => selectedInviteeIds.has(m.id));
+    const isGroupIndeterminate = isBulkDeleteMode && !isGroupAllSelected && members.some(m => selectedInviteeIds.has(m.id));
+
+    return (
+      <div key={key} className="mb-4 bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+        <div
+          onClick={() => toggleInviteeGroupCollapse(key)}
+          className="w-full bg-muted/50 px-4 py-3 flex items-center justify-between border-b border-border hover:bg-muted transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            {icon}
+            <h3 className="font-semibold text-foreground">{title}</h3>
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+              {members.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {isBulkDeleteMode && (
+              <label
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground cursor-pointer select-none"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={isGroupAllSelected}
+                  ref={el => { if (el) el.indeterminate = isGroupIndeterminate; }}
+                  onChange={() => handleToggleSelectAllInvitees(members.map(m => m.id), !isGroupAllSelected)}
+                  className="cursor-pointer"
+                />
+                Select All
+              </label>
+            )}
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+          </div>
+        </div>
+        {!isCollapsed && (
+          <div className="divide-y divide-border">
+            {members.map((m: any) => (
+              <div
+                key={m.id}
+                onClick={() => isBulkDeleteMode && handleToggleSelectInvitee(m.id)}
+                className={`flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors group ${isBulkDeleteMode ? 'cursor-pointer' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  {isBulkDeleteMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedInviteeIds.has(m.id)}
+                      onChange={() => handleToggleSelectInvitee(m.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="cursor-pointer"
+                    />
+                  )}
+                  <div>
+                    <div className="font-medium text-foreground">{m.name}</div>
+                    <div className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
+                      {m.designation && <span>{m.designation}</span>}
+                      {m.office_name && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-border" />
+                          <span>{m.office_name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {!readOnly && !isBulkDeleteMode && (
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
+                      className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemove(m.id); }}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Drag-reorder derives a target serial from the dragged row's new neighbors
   // in this list, so it's only safe while the list isn't narrowed by a filter
   // — otherwise the "neighbor" wouldn't be the true adjacent invitee.
@@ -190,6 +343,57 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
         toast.error("Failed to remove");
       }
     });
+  };
+
+  const handleToggleSelectInvitee = (id: string) => {
+    setSelectedInviteeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleSelectAllInvitees = (visibleIds: string[], selectAll: boolean) => {
+    setSelectedInviteeIds(prev => {
+      const next = new Set(prev);
+      visibleIds.forEach(id => selectAll ? next.add(id) : next.delete(id));
+      return next;
+    });
+  };
+
+  const handleCancelBulkDelete = () => {
+    setIsBulkDeleteMode(false);
+    setSelectedInviteeIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedInviteeIds.size === 0) {
+      toast.error(`Select at least one ${isPast ? 'presentee' : 'invitee'} to delete`);
+      return;
+    }
+    const ids = Array.from(selectedInviteeIds);
+    const count = ids.length;
+    confirm(
+      `Remove ${count} ${isPast ? 'Presentee' : 'Invitee'}${count > 1 ? 's' : ''}`,
+      `Are you sure you want to remove ${count} selected ${isPast ? 'presentee' : 'invitee'}${count > 1 ? 's' : ''}?`,
+      async () => {
+        try {
+          await Promise.all(
+            ids.map(id => isPast
+              ? api.delete(`/meetings/${meeting.id}/presentees/${id}`)
+              : api.delete(`/meetings/${meeting.id}/invitees/${id}`)
+            )
+          );
+          mutateInvitees();
+          toast.success(`${count} ${isPast ? 'presentee' : 'invitee'}${count > 1 ? 's' : ''} removed successfully`);
+        } catch (err) {
+          toast.error("Failed to remove selected entries");
+        } finally {
+          setIsBulkDeleteMode(false);
+          setSelectedInviteeIds(new Set());
+        }
+      }
+    );
   };
 
   const handleReorderInvitee = async (sourceIndex: number, targetIndex: number) => {
@@ -435,9 +639,38 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
     );
   };
 
+  const bulkDeleteControls = !readOnly && invitees.length > 0 && (
+    isBulkDeleteMode ? (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleBulkDelete}
+          title="Confirm delete"
+          className="p-2 bg-destructive text-destructive-foreground rounded-md hover:opacity-90 transition-opacity"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleCancelBulkDelete}
+          title="Cancel"
+          className="p-2 bg-accent text-accent-foreground border border-border rounded-md hover:bg-accent/80 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    ) : (
+      <button
+        onClick={() => setIsBulkDeleteMode(true)}
+        className="border border-destructive/50 text-destructive px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:bg-destructive/5 transition-colors"
+      >
+        <Trash2 className="w-4 h-4" />
+        Delete {isPast ? 'Presentee' : 'Invitee'}
+      </button>
+    )
+  );
+
   if (isTakingAttendance) {
     return (
-      <TakeAttendanceView 
+      <TakeAttendanceView
         invitees={invitees} 
         onSave={handleSaveAttendance} 
         onCancel={() => setIsTakingAttendance(false)}
@@ -491,35 +724,66 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                     <Plus className="w-4 h-4" />
                     Add Invitee
                   </button>
+                  {bulkDeleteControls}
                 </div>
               </>
             )
           ) : (
             !readOnly && (
-              <button
-                onClick={() => {
-                  // Initialize selectedMembers with already added presentees
-                  const initiallySelected = allMembers
-                    .filter((m: any) => invitees.some((p: any) => p.name === m.name && p.designation === m.designation))
-                    .map((m: any) => m.id);
-                  setSelectedMembers(initiallySelected);
-                  setIsAddPresenteeModalOpen(true);
-                }}
-                className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:opacity-90 transition-opacity"
-              >
-                <Plus className="w-4 h-4" />
-                Add Presentee
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // Initialize selectedMembers with already added presentees
+                    const initiallySelected = allMembers
+                      .filter((m: any) => invitees.some((p: any) => p.name === m.name && p.designation === m.designation))
+                      .map((m: any) => m.id);
+                    setSelectedMembers(initiallySelected);
+                    setIsAddPresenteeModalOpen(true);
+                  }}
+                  className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 hover:opacity-90 transition-opacity"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Presentee
+                </button>
+                {bulkDeleteControls}
+              </div>
             )
           )}
         </div>
       </div>
+
+      {invitees.length > 0 && (
+        <div className="flex justify-end mb-4">
+          <div className="inline-flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setInviteeViewMode('list')}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${inviteeViewMode === 'list' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent'}`}
+            >
+              <LayoutList className="w-4 h-4" /> List
+            </button>
+            <button
+              onClick={() => setInviteeViewMode('grouped')}
+              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors border-l border-border ${inviteeViewMode === 'grouped' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent'}`}
+            >
+              <Layers className="w-4 h-4" /> Grouped
+            </button>
+          </div>
+        </div>
+      )}
 
       {invitees.length === 0 ? (
         <div className="text-center py-16 bg-card border border-border rounded-lg shadow-sm">
           <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-medium text-foreground">No {displayType} added yet</h3>
           <p className="text-muted-foreground mt-1">Click the add button above to include participants.</p>
+        </div>
+      ) : inviteeViewMode === 'grouped' ? (
+        <div>
+          {renderInviteeGroup('admin', 'প্রশাসন', inviteeGroups.admin, <ShieldCheck className="w-4 h-4 text-primary" />)}
+          {renderInviteeGroup('deans', 'সকল ডিন', inviteeGroups.deans, <Building className="w-4 h-4 text-blue-500" />)}
+          {renderInviteeGroup('heads', 'সকল বিভাগীয় প্রধান', inviteeGroups.heads, <Building className="w-4 h-4 text-blue-500" />)}
+          {inviteeGroups.sortedDeptGroups.map(([deptName, data]) => renderInviteeGroup(`dept-${deptName}`, deptName, data.members, <Building className="w-4 h-4 text-blue-500" />))}
+          {renderInviteeGroup('others', 'অন্যান্য সদস্য', inviteeGroups.others, <Users className="w-4 h-4 text-muted-foreground" />)}
         </div>
       ) : (
         <DataTable
@@ -529,6 +793,10 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
           searchable
           searchPlaceholder="Search by name or designation..."
           onReorderItem={!isPast && !readOnly && noTableFiltersActive ? handleReorderInvitee : undefined}
+          selectable={isBulkDeleteMode}
+          selectedIds={selectedInviteeIds}
+          onToggleSelect={handleToggleSelectInvitee}
+          onToggleSelectAll={handleToggleSelectAllInvitees}
           filters={
             <>
               <div className="w-44">
