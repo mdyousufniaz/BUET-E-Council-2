@@ -15,6 +15,7 @@ interface TagMultiSelectProps {
   onChange: (value: string[]) => void;
   onAddNew?: (name: string) => void;
   placeholder?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLElement>) => void;
 }
 
 export default function TagMultiSelect({
@@ -22,7 +23,8 @@ export default function TagMultiSelect({
   value,
   onChange,
   onAddNew,
-  placeholder = "Select tags..."
+  placeholder = "Select tags...",
+  onKeyDown
 }: TagMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -99,6 +101,8 @@ export default function TagMultiSelect({
       <div
         className="flex items-center flex-wrap gap-1.5 min-h-[38px] w-full px-2 py-1.5 bg-input/20 border border-input rounded-md cursor-pointer focus-within:ring-2 focus-within:ring-ring"
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={onKeyDown}
+        tabIndex={0}
       >
         {selectedTags.length === 0 && (
           <span className="text-sm text-muted-foreground px-1">{placeholder}</span>
@@ -130,6 +134,7 @@ export default function TagMultiSelect({
               placeholder="Search tags..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={onKeyDown}
               autoFocus
             />
           </div>

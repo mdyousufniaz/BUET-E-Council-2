@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR, { SWRConfig } from "swr";
 import Link from "next/link";
@@ -74,113 +74,180 @@ function SearchPageInner() {
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [scope, setScope] = useState<"agenda" | "both">(searchParams.get("scope") === "agenda" ? "agenda" : "both");
-  const [tagIds, setTagIds] = useState<string[]>((searchParams.get("tags") || "").split(",").filter(Boolean));
-  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") || "");
-  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") || "");
+  const [tagIdsInput, setTagIdsInput] = useState<string[]>((searchParams.get("tags") || "").split(",").filter(Boolean));
+  const [dateFromInput, setDateFromInput] = useState(searchParams.get("dateFrom") || "");
+  const [dateToInput, setDateToInput] = useState(searchParams.get("dateTo") || "");
+  const [serialFromInput, setSerialFromInput] = useState(searchParams.get("serialFrom") || "");
+  const [serialToInput, setSerialToInput] = useState(searchParams.get("serialTo") || "");
 
   const { data: tagsResponse } = useSWR('/tags', fetcher, { fallbackData: { data: [] } });
   const allTags = tagsResponse?.data || [];
 
   const activeQuery = searchParams.get("q") || "";
-  const hasSearchCriteria = !!activeQuery.trim() || tagIds.length > 0;
+  const activeTagIds = useMemo(() => (searchParams.get("tags") || "").split(",").filter(Boolean), [searchParams]);
+  const activeDateFrom = searchParams.get("dateFrom") || "";
+  const activeDateTo = searchParams.get("dateTo") || "";
+  const activeSerialFrom = searchParams.get("serialFrom") || "";
+  const activeSerialTo = searchParams.get("serialTo") || "";
+  const hasSearchCriteria = !!activeQuery.trim() || activeTagIds.length > 0 || !!activeSerialFrom || !!activeSerialTo;
 
-  // Tag/date/scope filters apply immediately; the text query only applies on submit (Enter).
+  // Sync inputs with URL on searchParams change (e.g. back/forward navigation)
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (activeQuery.trim()) params.set("q", activeQuery.trim());
+    setQuery(searchParams.get("q") || "");
+    setScope(searchParams.get("scope") === "agenda" ? "agenda" : "both");
+    setTagIdsInput((searchParams.get("tags") || "").split(",").filter(Boolean));
+    setDateFromInput(searchParams.get("dateFrom") || "");
+    setDateToInput(searchParams.get("dateTo") || "");
+    setSerialFromInput(searchParams.get("serialFrom") || "");
+    setSerialToInput(searchParams.get("serialTo") || "");
+  }, [searchParams]);
+
+  // Scope toggles apply immediately. Other inputs wait for form submit (Enter).
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
     if (scope !== "both") params.set("scope", scope);
-    if (tagIds.length > 0) params.set("tags", tagIds.join(","));
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
+    else params.delete("scope");
     router.replace(`/search?${params.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, tagIds, dateFrom, dateTo]);
+  }, [scope]);
 
   const searchKey = useMemo(() => {
-    if (!activeQuery.trim() && tagIds.length === 0) return null;
+    if (!activeQuery.trim() && activeTagIds.length === 0 && !activeSerialFrom && !activeSerialTo) return null;
     const params = new URLSearchParams();
     if (activeQuery.trim()) params.set("q", activeQuery.trim());
     params.set("scope", scope);
-    if (tagIds.length > 0) params.set("tags", tagIds.join(","));
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
+    if (activeTagIds.length > 0) params.set("tags", activeTagIds.join(","));
+    if (activeDateFrom) params.set("dateFrom", activeDateFrom);
+    if (activeDateTo) params.set("dateTo", activeDateTo);
+    if (activeSerialFrom) params.set("serialFrom", activeSerialFrom);
+    if (activeSerialTo) params.set("serialTo", activeSerialTo);
     return `/search?${params.toString()}`;
-  }, [activeQuery, scope, tagIds, dateFrom, dateTo]);
+  }, [activeQuery, scope, activeTagIds, activeDateFrom, activeDateTo, activeSerialFrom, activeSerialTo]);
 
   const { data, isLoading } = useSWR(searchKey, fetcher);
   const results = data?.data || [];
+
+  const triggerSearch = () => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (scope !== "both") params.set("scope", scope);
+    if (tagIdsInput.length > 0) params.set("tags", tagIdsInput.join(","));
+    if (dateFromInput) params.set("dateFrom", dateFromInput);
+    if (dateToInput) params.set("dateTo", dateToInput);
+    if (serialFromInput.trim()) params.set("serialFrom", serialFromInput.trim());
+    if (serialToInput.trim()) params.set("serialTo", serialToInput.trim());
+    router.replace(`/search?${params.toString()}`, { scroll: false });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      triggerSearch();
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header hideSearch />
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
         <form
-          onSubmit={(e) => {
+          onSubmit={(e: React.FormEvent) => {
             e.preventDefault();
-            const params = new URLSearchParams(searchParams.toString());
-            if (query.trim()) params.set("q", query.trim());
-            else params.delete("q");
-            router.replace(`/search?${params.toString()}`, { scroll: false });
+            triggerSearch();
           }}
-          className="relative mb-6"
         >
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search agendas & resolutions (English or Bangla)..."
-            className="w-full pl-10 pr-4 py-3 text-base bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-          />
-        </form>
-
-        <div className="bg-card border border-border rounded-lg p-4 mb-6 flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <TagIcon className="w-3.5 h-3.5" /> Tags
-            </label>
-            <TagMultiSelect options={allTags} value={tagIds} onChange={setTagIds} placeholder="Any tag" />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">From</label>
+          <div className="relative mb-6">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">To</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search agendas & resolutions (English or Bangla)..."
+              className="w-full pl-10 pr-4 py-3 text-base bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
             />
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Search in</label>
-            <div className="flex rounded-md border border-input overflow-hidden text-sm">
-              <button
-                type="button"
-                onClick={() => setScope("agenda")}
-                className={`px-3 py-2 flex items-center gap-1.5 transition-colors ${scope === "agenda" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
-              >
-                <FileText className="w-3.5 h-3.5" /> Agenda only
-              </button>
-              <button
-                type="button"
-                onClick={() => setScope("both")}
-                className={`px-3 py-2 flex items-center gap-1.5 transition-colors border-l border-input ${scope === "both" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
-              >
-                <Sparkles className="w-3.5 h-3.5" /> Agenda + Resolution
-              </button>
+          <div className="bg-card border border-border rounded-lg p-4 mb-6 flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[180px]">
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <TagIcon className="w-3.5 h-3.5" /> Tags
+              </label>
+              <TagMultiSelect
+                options={allTags}
+                value={tagIdsInput}
+                onChange={setTagIdsInput}
+                placeholder="Any tag"
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">From</label>
+              <input
+                type="date"
+                value={dateFromInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDateFromInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">To</label>
+              <input
+                type="date"
+                value={dateToInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDateToInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Serial From</label>
+              <input
+                type="number"
+                min="0"
+                value={serialFromInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSerialFromInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g. 50"
+                className="w-24 px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Serial To</label>
+              <input
+                type="number"
+                min="0"
+                value={serialToInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSerialToInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g. 100"
+                className="w-24 px-3 py-2 text-sm bg-input/20 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Search in</label>
+              <div className="flex rounded-md border border-input overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setScope("agenda")}
+                  className={`px-3 py-2 flex items-center gap-1.5 transition-colors ${scope === "agenda" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
+                >
+                  <FileText className="w-3.5 h-3.5" /> Agenda only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope("both")}
+                  className={`px-3 py-2 flex items-center gap-1.5 transition-colors border-l border-input ${scope === "both" ? "bg-primary/10 text-primary font-medium" : "bg-input/20 text-muted-foreground hover:bg-accent"}`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> Agenda + Resolution
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </form>
 
         {!hasSearchCriteria ? (
           <div className="text-center text-muted-foreground py-16">
