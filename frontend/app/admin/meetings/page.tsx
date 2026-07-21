@@ -127,7 +127,7 @@ export default function ManageMeetingsPage() {
               className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded-md hover:bg-secondary/80 transition-colors text-sm font-medium"
             >
               <FileJson className="w-4 h-4" />
-              + Create Meeting with JSON
+              + Import Meeting
             </button>
           )
         }

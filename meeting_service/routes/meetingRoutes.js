@@ -9,8 +9,8 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
-const canEdit = requireRole('admin', 'moderator');
-const adminOnly = requireRole('admin');
+const canEdit = requireRole('admin', 'moderator', 'superadmin');
+const adminOnly = requireRole('admin', 'superadmin');
 
 router.use(authMiddleware);
 router.use(checkMeetingLock);
@@ -23,7 +23,8 @@ router.get('/:id', meetingController.getMeetingById);
 router.put('/:id', canEdit, meetingController.updateMeeting);
 router.delete('/:id', adminOnly, meetingController.deleteMeeting); // critical - admin-only
 router.post('/:id/complete', canEdit, meetingController.completeMeeting);
-router.put('/:id/lock', requireRole('admin'), meetingController.toggleLock);
+router.put('/:id/lock', adminOnly, meetingController.toggleLock);
+router.put('/:id/approve', requireRole('superadmin'), meetingController.approveMeeting);
 
 router.post('/:id/invitees', canEdit, meetingController.addInvitees);
 router.get('/:id/invitees', meetingController.getInvitees);
