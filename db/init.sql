@@ -132,6 +132,10 @@ CREATE TABLE meetings (
     created_by UUID REFERENCES users (id) ON DELETE SET NULL,
     stage meeting_stage NOT NULL DEFAULT 'initiator',
     moderator_can_return BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Resolution/attendance phase: once the agenda is approved and the meeting
+    -- is set "ongoing", initiator/moderator can record resolutions & attendance
+    -- until an admin approves the resolution, which locks them (Phase 2).
+    resolution_approved BOOLEAN NOT NULL DEFAULT FALSE,
     review_note TEXT,
     submitted_at TIMESTAMP WITH TIME ZONE,
     reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,

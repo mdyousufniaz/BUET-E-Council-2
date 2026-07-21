@@ -67,7 +67,7 @@ const loadMeeting = async (req) => {
     }
 
     const result = await db.query(
-        'SELECT id, created_by, stage FROM meetings WHERE id = $1',
+        'SELECT id, created_by, stage, status, resolution_approved FROM meetings WHERE id = $1',
         [meetingId]
     );
     req._workflowMeeting = result.rows[0] || null;
@@ -127,10 +127,39 @@ const requireMeetingAuthor = async (req, res, next) => {
     }
 };
 
-// In Phase 1 operational actions (invitees, presentees, attendance, materials)
-// follow the same stage rules as content editing. Phase 2 will relax this for
-// the resolution/attendance sub-phase once a meeting goes "ongoing".
+// Operational actions that are part of building the file (invitees, materials)
+// follow the same stage rules as content editing.
 const requireMeetingOperator = requireMeetingAuthor;
+
+// Resolution/attendance phase (Phase 2): once the agenda is approved and the
+// meeting is set "ongoing", the initiator/moderator (and admin/superadmin) may
+// record resolutions & attendance until an admin approves the resolution.
+const canEditResolutionAtStage = (meeting, user) => {
+    if (meeting.stage !== 'approved' || meeting.status !== 'ongoing' || meeting.resolution_approved) return false;
+    if (isAdminRole(user)) return true;
+    return isOwner(meeting, user) || user?.role === 'moderator';
+};
+
+const resolutionBlockedMessage = (meeting) => {
+    if (meeting.resolution_approved) return 'The resolution has been approved and is now locked.';
+    if (meeting.stage !== 'approved') return 'Resolutions and attendance can only be recorded after the agenda is approved.';
+    if (meeting.status !== 'ongoing') return 'Set the meeting status to "Ongoing" to record resolutions and attendance.';
+    return 'You do not have permission to edit the resolution at this stage.';
+};
+
+const requireResolutionEditor = async (req, res, next) => {
+    try {
+        if (!req.user) return next(new CustomError('You are not logged in.', 401));
+
+        const meeting = await loadMeeting(req);
+        if (!meeting) return next(new CustomError('Meeting not found.', 404));
+
+        if (canEditResolutionAtStage(meeting, req.user)) return next();
+        return next(new CustomError(resolutionBlockedMessage(meeting), 403));
+    } catch (err) {
+        next(err);
+    }
+};
 
 module.exports = {
     resolveMeetingId,
@@ -138,6 +167,8 @@ module.exports = {
     isOwner,
     isAdminRole,
     canEditAtStage,
+    canEditResolutionAtStage,
     requireMeetingAuthor,
     requireMeetingOperator,
+    requireResolutionEditor,
 };

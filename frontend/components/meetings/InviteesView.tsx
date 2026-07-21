@@ -13,11 +13,14 @@ import SendAgendaModal from "./SendAgendaModal";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
-import { canOperateMeeting } from "../../lib/meetingAccess";
+import { canOperateMeeting, canEditResolution } from "../../lib/meetingAccess";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const { user } = useAuth();
   const canEdit = canOperateMeeting(user, meeting);
+  // Attendance belongs to the resolution phase (approved + ongoing), which
+  // opens for the initiator/moderator even though agenda editing is locked.
+  const canAttendance = canEditResolution(user, meeting);
   const isPast = meeting.status === 'past';
   const displayType = isPast ? 'Presentees' : 'Invitees';
   const isLocked = meeting.is_locked;
@@ -689,14 +692,16 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
 
         <div className="flex items-center gap-4">
           {!isPast ? (
-            !readOnly && (
-              <>
-                <button 
+            <>
+              {canAttendance && (
+                <button
                   onClick={() => setIsTakingAttendance(true)}
                   className="border border-primary text-primary px-4 py-2 text-sm font-medium rounded-md hover:bg-primary/5 transition-colors"
                 >
                   Take Attendance
                 </button>
+              )}
+              {!readOnly && (
                 <div className="flex gap-2">
                   <button
                     onClick={handleBulkFetch}
@@ -728,8 +733,8 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
                   </button>
                   {bulkDeleteControls}
                 </div>
-              </>
-            )
+              )}
+            </>
           ) : (
             !readOnly && (
               <div className="flex gap-2">

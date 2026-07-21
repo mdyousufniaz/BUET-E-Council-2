@@ -9,6 +9,8 @@ import {
   submitTarget,
   canApproveMeeting,
   returnTargets,
+  canApproveResolution,
+  canReopenResolution,
   STAGE_LABELS,
   STAGE_BADGE_CLASSES,
   type MeetingStage,
@@ -35,6 +37,8 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
   const nextUp = submitTarget(user, meeting);
   const canApprove = canApproveMeeting(user, meeting);
   const targets = returnTargets(user, meeting);
+  const canApproveRes = canApproveResolution(user, meeting);
+  const canReopenRes = canReopenResolution(user, meeting);
 
   const act = async (path: string, body: Record<string, unknown>, successMsg: string) => {
     setBusy(true);
@@ -101,6 +105,46 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
           ))}
         </div>
       </div>
+
+      {/* Resolution / attendance phase, once the agenda is approved. */}
+      {stage === "approved" && (
+        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Resolution &amp; attendance:</span>
+            {meeting.resolution_approved ? (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                Approved — locked
+              </span>
+            ) : meeting.status === "ongoing" ? (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                Open for editing
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Set status to &ldquo;Ongoing&rdquo; (Meeting Info) to open</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {canApproveRes && (
+              <button
+                disabled={busy}
+                onClick={() => act("approve-resolution", {}, "Resolution approved")}
+                className="inline-flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-emerald-700 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Approve Resolution
+              </button>
+            )}
+            {canReopenRes && (
+              <button
+                disabled={busy}
+                onClick={() => act("reopen-resolution", {}, "Resolution reopened for editing")}
+                className="inline-flex items-center gap-2 border border-border text-sm font-medium px-4 py-2 rounded-md hover:bg-accent disabled:opacity-50"
+              >
+                <CornerDownLeft className="w-4 h-4" /> Reopen Resolution
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Note left by whoever last handed the file back. */}
       {meeting.review_note && (stage === "initiator" || stage === "moderator") && (

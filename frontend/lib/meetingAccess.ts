@@ -17,6 +17,8 @@ export interface WorkflowMeeting {
   stage?: MeetingStage | null;
   moderator_can_return?: boolean;
   is_locked?: boolean;
+  status?: string | null;
+  resolution_approved?: boolean;
 }
 
 export const isAdminRole = (user?: WorkflowUser | null): boolean =>
@@ -77,6 +79,25 @@ export const returnTargets = (user?: WorkflowUser | null, meeting?: WorkflowMeet
   }
   return [];
 };
+
+// --- Resolution / attendance phase (Phase 2) ---------------------------------
+// Open only after the agenda is approved and the meeting is set "ongoing",
+// until an admin approves the resolution.
+
+const resolutionPhaseOpen = (meeting?: WorkflowMeeting | null): boolean =>
+  !!meeting && !meeting.is_locked && meeting.stage === 'approved' &&
+  meeting.status === 'ongoing' && !meeting.resolution_approved;
+
+export const canEditResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
+  if (!user || !resolutionPhaseOpen(meeting)) return false;
+  return isAdminRole(user) || isMeetingOwner(user, meeting) || user.role === 'moderator';
+};
+
+export const canApproveResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean =>
+  isAdminRole(user) && resolutionPhaseOpen(meeting);
+
+export const canReopenResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean =>
+  isAdminRole(user) && !!meeting && !meeting.is_locked && !!meeting.resolution_approved;
 
 export const STAGE_LABELS: Record<MeetingStage, string> = {
   initiator: 'Draft — with initiator',

@@ -178,8 +178,8 @@ const approveMeeting = async (req, res, next) => {
 
         const result = await db.query(
             `UPDATE meetings
-             SET stage = 'approved', moderator_can_return = FALSE, review_note = NULL,
-                 reviewed_by = $2, reviewed_at = NOW()
+             SET stage = 'approved', moderator_can_return = FALSE, resolution_approved = FALSE,
+                 review_note = NULL, reviewed_by = $2, reviewed_at = NOW()
              WHERE id = $1 RETURNING *`,
             [id, req.user?.id || null]
         );
@@ -224,7 +224,7 @@ const returnMeeting = async (req, res, next) => {
         const moderatorCanReturn = admin && target === 'moderator';
         const result = await db.query(
             `UPDATE meetings
-             SET stage = $2, moderator_can_return = $3, review_note = $4,
+             SET stage = $2, moderator_can_return = $3, resolution_approved = FALSE, review_note = $4,
                  reviewed_by = $5, reviewed_at = NOW()
              WHERE id = $1 RETURNING *`,
             [id, target, moderatorCanReturn, note || null, req.user?.id || null]
@@ -235,11 +235,50 @@ const returnMeeting = async (req, res, next) => {
     }
 };
 
+// admin/superadmin approves the resolution, locking resolution + attendance
+// editing. Requires the agenda approved and the meeting ongoing.
+const approveResolution = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const check = await db.query('SELECT stage, status, resolution_approved FROM meetings WHERE id = $1', [id]);
+        if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        const m = check.rows[0];
+        if (m.stage !== 'approved') return next(new CustomError('The agenda must be approved before the resolution.', 409));
+        if (m.status !== 'ongoing') return next(new CustomError('The meeting must be "ongoing" to approve its resolution.', 409));
+        if (m.resolution_approved) return next(new CustomError('The resolution has already been approved.', 409));
+
+        const result = await db.query(
+            `UPDATE meetings SET resolution_approved = TRUE, reviewed_by = $2, reviewed_at = NOW()
+             WHERE id = $1 RETURNING *`,
+            [id, req.user?.id || null]
+        );
+        res.status(200).json({ success: true, message: 'Resolution approved', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// admin/superadmin reopens an approved resolution for further edits.
+const reopenResolution = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query(
+            `UPDATE meetings SET resolution_approved = FALSE, reviewed_by = $2, reviewed_at = NOW()
+             WHERE id = $1 RETURNING *`,
+            [id, req.user?.id || null]
+        );
+        if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        res.status(200).json({ success: true, message: 'Resolution reopened for editing', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
 const completeMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { title } = req.body;
-        
+
         // Verify meeting
         const check = await db.query('SELECT title, status FROM meetings WHERE id = $1', [id]);
         if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
@@ -910,6 +949,8 @@ module.exports = {
     submitMeeting,
     approveMeeting,
     returnMeeting,
+    approveResolution,
+    reopenResolution,
     addInvitees,
     bulkFetchInvitees,
     getInvitees,

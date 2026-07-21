@@ -228,7 +228,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
           )}
         </form>
 
-        {!isPast && !readOnly && (
+        {!isPast && isAdmin && (
           <>
             <hr className="my-8 border-border" />
             <div>

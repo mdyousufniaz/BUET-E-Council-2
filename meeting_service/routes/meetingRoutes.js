@@ -1,7 +1,7 @@
 const express = require('express');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
-const { requireMeetingAuthor, requireMeetingOperator } = require('../middlewares/meetingWorkflowMiddleware');
+const { requireMeetingAuthor, requireMeetingOperator, requireResolutionEditor } = require('../middlewares/meetingWorkflowMiddleware');
 const meetingController = require('../controllers/meetingController');
 const { checkMeetingLock } = require('../middlewares/lockMiddleware');
 const { auditLog } = require('../middlewares/auditMiddleware');
@@ -36,7 +36,12 @@ router.post('/:id/submit', canWorkflow, meetingController.submitMeeting);      /
 router.post('/:id/approve', canApprove, meetingController.approveMeeting);     // admin/superadmin finalize
 router.post('/:id/return', canWorkflow, meetingController.returnMeeting);      // hand back down (with note)
 
-router.post('/:id/complete', requireMeetingOperator, meetingController.completeMeeting);
+// Resolution/attendance phase (after agenda approved + meeting ongoing).
+router.post('/:id/approve-resolution', canApprove, meetingController.approveResolution);
+router.post('/:id/reopen-resolution', canApprove, meetingController.reopenResolution);
+
+// Only admin/superadmin can finalize a meeting as completed.
+router.post('/:id/complete', adminOnly, meetingController.completeMeeting);
 router.put('/:id/lock', adminOnly, meetingController.toggleLock);
 
 router.post('/:id/invitees', requireMeetingOperator, meetingController.addInvitees);
@@ -46,11 +51,12 @@ router.delete('/:id/invitees/:inviteeId', requireMeetingOperator, meetingControl
 router.put('/:id/invitees/:inviteeId', requireMeetingOperator, meetingController.updateInvitee);
 router.put('/:id/invitees/:inviteeId/reorder', requireMeetingOperator, meetingController.reorderInvitee);
 router.post('/:id/invitees/bulk-fetch', requireMeetingOperator, meetingController.bulkFetchInvitees);
+// Presentees + attendance belong to the resolution/attendance phase.
 router.get('/:id/presentees', meetingController.getPresentees);
-router.post('/:id/presentees', requireMeetingOperator, meetingController.addPresentees);
-router.put('/:id/presentees/:presenteeId', requireMeetingOperator, meetingController.updatePresentee);
-router.delete('/:id/presentees/:presenteeId', requireMeetingOperator, meetingController.removePresentee);
-router.put('/:id/attendance', requireMeetingOperator, meetingController.saveAttendance);
+router.post('/:id/presentees', requireResolutionEditor, meetingController.addPresentees);
+router.put('/:id/presentees/:presenteeId', requireResolutionEditor, meetingController.updatePresentee);
+router.delete('/:id/presentees/:presenteeId', requireResolutionEditor, meetingController.removePresentee);
+router.put('/:id/attendance', requireResolutionEditor, meetingController.saveAttendance);
 
 // Unified endpoint for generating PDFs
 router.get('/:id/pdf/:type', meetingController.generatePdf);
