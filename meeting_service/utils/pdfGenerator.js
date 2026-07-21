@@ -120,7 +120,7 @@ const renderPdf = async (html) => {
 // existing caches are invalidated.
 // ---------------------------------------------------------------------------
 const CACHE_PREFIX = 'generated-pdfs';
-const PDF_TEMPLATE_VERSION = 'v3';
+const PDF_TEMPLATE_VERSION = 'v4';
 
 const pdfCacheKey = (meetingId, type) => `${CACHE_PREFIX}/${meetingId}/${type}.pdf`;
 
@@ -167,7 +167,7 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
             LEFT JOIN offices o ON p.office_id = o.id
             WHERE p.meeting_id = $1
         `;
-        const agendasQuery = `SELECT agenda_serial, content, resolution FROM agenda WHERE meeting_id = $1 ORDER BY agenda_serial ASC`;
+        const agendasQuery = `SELECT agenda_serial, content, resolution, is_suppli FROM agenda WHERE meeting_id = $1 ORDER BY agenda_serial ASC`;
 
         // These queries are independent, so run them in parallel.
         const [meetingResult, presenteesResult, agendasResult] = await Promise.all([
@@ -315,6 +315,28 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
         const meetingDate = new Date(meeting.meeting_date).toLocaleDateString('bn-BD', { year: 'numeric', month: 'long', day: 'numeric' });
         const serialNo = meeting.title || 'Untitled';
 
+        // Agenda (pre-meeting notice) and resolution (post-meeting minutes) are
+        // different documents, not the same content with an extra line: they
+        // carry different titles and tense ("to be held" vs "held").
+        const docLabel = isResolution ? 'কার্যবিবরণী' : 'আলোচ্যসূচি';
+        const dateVerb = isResolution ? 'অনুষ্ঠিত' : 'অনুষ্ঠিতব্য';
+
+        // Supplementary agenda items (is_suppli) are printed after the main
+        // agenda/resolution items under their own heading, never interleaved.
+        const mainAgendas = agendas.filter(ag => !ag.is_suppli);
+        const suppliAgendas = agendas.filter(ag => ag.is_suppli);
+
+        const renderAgendaBlock = (ag) => `
+            <div class="agenda-block">
+                <div class="agenda-title">প্রস্তাবনা নং ${ag.agenda_serial || ''}</div>
+                <div class="agenda-content">${ag.content || ''}</div>
+                ${isResolution ? `
+                <div class="agenda-title" style="margin-top:15px;">সিদ্ধান্ত:</div>
+                <div class="agenda-resolution">${ag.resolution || ''}</div>
+                ` : ''}
+            </div>
+        `;
+
         let html = `
         <!DOCTYPE html>
         <html>
@@ -374,7 +396,7 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
         </head>
         <body>
             <div class="text-center header-title">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
-            <div class="text-center sub-title">${meetingDate} তারিখে অনুষ্ঠিত ${serialNo}নং সভার কার্যবিবরণী</div>
+            <div class="text-center sub-title">${meetingDate} তারিখে ${dateVerb} ${serialNo}নং সভার ${docLabel}</div>
 
             ${meeting.description ? `<div class="description">${meeting.description}</div>` : ''}
 
@@ -391,16 +413,12 @@ const generatePdf = async (meetingId, isResolution, cacheVariant) => {
 
             <div class="disclaimer">এই তালিকা সিনিওরিটি হিসেবে গণ্য হবে না।</div>
 
-            ${agendas.map(ag => `
-                <div class="agenda-block">
-                    <div class="agenda-title">প্রস্তাবনা নং ${ag.agenda_serial || ''}</div>
-                    <div class="agenda-content">${ag.content || ''}</div>
-                    ${isResolution ? `
-                    <div class="agenda-title" style="margin-top:15px;">সিদ্ধান্ত:</div>
-                    <div class="agenda-resolution">${ag.resolution || ''}</div>
-                    ` : ''}
-                </div>
-            `).join('')}
+            ${mainAgendas.map(renderAgendaBlock).join('')}
+
+            ${suppliAgendas.length > 0 ? `
+                <div class="presentees-header" style="margin-top:20px;">সম্পূরক আলোচ্যসূচি</div>
+                ${suppliAgendas.map(renderAgendaBlock).join('')}
+            ` : ''}
         </body>
         </html>
         `;

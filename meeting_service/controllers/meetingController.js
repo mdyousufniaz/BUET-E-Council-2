@@ -6,16 +6,26 @@ const { sendMail } = require('../utils/mailer');
 const crypto = require('crypto');
 const { indexAgendaContent, indexResolutionContent } = require('../utils/searchIndexer');
 
+// A viewer whose account is scoped to a specific member_type (academic/syndicate)
+// only sees meetings of that type; 'none' (and every non-viewer role) sees both.
+const viewerTypeRestriction = (user) =>
+    (user?.role === 'viewer' && ['academic', 'syndicate'].includes(user?.member_type))
+        ? user.member_type
+        : null;
+
 const getMeetings = async (req, res, next) => {
     try {
+        const restrictedType = viewerTypeRestriction(req.user);
+
         const result = await db.query(`
             SELECT m.*,
                    u.username AS creator_username,
                    ROW_NUMBER() OVER (ORDER BY m.legacy_meeting_no DESC NULLS FIRST) as serial
             FROM meetings m
             LEFT JOIN users u ON u.id = m.created_by
+            ${restrictedType ? 'WHERE m.type = $1' : ''}
             ORDER BY m.legacy_meeting_no DESC NULLS FIRST
-        `);
+        `, restrictedType ? [restrictedType] : []);
 
         // Format dates correctly for the frontend
         const data = result.rows.map(meeting => ({
@@ -50,6 +60,12 @@ const getMeetingById = async (req, res, next) => {
         }
 
         const meeting = result.rows[0];
+
+        const restrictedType = viewerTypeRestriction(req.user);
+        if (restrictedType && meeting.type !== restrictedType) {
+            return next(new CustomError('You do not have access to this meeting.', 403));
+        }
+
         meeting.date = new Date(meeting.meeting_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
         res.status(200).json({ success: true, data: meeting });

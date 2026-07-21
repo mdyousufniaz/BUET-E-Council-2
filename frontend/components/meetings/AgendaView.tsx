@@ -24,6 +24,14 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   const agendas = response?.data || [];
   const { confirm, ConfirmModal } = useConfirm();
 
+  // Meeting criteria (regular/emergency) is a creation-time-only choice, never
+  // persisted to the DB — it's stashed in localStorage by the create-meeting
+  // form so this tab can still enforce "emergency meetings get 1 agendum only"
+  // without a schema change. Only applies to the main Agenda tab, not Supplementary.
+  const isEmergencyMeeting = typeof window !== 'undefined'
+    && window.localStorage.getItem(`meeting_criteria_${meeting.id}`) === 'emergency';
+  const emergencyLimitReached = !isSuppliView && isEmergencyMeeting && agendas.length >= 1;
+
   const { data: tagsResponse, mutate: mutateTags } = useSWR('/tags', fetcher, { fallbackData: { data: [] } });
   const allTags = tagsResponse?.data || [];
 
@@ -58,9 +66,9 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
       await api.put(`/agendas/${editingId}`, { content: editContent, tag_ids: editTagIds });
       mutate();
       setEditingId(null);
-      toast.success("Agenda saved successfully");
+      toast.success("Agendum saved successfully");
     } catch (err: any) {
-      toast.error("Failed to save agenda");
+      toast.error("Failed to save agendum");
     } finally {
       setIsSaving(false);
     }
@@ -129,27 +137,30 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
         agenda_serial: nextSerial,
         content: newContent,
         is_suppli: isSuppliView,
-        tag_ids: newTagIds
+        tag_ids: newTagIds,
+        // Transient flag, re-sent on every create call since it's never stored
+        // on the meeting row — lets the backend also enforce the 1-agendum cap.
+        meeting_criteria: (!isSuppliView && isEmergencyMeeting) ? 'emergency' : undefined
       });
       mutate();
       setIsCreating(false);
       setNewTagIds([]);
-      toast.success("Agenda created");
+      toast.success("Agendum created");
     } catch (err: any) {
-      toast.error("Failed to create agenda");
+      toast.error(err.response?.data?.message || "Failed to create agendum");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = (id: string) => {
-    confirm("Delete Agenda", "Are you sure you want to delete this agenda?", async () => {
+    confirm("Delete Agendum", "Are you sure you want to delete this agendum?", async () => {
       try {
         await api.delete(`/agendas/${id}`);
         mutate();
-        toast.success("Agenda deleted");
+        toast.success("Agendum deleted");
       } catch (err) {
-        toast.error("Failed to delete agenda");
+        toast.error("Failed to delete agendum");
       }
     });
   };
@@ -181,13 +192,13 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             </div>
             {!readOnly && (
               <div className="flex gap-4 mt-4">
-                <button 
-                  onClick={handleStartCreate} 
+                <button
+                  onClick={handleStartCreate}
                   className="bg-primary text-primary-foreground py-2 px-6 rounded-md font-medium shadow-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Create New Agenda
+                  <Plus className="w-4 h-4" /> Create New Agendum
                 </button>
-                <button 
+                <button
                   onClick={() => setIsDrawerOpen(true)}
                   className="bg-accent text-accent-foreground border border-border py-2 px-6 rounded-md font-medium shadow-sm hover:bg-accent/80 transition-colors flex items-center gap-2"
                 >
@@ -213,14 +224,14 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                       <button
                         onClick={() => handleEditClick(agenda)}
                         className="text-primary opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-primary/10 rounded-md hover:bg-primary/20"
-                        title="Edit Agenda"
+                        title="Edit Agendum"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(agenda.id)}
                         className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-destructive/10 rounded-md hover:bg-destructive/20"
-                        title="Delete Agenda"
+                        title="Delete Agendum"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -276,14 +287,14 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             </div>
 
             {/* Insertion Strip (UX Magic) */}
-            {!isCreating && !readOnly && (
+            {!isCreating && !readOnly && !emergencyLimitReached && (
               <div className="h-10 my-2 relative group flex items-center justify-center cursor-pointer">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t-2 border-dashed border-primary/30"></div>
                 </div>
                 <div className="relative flex gap-3">
                   <button onClick={handleStartCreate} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
-                    <Plus className="w-3 h-3" /> Create Agenda
+                    <Plus className="w-3 h-3" /> Create Agendum
                   </button>
                   <button onClick={() => setIsDrawerOpen(true)} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
                     <FileText className="w-3 h-3" /> From Template
@@ -291,10 +302,16 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                 </div>
               </div>
             )}
+
+            {!isCreating && !readOnly && emergencyLimitReached && (
+              <div className="my-2 flex items-center justify-center gap-2 text-xs text-sky-600 dark:text-sky-400 bg-sky-500/10 rounded-full py-1.5 px-4 w-fit mx-auto">
+                Emergency meeting — limited to 1 agendum.
+              </div>
+            )}
           </div>
         ))}
-        
-        {/* Create New Agenda Form */}
+
+        {/* Create New Agendum Form */}
         {isCreating && !readOnly && (
           <div className="bg-card border border-primary/50 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow mt-4">
             <div className="p-6">
@@ -322,7 +339,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                   <div className="flex gap-3 shrink-0">
                     <button onClick={() => setIsCreating(false)} className="px-4 py-1.5 text-sm font-medium text-muted-foreground hover:bg-background rounded-md transition-colors">Cancel</button>
                     <button onClick={handleSaveNew} disabled={isSaving || !newContent} className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-md disabled:opacity-50 transition-opacity">
-                      {isSaving ? "Saving..." : "Create Agenda"}
+                      {isSaving ? "Saving..." : "Create Agendum"}
                     </button>
                   </div>
                 </div>
