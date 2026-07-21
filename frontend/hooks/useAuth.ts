@@ -1,7 +1,7 @@
 import useSWR from 'swr';
 import { fetcher } from '../lib/api';
 
-export type Role = 'admin' | 'moderator' | 'file_initiator' | 'viewer';
+export type Role = 'admin' | 'superadmin' | 'moderator' | 'file_initiator' | 'viewer';
 
 export function useAuth() {
   const { data: response, error, isLoading } = useSWR('/auth/me', fetcher, {
@@ -11,7 +11,9 @@ export function useAuth() {
   const user = response?.data ?? null;
   const role: Role | null = user?.role ?? null;
 
-  const isAdmin = role === 'admin';
+  // superadmin can do everything admin can, so it satisfies isAdmin checks too.
+  const isAdmin = role === 'admin' || role === 'superadmin';
+  const isSuperAdmin = role === 'superadmin';
   const isModerator = role === 'moderator';
   const isInitiator = role === 'file_initiator';
 
@@ -21,6 +23,7 @@ export function useAuth() {
     isLoading,
     error,
     isAdmin,
+    isSuperAdmin,
     isModerator,
     isInitiator,
     // Generic "staff can manage the structural admin pages" (members,

@@ -6,7 +6,7 @@ const auditLogController = require('../controllers/auditLogController');
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(requireRole('admin'));
+router.use(requireRole('admin', 'superadmin'));
 
 router.get('/', auditLogController.getAuditLogs);
 router.get('/archives', auditLogController.getAuditLogArchives);

@@ -151,7 +151,9 @@ const submitMeeting = async (req, res, next) => {
 };
 
 // Moderator/admin approves a submitted file (finalizes it, locks initiator out).
-const approveMeeting = async (req, res, next) => {
+// Named reviewApproveMeeting to avoid clashing with the separate super_admin
+// "dummy approve" (approveMeeting, which flips meetings.is_approved).
+const reviewApproveMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
         const check = await db.query('SELECT approval_status FROM meetings WHERE id = $1', [id]);
@@ -773,10 +775,6 @@ const sendAgendaEmail = async (req, res, next) => {
 const toggleLock = async (req, res, next) => {
     try {
         const { id } = req.params;
-        
-        if (req.user?.role !== 'admin') {
-            return next(new CustomError('Only admins can lock or unlock meetings', 403));
-        }
 
         const meetingCheck = await db.query('SELECT is_locked FROM meetings WHERE id = $1', [id]);
         if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
@@ -793,6 +791,27 @@ const toggleLock = async (req, res, next) => {
             message: `Meeting successfully ${newLockState ? 'locked' : 'unlocked'}`, 
             data: result.rows[0] 
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const approveMeeting = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const meetingCheck = await db.query('SELECT status FROM meetings WHERE id = $1', [id]);
+        if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        if (meetingCheck.rows[0].status !== 'draft') {
+            return next(new CustomError('Only draft meetings can be approved', 400));
+        }
+
+        const result = await db.query(
+            'UPDATE meetings SET is_approved = true WHERE id = $1 RETURNING *',
+            [id]
+        );
+
+        res.status(200).json({ success: true, message: 'Meeting approved', data: result.rows[0] });
     } catch (error) {
         next(error);
     }
@@ -892,7 +911,7 @@ module.exports = {
     updateMeeting,
     deleteMeeting,
     submitMeeting,
-    approveMeeting,
+    reviewApproveMeeting,
     sendBackMeeting,
     reopenMeeting,
     addInvitees,
@@ -910,6 +929,7 @@ module.exports = {
     completeMeeting,
     uploadMaterial,
     toggleLock,
+    approveMeeting,
     bulkImportMeeting,
     getInviteesEmails,
     sendAgendaEmail

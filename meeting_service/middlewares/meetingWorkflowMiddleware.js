@@ -85,7 +85,7 @@ const requireMeetingAccess = ({ allowStatuses = ['draft', 'sent_back'], allowRol
         try {
             if (!req.user) return next(new CustomError('You are not logged in.', 401));
 
-            if (req.user.role === 'admin') return next();
+            if (req.user.role === 'admin' || req.user.role === 'superadmin') return next();
             if (allowRoles.includes(req.user.role)) return next();
 
             const meeting = await loadMeeting(req);

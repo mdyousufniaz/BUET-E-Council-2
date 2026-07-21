@@ -193,7 +193,8 @@ export default function ManageUsersPage() {
                       { value: "viewer", label: "Viewer" },
                       { value: "file_initiator", label: "File Initiator" },
                       { value: "moderator", label: "Moderator" },
-                      { value: "admin", label: "Admin" }
+                      { value: "admin", label: "Admin" },
+                      { value: "superadmin", label: "Super Admin" }
                     ]}
                     value={newUser.role}
                     onChange={(val) => setNewUser({...newUser, role: val})}

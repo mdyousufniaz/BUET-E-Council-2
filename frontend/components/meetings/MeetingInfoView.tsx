@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
 import { canAuthorMeeting } from "../../lib/meetingAccess";
-import { Lock, Unlock, Trash2 } from "lucide-react";
+import { Lock, Unlock, Trash2, CheckCircle2 } from "lucide-react";
 
 const typeOptions = [
   { value: "syndicate", label: "Syndicate" },
@@ -30,7 +30,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     status: meeting.status || "draft"
   });
   const { confirm, ConfirmModal } = useConfirm();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, isSuperAdmin, user } = useAuth();
   const canEdit = canAuthorMeeting(user, meeting);
   const router = useRouter();
   const isLocked = meeting.is_locked;
@@ -42,6 +42,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const [confirmTitle, setConfirmTitle] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
   const handleDelete = () => {
     confirm("Delete Meeting", "Are you sure you want to delete this meeting? This action cannot be undone.", async () => {
@@ -96,6 +97,19 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     }
   };
 
+  const handleApprove = async () => {
+    setIsApproving(true);
+    try {
+      await api.put(`/meetings/${meeting.id}/approve`);
+      mutate();
+      toast.success('Meeting approved');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to approve meeting');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
   const handleToggleLock = async () => {
     const actionStr = isLocked ? "unlock" : "lock";
     confirm(`${isLocked ? 'Unlock' : 'Lock'} Meeting`, `Are you sure you want to ${actionStr} this meeting?`, async () => {
@@ -117,6 +131,21 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
         <h2 className="text-2xl font-bold">Meeting Info</h2>
         {isAdmin && (
           <div className="flex items-center gap-3">
+            {isSuperAdmin && meeting.status === 'draft' && (
+              meeting.is_approved ? (
+                <span className="flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm bg-emerald-100 text-emerald-700 border border-emerald-300">
+                  <CheckCircle2 className="w-4 h-4" /> Approved
+                </span>
+              ) : (
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> {isApproving ? "Approving..." : "Approve Meeting"}
+                </button>
+              )
+            )}
             <button
               onClick={handleToggleLock}
               className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${

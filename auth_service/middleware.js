@@ -50,7 +50,7 @@ const requireAuth = async (req, res, next) => {
 };
 
 const requireAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
+    if (req.user && ['admin', 'superadmin'].includes(req.user.role)) {
         next();
     } else {
         return res.status(403).json({ success: false, message: 'Forbidden. Admin access required.' });

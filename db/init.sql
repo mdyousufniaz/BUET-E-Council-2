@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- 2. Define Enum Types
-CREATE TYPE user_role AS ENUM ('admin', 'moderator', 'file_initiator', 'viewer');
+CREATE TYPE user_role AS ENUM ('admin', 'superadmin', 'moderator', 'file_initiator', 'viewer');
 
 -- Approval workflow state of a meeting "file". A file_initiator prepares the
 -- file (draft), submits it for review (submitted), and a moderator/admin either
@@ -116,6 +116,7 @@ CREATE TABLE meetings (
     conclusion TEXT,
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
     is_locked BOOLEAN DEFAULT FALSE,
+    is_approved BOOLEAN DEFAULT FALSE,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),
     agenda_pdf_link VARCHAR(255),
@@ -351,6 +352,23 @@ VALUES (
         'admin@buet.ac.bd',
         '$2b$10$Uept771hLFh/Wc0hKa8wZeS9XLVfvXdNYpVUq2oGhq/Fk3K4wvQaq', -- bcrypt hash of '123456' (matches README's documented default)
         'admin',
+        'active'
+    )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    users (
+        username,
+        email,
+        password,
+        role,
+        status
+    )
+VALUES (
+        'superadmin',
+        'superadmin@buet.ac.bd',
+        '$2b$10$Uept771hLFh/Wc0hKa8wZeS9XLVfvXdNYpVUq2oGhq/Fk3K4wvQaq', -- bcrypt hash of '123456' (same hash reused, same password)
+        'superadmin',
         'active'
     )
 ON CONFLICT DO NOTHING;

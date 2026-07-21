@@ -7,8 +7,9 @@
 -- NOTE: ALTER TYPE ... ADD VALUE cannot run inside a transaction block in older
 -- PostgreSQL, so this script is intentionally not wrapped in BEGIN/COMMIT.
 
--- 1. New global role.
+-- 1. New global roles (file_initiator from this feature; superadmin merged from main).
 ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'file_initiator';
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'superadmin';
 
 -- 2. Approval-status enum (guarded so re-runs don't fail).
 DO $$
@@ -25,4 +26,6 @@ ALTER TABLE meetings
     ADD COLUMN IF NOT EXISTS review_note TEXT,
     ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE,
     ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE;
+    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
+    -- is_approved backs the separate super_admin "dummy approve" merged from main.
+    ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT FALSE;

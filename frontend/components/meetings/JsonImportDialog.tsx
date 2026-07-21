@@ -99,9 +99,9 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
       };
     } catch (e) {
       return {
-        key, fileName, parsedData: null, parseError: 'Invalid JSON format',
+        key, fileName, parsedData: null, parseError: 'Invalid file format',
         unresolvedDepts: [], unresolvedOffices: [], deptMapping: {}, officeMapping: {},
-        status: 'failed', errorMessage: 'Invalid JSON format'
+        status: 'failed', errorMessage: 'Invalid file format'
       };
     }
   };
@@ -271,10 +271,10 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
               <FileJson className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Import Meeting JSON</h2>
+              <h2 className="text-xl font-bold">Import Meeting</h2>
               <p className="text-sm text-muted-foreground">
                 {step === 1
-                  ? 'Upload one or more JSON files to import.'
+                  ? 'Upload one or more files to import.'
                   : `${items.length} file(s) selected · ${readyCount} ready · ${needsResolutionCount} need attention`}
               </p>
             </div>
@@ -297,7 +297,7 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
                   <FileJson className="w-10 h-10 text-muted-foreground" />
                 )}
                 <p className="text-sm text-muted-foreground">
-                  {isParsingFiles ? 'Reading files...' : 'Click to select one or more .json files'}
+                  {isParsingFiles ? 'Reading files...' : 'Click to select one or more files'}
                 </p>
                 <input
                   id="json-import-files"

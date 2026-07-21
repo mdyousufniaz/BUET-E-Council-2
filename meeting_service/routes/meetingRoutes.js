@@ -10,11 +10,11 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
-const adminOnly = requireRole('admin');
+const adminOnly = requireRole('admin', 'superadmin');
 // File initiators (and admins) own meeting/agenda authoring; moderators only review.
-const canCreate = requireRole('admin', 'file_initiator');
+const canCreate = requireRole('admin', 'superadmin', 'file_initiator');
 // Approving / sending back a submitted file is the reviewer's job.
-const canReview = requireRole('admin', 'moderator');
+const canReview = requireRole('admin', 'superadmin', 'moderator');
 
 router.use(authMiddleware);
 router.use(checkMeetingLock);
@@ -27,14 +27,17 @@ router.get('/:id', meetingController.getMeetingById);
 router.put('/:id', requireMeetingAuthor, meetingController.updateMeeting);
 router.delete('/:id', adminOnly, meetingController.deleteMeeting); // critical - admin-only
 
-// Approval workflow
+// File approval workflow (initiator submits -> moderator reviews).
 router.post('/:id/submit', canCreate, meetingController.submitMeeting);
-router.post('/:id/approve', canReview, meetingController.approveMeeting);
+router.post('/:id/approve', canReview, meetingController.reviewApproveMeeting);
 router.post('/:id/send-back', canReview, meetingController.sendBackMeeting);
 router.post('/:id/reopen', adminOnly, meetingController.reopenMeeting);
 
 router.post('/:id/complete', requireMeetingOperator, meetingController.completeMeeting);
-router.put('/:id/lock', requireRole('admin'), meetingController.toggleLock);
+router.put('/:id/lock', adminOnly, meetingController.toggleLock);
+
+// Super admin "dummy" approval (from PR #32) — flips meetings.is_approved.
+router.put('/:id/approve', requireRole('superadmin'), meetingController.approveMeeting);
 
 router.post('/:id/invitees', requireMeetingOperator, meetingController.addInvitees);
 router.get('/:id/invitees', meetingController.getInvitees);

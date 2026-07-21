@@ -26,7 +26,7 @@ export const isMeetingOwner = (user?: WorkflowUser | null, meeting?: WorkflowMee
 // the file is draft/sent_back, or admin. Never while locked.
 export const canAuthorMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting || meeting.is_locked) return false;
-  if (user.role === 'admin') return true;
+  if ((user.role === 'admin' || user.role === 'superadmin')) return true;
   if (user.role === 'file_initiator' && isMeetingOwner(user, meeting)) {
     return EDITABLE_STATUSES.includes((meeting.approval_status ?? 'draft') as ApprovalStatus);
   }
@@ -37,7 +37,7 @@ export const canAuthorMeeting = (user?: WorkflowUser | null, meeting?: WorkflowM
 // presentees, attendance, resolutions, materials). Owner or admin.
 export const canOperateMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting || meeting.is_locked) return false;
-  if (user.role === 'admin') return true;
+  if ((user.role === 'admin' || user.role === 'superadmin')) return true;
   return user.role === 'file_initiator' && isMeetingOwner(user, meeting);
 };
 
@@ -46,14 +46,14 @@ export const canSubmitMeeting = (user?: WorkflowUser | null, meeting?: WorkflowM
   if (!user || !meeting || meeting.is_locked) return false;
   const editable = EDITABLE_STATUSES.includes((meeting.approval_status ?? 'draft') as ApprovalStatus);
   if (!editable) return false;
-  if (user.role === 'admin') return true;
+  if ((user.role === 'admin' || user.role === 'superadmin')) return true;
   return user.role === 'file_initiator' && isMeetingOwner(user, meeting);
 };
 
 // May approve / send back a submitted file.
 export const canReviewMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
-  return (user.role === 'admin' || user.role === 'moderator') && meeting.approval_status === 'submitted';
+  return ((user.role === 'admin' || user.role === 'superadmin') || user.role === 'moderator') && meeting.approval_status === 'submitted';
 };
 
 export const APPROVAL_LABELS: Record<ApprovalStatus, string> = {
