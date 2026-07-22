@@ -6,24 +6,11 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- 2. Define Enum Types
-CREATE TYPE user_role AS ENUM ('admin', 'superadmin', 'moderator', 'file_initiator', 'viewer');
-
--- Approval escalation stage of a meeting "file". Editing rights follow the
--- stage: the file climbs initiator -> moderator -> admin, and an admin/superadmin
--- finally approves it. admin/superadmin can always edit and can hand the file
--- back down the chain, recording who did so in return_source so the receiver
--- knows which reviewer to re-submit to.
-CREATE TYPE meeting_stage AS ENUM ('initiator', 'moderator', 'admin', 'approved');
+CREATE TYPE user_role AS ENUM ('admin', 'viewer', 'editor', 'superadmin', 'moderator', 'file_initiator');
 
 CREATE TYPE member_type_enum AS ENUM ('academic', 'syndicate', 'none');
 
 CREATE TYPE meeting_type AS ENUM ('syndicate', 'academic');
-
--- Lifecycle of a meeting, derived from the approval workflow rather than picked
--- by hand: 'draft' while the agenda is being prepared and approved, 'ongoing'
--- the moment an admin/superadmin approves the agenda, and 'past' only when an
--- admin hits "Mark Meeting Completed".
-CREATE TYPE meeting_status AS ENUM ('draft', 'ongoing', 'past');
 
 CREATE TYPE annexure_type AS ENUM ('agendaItem', 'resolution');
 
@@ -43,6 +30,22 @@ CREATE TYPE account_status AS ENUM ('active', 'inactive');
 
 -- 3. Create Tables
 
+-- Roles Table (Level-based permissions for editors)
+CREATE TABLE roles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    level INTEGER NOT NULL UNIQUE,
+    level_title VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- System Settings Table
+CREATE TABLE system_settings (
+    key VARCHAR(50) PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO system_settings (key, value) VALUES ('min_completed_level', '1') ON CONFLICT DO NOTHING;
+
 -- Users Table
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
@@ -50,6 +53,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL, -- Store hashed passwords only
     role user_role NOT NULL DEFAULT 'viewer',
+    role_id UUID REFERENCES roles (id) ON DELETE SET NULL,
     member_type member_type_enum NOT NULL DEFAULT 'none',
     status account_status NOT NULL DEFAULT 'active',
     legacy_username VARCHAR(100) UNIQUE,
@@ -122,45 +126,41 @@ CREATE TABLE meetings (
     conclusion TEXT,
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
     type meeting_type NOT NULL,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'ongoing', 'past')),
     meeting_link VARCHAR(255),
-    -- Video-call link (Zoom/Meet/Teams) for attending remotely, editable any
-    -- time by any non-viewer role independent of the meeting's lock/workflow
-    -- state (see PUT /meetings/:id/online-link).
     online_meeting_link VARCHAR(255),
-    -- Meeting-wide proposal-code prefix (e.g. "২১০৬"), the same for every
-    -- agendum in this meeting. Extracted from the first OCR-imported
-    -- agendum's leading "প্রস্তাব নং <4 Bangla digits>" marker, or entered
-    -- manually via Meeting Info. NULL means each agendum falls back to
-    -- showing its own agenda_serial (in Bangla digits) instead.
     agenda_prefix VARCHAR(10),
     agenda_pdf_link VARCHAR(255),
     transcript VARCHAR(255),
     resolution_pdf_link VARCHAR(255),
     resolution_status_pdf_link VARCHAR(255),
-    status meeting_status NOT NULL DEFAULT 'draft',
     legacy_meeting_no NUMERIC UNIQUE,
-    -- Approval workflow: the initiator who created the file and the current
-    -- escalation stage. return_source records who handed the file back down to
-    -- the initiator ('moderator' | 'admin'), so the initiator re-submits to the
-    -- same party. Per-role send-back notes are shown together when both exist.
     created_by UUID REFERENCES users (id) ON DELETE SET NULL,
-    stage meeting_stage NOT NULL DEFAULT 'initiator',
-    return_source VARCHAR(20),
-    moderator_note TEXT,
-    admin_note TEXT,
-    -- Resolution approval: a SECOND escalation chain that opens once the agenda
-    -- is approved (status 'ongoing'), running the same initiator -> moderator ->
-    -- admin route with its own stage, return source and per-role send-back
-    -- notes. Reaching 'approved' freezes the resolution for good.
-    resolution_stage meeting_stage NOT NULL DEFAULT 'initiator',
-    resolution_return_source VARCHAR(20),
-    resolution_moderator_note TEXT,
-    resolution_admin_note TEXT,
-    submitted_at TIMESTAMP WITH TIME ZONE,
-    reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
-    reviewed_at TIMESTAMP WITH TIME ZONE,
+    -- Level-based Handover & Locking controls
+    agenda_handover_level INTEGER DEFAULT NULL,
+    suppli_agenda_handover_level INTEGER DEFAULT NULL,
+    resolution_handover_level INTEGER DEFAULT NULL,
+    resolution_status_handover_level INTEGER DEFAULT NULL,
+    agenda_locked_level INTEGER DEFAULT NULL,
+    suppli_agenda_locked_level INTEGER DEFAULT NULL,
+    resolution_locked_level INTEGER DEFAULT NULL,
+    resolution_status_locked_level INTEGER DEFAULT NULL,
+    meeting_locked_level INTEGER DEFAULT NULL,
+    invitees_locked_level INTEGER DEFAULT NULL,
+    presentees_locked_level INTEGER DEFAULT NULL,
+    conclusion_locked_level INTEGER DEFAULT NULL,
+    is_completed BOOLEAN DEFAULT FALSE,
+    completed_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+    completed_by UUID REFERENCES users (id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS invitees_locked_level INTEGER DEFAULT NULL;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS presentees_locked_level INTEGER DEFAULT NULL;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS conclusion_locked_level INTEGER DEFAULT NULL;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS suppli_agenda_handover_level INTEGER DEFAULT NULL;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS suppli_agenda_locked_level INTEGER DEFAULT NULL;
 
 -- Content Table (Stores the core text data)
 CREATE TABLE agenda (

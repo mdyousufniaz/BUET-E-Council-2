@@ -7,11 +7,11 @@ import api from "../../lib/api";
 import { toast } from "sonner";
 import TemplateDrawer from "../TemplateDrawer";
 import { useAuth } from "../../hooks/useAuth";
-import { canAuthorMeeting } from "../../lib/meetingAccess";
+import { canEditMeeting, canEditConclusion } from "../../lib/meetingAccess";
 
 export default function DescriptionView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const { user } = useAuth();
-  const canEdit = canAuthorMeeting(user, meeting);
+  const canEdit = type === 'conclusion' ? canEditConclusion(user, meeting) : canEditMeeting(user, meeting);
   const [content, setContent] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

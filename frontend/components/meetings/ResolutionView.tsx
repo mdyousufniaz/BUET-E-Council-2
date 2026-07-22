@@ -14,6 +14,7 @@ import TemplateDrawer from "../TemplateDrawer";
 import { useAuth } from "../../hooks/useAuth";
 import { canEditResolution } from "../../lib/meetingAccess";
 import { useConfirm } from "../../hooks/useConfirm";
+import { toBanglaDigits } from "../../lib/banglaNumerals";
 
 export default function ResolutionView({ meeting }: { meeting: any }) {
   const { user } = useAuth();
@@ -139,8 +140,8 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
             {/* Top Section (Read-Only Agenda) */}
             <div className="mb-6">
-              <h3 className="font-semibold text-sm text-primary uppercase tracking-wider mb-2">
-                {agenda.is_suppli ? 'Suppli Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+              <h3 className="font-semibold text-base text-primary mb-2">
+                প্রস্তাবনা নং {(meeting.agenda_prefix || '') + toBanglaDigits(agenda.agenda_serial || index + 1)}
               </h3>
               {agenda.tags && agenda.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">

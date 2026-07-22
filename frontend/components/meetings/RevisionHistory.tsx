@@ -36,6 +36,8 @@ const formatRelative = (iso: string) => {
 export default function RevisionHistory({ contentId, contentType, onRestored, className, canRestore }: RevisionHistoryProps) {
   const { canEdit: staffCanEdit } = useAuth();
   const canEdit = canRestore ?? staffCanEdit;
+  if (!canEdit) return null;
+
   const [isOpen, setIsOpen] = useState(false);
   const [style, setStyle] = useState<React.CSSProperties>({});
   const [mounted, setMounted] = useState(false);

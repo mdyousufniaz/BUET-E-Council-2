@@ -11,7 +11,7 @@ export default function HomePage() {
   const { user } = useAuth();
   // A viewer scoped to a single member_type (academic/syndicate) only ever
   // sees that type; 'none' (or no logged-in user at all) sees both, same as today.
-  const restrictedType = (user?.role === 'viewer' && ['academic', 'syndicate'].includes(user?.member_type))
+  const restrictedType = (user?.role === 'viewer' && user?.member_type && ['academic', 'syndicate'].includes(user.member_type))
     ? (user.member_type as 'academic' | 'syndicate')
     : null;
 

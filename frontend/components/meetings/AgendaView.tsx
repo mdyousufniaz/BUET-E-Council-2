@@ -12,23 +12,19 @@ import { sanitizeHtml } from "../../lib/sanitize";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
-import { canAuthorMeeting, canOperateMeeting } from "../../lib/meetingAccess";
+import { canEditAgenda, canEditSuppliAgenda } from "../../lib/meetingAccess";
 import { toBanglaDigits } from "../../lib/banglaNumerals";
 import TemplateDrawer from "../TemplateDrawer";
 
 export default function AgendaView({ meeting, type }: { meeting: any, type: string }) {
   const { user } = useAuth();
-  const canEdit = canAuthorMeeting(user, meeting);
-  const canManageAnnexures = canOperateMeeting(user, meeting);
   const isSuppliView = type === 'suppli-agenda';
+  const canEdit = isSuppliView ? canEditSuppliAgenda(user, meeting) : canEditAgenda(user, meeting);
+  const canManageAnnexures = canEdit;
   const { data: response, mutate } = useSWR(`/agendas?meeting_id=${meeting.id}&is_suppli=${isSuppliView}`, fetcher, { fallbackData: { data: [] } });
   const agendas = response?.data || [];
   const { confirm, ConfirmModal } = useConfirm();
 
-  // Meeting criteria (regular/emergency) is a creation-time-only choice, never
-  // persisted to the DB — it's stashed in localStorage by the create-meeting
-  // form so this tab can still enforce "emergency meetings get 1 agendum only"
-  // without a schema change. Only applies to the main Agenda tab, not Supplementary.
   const isEmergencyMeeting = typeof window !== 'undefined'
     && window.localStorage.getItem(`meeting_criteria_${meeting.id}`) === 'emergency';
   const emergencyLimitReached = !isSuppliView && isEmergencyMeeting && agendas.length >= 1;
@@ -40,7 +36,9 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   const [editContent, setEditContent] = useState("");
   const [editTagIds, setEditTagIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+
+  // In-place creation state
+  const [createAtIndex, setCreateAtIndex] = useState<number | null>(null);
   const [newContent, setNewContent] = useState("");
   const [newTagIds, setNewTagIds] = useState<string[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -83,7 +81,6 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
     const sourceId = e.dataTransfer.getData("text/plain");
     if (sourceId === targetId) return;
 
-    // Local optimistic update
     const sourceIndex = agendas.findIndex((a: any) => a.id === sourceId);
     const targetIndex = agendas.findIndex((a: any) => a.id === targetId);
 
@@ -93,27 +90,24 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
     const [moved] = newAgendas.splice(sourceIndex, 1);
     newAgendas.splice(targetIndex, 0, moved);
 
-    // Update serials based on new position
     const updatedAgendas = newAgendas.map((a: any, idx: number) => ({
       ...a,
       agenda_serial: idx + 1
     }));
 
-    // Mutate locally
     mutate({ ...response, data: updatedAgendas }, false);
 
-    // Sync with backend (could be parallelized)
     try {
       await Promise.all(
         updatedAgendas.map((a: any) =>
           api.put(`/agendas/${a.id}`, { agenda_serial: a.agenda_serial })
         )
       );
-      mutate(); // Re-fetch to ensure sync
+      mutate();
       toast.success("Agendas reordered");
     } catch (err) {
       toast.error("Failed to reorder agendas");
-      mutate(); // Revert on failure
+      mutate();
     }
   };
 
@@ -121,31 +115,31 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
     e.preventDefault();
   };
 
-  const handleStartCreate = () => {
-    setIsCreating(true);
+  const handleStartCreate = (atIndex: number) => {
+    setCreateAtIndex(atIndex);
     setNewContent("");
     setNewTagIds([]);
     setEditingId(null);
   };
 
   const handleSaveNew = async () => {
+    if (createAtIndex === null) return;
     setIsSaving(true);
-    const nextSerial = agendas.length > 0 ? Math.max(...agendas.map((a: any) => a.agenda_serial || 0)) + 1 : 1;
+    const targetSerial = createAtIndex + 1;
+
     try {
       await api.post(`/agendas`, {
         meeting_id: meeting.id,
-        agenda_serial: nextSerial,
+        agenda_serial: targetSerial,
         content: newContent,
         is_suppli: isSuppliView,
         tag_ids: newTagIds,
-        // Transient flag, re-sent on every create call since it's never stored
-        // on the meeting row — lets the backend also enforce the 1-agendum cap.
         meeting_criteria: (!isSuppliView && isEmergencyMeeting) ? 'emergency' : undefined
       });
       mutate();
-      setIsCreating(false);
+      setCreateAtIndex(null);
       setNewTagIds([]);
-      toast.success("Agendum created");
+      toast.success("Agendum created successfully");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create agendum");
     } finally {
@@ -169,19 +163,55 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
     setEditingId(agenda.id);
     setEditContent(agenda.content || "");
     setEditTagIds((agenda.tags || []).map((t: any) => t.id));
-    setIsCreating(false);
+    setCreateAtIndex(null);
   };
+
+  const renderCreateForm = () => (
+    <div className="bg-card border border-primary/50 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow my-4 animate-in fade-in zoom-in-95 duration-200">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="font-semibold text-lg text-primary">
+            New {title}
+          </h3>
+        </div>
+        <div className="border border-primary/50 rounded-md overflow-hidden ring-2 ring-primary/20">
+          <RichTextEditor
+            content={newContent}
+            onChange={setNewContent}
+            className="p-4 min-h-[200px]"
+          />
+          <div className="bg-muted p-3 flex justify-between items-center gap-4 border-t border-border">
+            <div className="flex-1 min-w-0">
+              <TagChipSelector
+                options={allTags}
+                value={newTagIds}
+                onChange={setNewTagIds}
+                onAddNew={(name) => handleAddNewTag(name, "new")}
+                placeholder="Add tag"
+              />
+            </div>
+            <div className="flex gap-3 shrink-0">
+              <button onClick={() => setCreateAtIndex(null)} className="px-4 py-1.5 text-sm font-medium text-muted-foreground hover:bg-background rounded-md transition-colors">Cancel</button>
+              <button onClick={handleSaveNew} disabled={isSaving || !newContent} className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-md disabled:opacity-50 transition-opacity">
+                {isSaving ? "Saving..." : "Create Agendum"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex gap-8 h-full">
       <ConfirmModal />
-      {/* Main Left Area (70%) */}
-      <div className="flex-1 w-[70%] max-w-4xl pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Main Area */}
+      <div className={`flex-1 ${!readOnly ? 'w-[70%] max-w-4xl' : 'w-full max-w-5xl'} pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">{title}</h2>
         </div>
 
-        {agendas.length === 0 && !isCreating ? (
+        {agendas.length === 0 && createAtIndex === null ? (
           <div className="bg-card border border-border border-dashed rounded-lg p-12 flex flex-col items-center justify-center text-center space-y-4 shadow-sm h-64">
             <div className="bg-muted p-4 rounded-full">
               <FileText className="w-8 h-8 text-muted-foreground" />
@@ -193,13 +223,16 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             {!readOnly && (
               <div className="flex gap-4 mt-4">
                 <button
-                  onClick={handleStartCreate}
+                  onClick={() => handleStartCreate(0)}
                   className="bg-primary text-primary-foreground py-2 px-6 rounded-md font-medium shadow-sm hover:bg-primary/90 transition-colors flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" /> Create New Agendum
                 </button>
                 <button
-                  onClick={() => setIsDrawerOpen(true)}
+                  onClick={() => {
+                    handleStartCreate(0);
+                    setIsDrawerOpen(true);
+                  }}
                   className="bg-accent text-accent-foreground border border-border py-2 px-6 rounded-md font-medium shadow-sm hover:bg-accent/80 transition-colors flex items-center gap-2"
                 >
                   <FileText className="w-4 h-4" /> Create from Template
@@ -208,22 +241,25 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             )}
           </div>
         ) : (
-          <>
+          <div className="space-y-6">
+            {/* If creating at index 0 (top of empty or top of list) */}
+            {createAtIndex === 0 && renderCreateForm()}
+
             {agendas.map((agenda: any, index: number) => (
               <div key={agenda.id}>
                 {/* Agenda Card */}
                 <div className="bg-card border border-border p-6 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-start mb-4">
                     <div>
+                      {/* Bengali proposal heading: "প্রস্তাবনা নং {prefix}{01}" */}
                       <h3 className="font-semibold text-lg text-primary">
-                        {agenda.is_suppli ? 'Supplementary Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
+                        প্রস্তাবনা নং {(meeting.agenda_prefix || '') + toBanglaDigits(agenda.agenda_serial || index + 1)}
                       </h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">প্রস্তাব নং {(meeting.agenda_prefix || '') + toBanglaDigits(agenda.agenda_serial || index + 1)}</p>
                     </div>
                     <div className="flex gap-2">
-                      <RevisionHistory contentId={agenda.id} contentType="agendaItem" onRestored={() => mutate()} canRestore={canEdit} />
                       {!readOnly && (
                         <>
+                          <RevisionHistory contentId={agenda.id} contentType="agendaItem" onRestored={() => mutate()} canRestore={canEdit} />
                           <button
                             onClick={() => handleEditClick(agenda)}
                             className="text-primary opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-primary/10 rounded-md hover:bg-primary/20"
@@ -289,102 +325,79 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                   <AnnexureList contentId={agenda.id} type="agenda" readOnly={!canManageAnnexures} />
                 </div>
 
-                {/* Insertion Strip (UX Magic) */}
-                {!isCreating && !readOnly && !emergencyLimitReached && (
-                  <div className="h-10 my-2 relative group flex items-center justify-center cursor-pointer">
+                {/* In-place creation form right after this item if active */}
+                {createAtIndex === index + 1 && renderCreateForm()}
+
+                {/* Insertion Strip (Secondary color with hover effect) */}
+                {createAtIndex === null && !readOnly && !emergencyLimitReached && (
+                  <div className="h-8 my-2 relative group flex items-center justify-center cursor-pointer opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t-2 border-dashed border-primary/30"></div>
+                      <div className="w-full border-t border-dashed border-secondary"></div>
                     </div>
                     <div className="relative flex gap-3">
-                      <button onClick={handleStartCreate} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
-                        <Plus className="w-3 h-3" /> Create Agendum
+                      <button
+                        onClick={() => handleStartCreate(index + 1)}
+                        className="bg-secondary text-secondary-foreground border border-secondary/50 shadow-sm py-1 px-3.5 text-xs font-semibold rounded-full flex items-center gap-1.5 hover:bg-secondary/80 hover:shadow-md transition-all hover:scale-105"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Create Agendum Here
                       </button>
-                      <button onClick={() => setIsDrawerOpen(true)} className="bg-accent text-accent-foreground border border-border shadow-sm py-1.5 px-4 text-xs font-medium rounded-full flex items-center gap-2 hover:bg-accent/80 transition-colors">
-                        <FileText className="w-3 h-3" /> From Template
+                      <button
+                        onClick={() => {
+                          handleStartCreate(index + 1);
+                          setIsDrawerOpen(true);
+                        }}
+                        className="bg-secondary text-secondary-foreground border border-secondary/50 shadow-sm py-1 px-3.5 text-xs font-semibold rounded-full flex items-center gap-1.5 hover:bg-secondary/80 hover:shadow-md transition-all hover:scale-105"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> From Template
                       </button>
                     </div>
                   </div>
                 )}
 
-                {!isCreating && !readOnly && emergencyLimitReached && (
+                {createAtIndex === null && !readOnly && emergencyLimitReached && (
                   <div className="my-2 flex items-center justify-center gap-2 text-xs text-sky-600 dark:text-sky-400 bg-sky-500/10 rounded-full py-1.5 px-4 w-fit mx-auto">
                     Emergency meeting — limited to 1 agendum.
                   </div>
                 )}
               </div>
             ))}
-
-            {/* Create New Agendum Form */}
-            {isCreating && !readOnly && (
-              <div className="bg-card border border-primary/50 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow mt-4">
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-semibold text-lg text-primary">
-                      New {title}
-                    </h3>
-                  </div>
-                  <div className="border border-primary/50 rounded-md overflow-hidden ring-2 ring-primary/20">
-                    <RichTextEditor
-                      content={newContent}
-                      onChange={setNewContent}
-                      className="p-4 min-h-[200px]"
-                    />
-                    <div className="bg-muted p-3 flex justify-between items-center gap-4 border-t border-border">
-                      <div className="flex-1 min-w-0">
-                        <TagChipSelector
-                          options={allTags}
-                          value={newTagIds}
-                          onChange={setNewTagIds}
-                          onAddNew={(name) => handleAddNewTag(name, "new")}
-                          placeholder="Add tag"
-                        />
-                      </div>
-                      <div className="flex gap-3 shrink-0">
-                        <button onClick={() => setIsCreating(false)} className="px-4 py-1.5 text-sm font-medium text-muted-foreground hover:bg-background rounded-md transition-colors">Cancel</button>
-                        <button onClick={handleSaveNew} disabled={isSaving || !newContent} className="px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-md disabled:opacity-50 transition-opacity">
-                          {isSaving ? "Saving..." : "Create Agendum"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
 
-      {/* Right Sticky Panel (Reordering) - 30% */}
-      <div className="w-[30%] shrink-0">
-        <div className="bg-sidebar/50 border border-border rounded-lg p-5 sticky top-8 max-h-[80vh] overflow-y-auto shadow-sm backdrop-blur-sm">
-          <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground mb-4">Reorder Sequence</h3>
+      {/* Right Sticky Panel (Reordering) - Only shown when user has edit access */}
+      {!readOnly && (
+        <div className="w-[30%] shrink-0">
+          <div className="bg-sidebar/50 border border-border rounded-lg p-5 sticky top-8 max-h-[80vh] overflow-y-auto shadow-sm backdrop-blur-sm">
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground mb-4">Reorder Sequence</h3>
 
-          <div className="space-y-2">
-            {agendas.map((agenda: any, index: number) => (
-              <div
-                key={agenda.id}
-                draggable={!readOnly}
-                onDragStart={(e) => !readOnly && handleDragStart(e, agenda.id)}
-                onDragOver={!readOnly ? handleDragOver : undefined}
-                onDrop={(e) => !readOnly && handleDrop(e, agenda.id)}
-                className={`bg-card border border-border p-3 rounded-md flex items-center gap-3 transition-colors group shadow-sm ${!readOnly ? 'cursor-grab hover:border-primary/50 active:cursor-grabbing' : ''}`}
-              >
-                <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="font-medium text-sm">
-                  {agenda.is_suppli ? 'Supplementary Ag-' : 'Ag-'}{agenda.agenda_serial || index + 1}
-                </span>
-                <span className="text-xs text-muted-foreground truncate flex-1 opacity-60">
-                  {agenda.content ? agenda.content.replace(/<[^>]*>?/gm, '').substring(0, 38) : '...'}...
-                </span>
-              </div>
-            ))}
+            <div className="space-y-2">
+              {agendas.map((agenda: any, index: number) => (
+                <div
+                  key={agenda.id}
+                  draggable={!readOnly}
+                  onDragStart={(e) => !readOnly && handleDragStart(e, agenda.id)}
+                  onDragOver={!readOnly ? handleDragOver : undefined}
+                  onDrop={(e) => !readOnly && handleDrop(e, agenda.id)}
+                  className={`bg-card border border-border p-3 rounded-md flex items-center gap-3 transition-colors group shadow-sm ${!readOnly ? 'cursor-grab hover:border-primary/50 active:cursor-grabbing' : ''}`}
+                >
+                  <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <span className="font-medium text-xs">
+                    প্রস্তাবনা নং {(meeting.agenda_prefix || '') + toBanglaDigits(agenda.agenda_serial || index + 1)}
+                  </span>
+                  <span className="text-xs text-muted-foreground truncate flex-1 opacity-60">
+                    {agenda.content ? agenda.content.replace(/<[^>]*>?/gm, '').substring(0, 32) : '...'}...
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-6 text-center italic">
+              Drag and drop items to reorder the sequence in real-time.
+            </p>
           </div>
-
-          <p className="text-xs text-muted-foreground mt-6 text-center italic">
-            Drag and drop items to reorder the sequence in real-time.
-          </p>
         </div>
-      </div>
+      )}
 
       <TemplateDrawer
         isOpen={isDrawerOpen}
@@ -395,8 +408,8 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
             setEditContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
           } else {
             setNewContent(prev => prev + (prev ? '<br/>' : '') + templateContent);
-            if (!isCreating) {
-              setIsCreating(true);
+            if (createAtIndex === null) {
+              setCreateAtIndex(agendas.length);
             }
           }
         }}

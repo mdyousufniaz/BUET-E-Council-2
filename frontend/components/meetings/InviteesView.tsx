@@ -13,15 +13,13 @@ import SendAgendaModal from "./SendAgendaModal";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
-import { canOperateMeeting, canEditResolution } from "../../lib/meetingAccess";
+import { canEditInvitees, canEditPresentees } from "../../lib/meetingAccess";
 
 export default function InviteesView({ meeting, type, mutate }: { meeting: any, type: string, mutate: any }) {
   const { user } = useAuth();
-  const canEdit = canOperateMeeting(user, meeting);
-  // Attendance belongs to the resolution phase (approved + ongoing), which
-  // opens for the initiator/moderator even though agenda editing is locked.
-  const canAttendance = canEditResolution(user, meeting);
-  const isPast = meeting.status === 'past';
+  const isPast = meeting.status === 'past' || meeting.is_completed === true;
+  const canEdit = isPast ? canEditPresentees(user, meeting) : canEditInvitees(user, meeting);
+  const canAttendance = canEditInvitees(user, meeting);
   const displayType = isPast ? 'Presentees' : 'Invitees';
   const readOnly = !canEdit;
 

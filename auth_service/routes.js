@@ -50,37 +50,58 @@ const upload = multer({ storage: multer.memoryStorage() });
  *       409:
  *         description: Username or email already exists
  */
-// 1. POST /signup (admin-only: creating other users' accounts)
-router.post('/signup', requireAuth, requireAdmin, async (req, res) => {
+// 1. POST /signup (admin or upper-level editor users)
+router.post('/signup', requireAuth, async (req, res) => {
     try {
-        const { username, email, role = 'viewer', member_type = 'none' } = req.body;
-        let { password } = req.body;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        const userLevel = req.user.role_level;
+
+        if (!isAdmin && userLevel === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden. You do not have permission to create users.' });
+        }
+
+        const { username, email, member_type = 'none', role_id = null } = req.body;
+        let { role = 'viewer', password } = req.body;
 
         if (!username || !email) {
             return res.status(400).json({ success: false, message: 'Username and Email are required' });
         }
 
+        let assignedRoleId = role_id;
+        if (assignedRoleId) {
+            role = 'editor';
+            const roleRes = await db.query('SELECT level FROM roles WHERE id = $1', [assignedRoleId]);
+            if (roleRes.rows.length === 0) {
+                return res.status(400).json({ success: false, message: 'Invalid role_id specified' });
+            }
+            const targetLevel = parseInt(roleRes.rows[0].level, 10);
+            if (!isAdmin && (userLevel === null || targetLevel >= userLevel)) {
+                return res.status(403).json({ success: false, message: 'Upper level users can only create lower level users.' });
+            }
+        } else if (role === 'admin') {
+            if (!isAdmin) {
+                return res.status(403).json({ success: false, message: 'Only admin can create admin users.' });
+            }
+        }
+
         let generatedPassword = null;
         if (!password) {
-            generatedPassword = crypto.randomBytes(9).toString('base64url'); // 12-char random password
+            generatedPassword = crypto.randomBytes(9).toString('base64url');
             password = generatedPassword;
         }
 
-        // Check if user exists
         const userCheck = await db.query('SELECT id FROM users WHERE username = $1 OR email = $2', [username || '', email]);
         if (userCheck.rows.length > 0) {
             return res.status(409).json({ success: false, message: 'Username or email already exists' });
         }
 
-        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create user
         const result = await db.query(
-            `INSERT INTO users (username, email, password, role, member_type)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, role, status, created_at`,
-            [username, email, hashedPassword, role, member_type]
+            `INSERT INTO users (username, email, password, role, role_id, member_type)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, email, role, role_id, status, created_at`,
+            [username, email, hashedPassword, role, assignedRoleId, member_type]
         );
 
         const emailSent = await sendAccountCreatedEmail(email, username, password);
@@ -88,7 +109,7 @@ router.post('/signup', requireAuth, requireAdmin, async (req, res) => {
         logAudit({
             userId: req.user.id, username: req.user.username, action: 'create',
             entityType: 'user', entityId: result.rows[0].id,
-            details: { created_username: username, role }, ip: req.ip
+            details: { created_username: username, role, role_id: assignedRoleId }, ip: req.ip
         });
 
         res.status(201).json({
@@ -380,7 +401,10 @@ router.delete('/sessions/:sessionId', requireAuth, async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
     try {
         const result = await db.query(
-            'SELECT id, username, email, role, member_type, status, created_at FROM users WHERE id = $1',
+            `SELECT u.id, u.username, u.email, u.role, u.role_id, r.level as role_level, r.level_title, u.member_type, u.status, u.created_at
+             FROM users u
+             LEFT JOIN roles r ON u.role_id = r.id
+             WHERE u.id = $1`,
             [req.user.id]
         );
 
@@ -398,18 +422,6 @@ router.get('/me', requireAuth, async (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /secure-test:
- *   get:
- *     summary: Example endpoint to test the secure middleware
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Returns a success message and user details
- *       401:
- *         description: Unauthorized
- */
 // 8. GET /secure-test (Example of how to protect an endpoint)
 router.get('/secure-test', requireAuth, (req, res) => {
     res.status(200).json({
@@ -419,10 +431,20 @@ router.get('/secure-test', requireAuth, (req, res) => {
     });
 });
 
-// 9. GET /users
-router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+// 9. GET /users (admin or upper-level editor users)
+router.get('/users', requireAuth, async (req, res) => {
     try {
-        const result = await db.query('SELECT id, username, email, role, member_type, status, created_at FROM users ORDER BY created_at DESC');
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden. Access denied.' });
+        }
+
+        const result = await db.query(
+            `SELECT u.id, u.username, u.email, u.role, u.role_id, r.level as role_level, r.level_title, u.member_type, u.status, u.created_at
+             FROM users u
+             LEFT JOIN roles r ON u.role_id = r.id
+             ORDER BY u.created_at DESC`
+        );
         res.status(200).json({ success: true, data: result.rows });
     } catch (err) {
         console.error('Get users error:', err);
@@ -430,11 +452,38 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-// 10. PUT /users/:id
-router.put('/users/:id', requireAuth, requireAdmin, async (req, res) => {
+// 10. PUT /users/:id (Upper-level users can modify and degrade lower-level users)
+router.put('/users/:id', requireAuth, async (req, res) => {
     try {
         const { id } = req.params;
-        const { username, email, password, role, member_type, status } = req.body;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        const userLevel = req.user.role_level;
+
+        if (!isAdmin && userLevel === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden. You do not have permission to update users.' });
+        }
+
+        // Fetch target user's current role level
+        const targetRes = await db.query(
+            `SELECT u.id, u.role, u.role_id, r.level as role_level
+             FROM users u
+             LEFT JOIN roles r ON u.role_id = r.id
+             WHERE u.id = $1`,
+            [id]
+        );
+        if (targetRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        const targetUser = targetRes.rows[0];
+
+        if (!isAdmin) {
+            const targetLevel = targetUser.role_level;
+            if (targetLevel !== null && targetLevel >= userLevel) {
+                return res.status(403).json({ success: false, message: 'Upper level users can only modify lower level users.' });
+            }
+        }
+
+        const { username, email, password, role, role_id, member_type, status } = req.body;
         
         let updateQueries = [];
         let queryParams = [];
@@ -442,9 +491,36 @@ router.put('/users/:id', requireAuth, requireAdmin, async (req, res) => {
 
         if (username) { updateQueries.push(`username = $${paramIndex++}`); queryParams.push(username); }
         if (email) { updateQueries.push(`email = $${paramIndex++}`); queryParams.push(email); }
-        if (role) { updateQueries.push(`role = $${paramIndex++}`); queryParams.push(role); }
         if (member_type) { updateQueries.push(`member_type = $${paramIndex++}`); queryParams.push(member_type); }
         if (status) { updateQueries.push(`status = $${paramIndex++}`); queryParams.push(status); }
+
+        if (role_id !== undefined) {
+            if (role_id === null) {
+                updateQueries.push(`role_id = NULL`);
+                if (role && role !== 'editor') {
+                    updateQueries.push(`role = $${paramIndex++}`);
+                    queryParams.push(role);
+                }
+            } else {
+                const newRoleRes = await db.query('SELECT level FROM roles WHERE id = $1', [role_id]);
+                if (newRoleRes.rows.length === 0) {
+                    return res.status(400).json({ success: false, message: 'Invalid role_id specified' });
+                }
+                const newLevel = parseInt(newRoleRes.rows[0].level, 10);
+                if (!isAdmin && newLevel >= userLevel) {
+                    return res.status(403).json({ success: false, message: 'Upper level users can only assign lower levels.' });
+                }
+                updateQueries.push(`role_id = $${paramIndex++}`);
+                queryParams.push(role_id);
+                updateQueries.push(`role = 'editor'`);
+            }
+        } else if (role) {
+            if (role === 'admin' && !isAdmin) {
+                return res.status(403).json({ success: false, message: 'Only admin can grant admin role.' });
+            }
+            updateQueries.push(`role = $${paramIndex++}`);
+            queryParams.push(role);
+        }
         
         if (password) {
             const salt = await bcrypt.genSalt(10);
@@ -459,11 +535,9 @@ router.put('/users/:id', requireAuth, requireAdmin, async (req, res) => {
 
         queryParams.push(id);
         const result = await db.query(
-            `UPDATE users SET ${updateQueries.join(', ')} WHERE id = $${paramIndex} RETURNING id, username, role, status`,
+            `UPDATE users SET ${updateQueries.join(', ')} WHERE id = $${paramIndex} RETURNING id, username, role, role_id, status`,
             queryParams
         );
-
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
 
         logAudit({
             userId: req.user.id, username: req.user.username, action: 'update',
@@ -686,6 +760,176 @@ router.put('/me', requireAuth, async (req, res) => {
 
     } catch (err) {
         console.error('Update profile error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// -------------------------------------------------------------
+// ROLES MANAGEMENT ENDPOINTS
+// -------------------------------------------------------------
+router.get('/roles', requireAuth, async (req, res) => {
+    try {
+        const result = await db.query('SELECT id, level, level_title, created_at FROM roles ORDER BY level ASC');
+        res.status(200).json({ success: true, data: result.rows });
+    } catch (err) {
+        console.error('Get roles error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+router.post('/roles', requireAuth, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden. Admin or editor level access required.' });
+        }
+
+        const { level, level_title } = req.body;
+        if (level === undefined || level === null || !level_title) {
+            return res.status(400).json({ success: false, message: 'level and level_title are required' });
+        }
+
+        const lvlInt = parseInt(level, 10);
+        if (Number.isNaN(lvlInt)) {
+            return res.status(400).json({ success: false, message: 'level must be a valid integer' });
+        }
+
+        if (!isAdmin && lvlInt >= req.user.role_level) {
+            return res.status(403).json({ success: false, message: 'Upper level users can only create lower levels.' });
+        }
+
+        const result = await db.query(
+            `INSERT INTO roles (level, level_title) VALUES ($1, $2) RETURNING id, level, level_title, created_at`,
+            [lvlInt, level_title.trim()]
+        );
+        res.status(201).json({ success: true, message: 'Role created successfully', data: result.rows[0] });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ success: false, message: 'Level or Level Title already exists' });
+        }
+        console.error('Create role error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+router.put('/roles/:id', requireAuth, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+
+        const { id } = req.params;
+        const { level, level_title } = req.body;
+
+        const roleRes = await db.query('SELECT level FROM roles WHERE id = $1', [id]);
+        if (roleRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Role not found' });
+        }
+        const currentLvl = parseInt(roleRes.rows[0].level, 10);
+        if (!isAdmin && currentLvl >= req.user.role_level) {
+            return res.status(403).json({ success: false, message: 'Upper level users can only modify lower levels.' });
+        }
+
+        let updates = [];
+        let params = [];
+        let pIndex = 1;
+
+        if (level !== undefined && level !== null) {
+            const lvlInt = parseInt(level, 10);
+            if (!isAdmin && lvlInt >= req.user.role_level) {
+                return res.status(403).json({ success: false, message: 'Cannot assign a level equal to or above your own level.' });
+            }
+            updates.push(`level = $${pIndex++}`);
+            params.push(lvlInt);
+        }
+        if (level_title) {
+            updates.push(`level_title = $${pIndex++}`);
+            params.push(level_title.trim());
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nothing to update' });
+        }
+
+        params.push(id);
+        const result = await db.query(
+            `UPDATE roles SET ${updates.join(', ')} WHERE id = $${pIndex} RETURNING id, level, level_title`,
+            params
+        );
+        res.status(200).json({ success: true, message: 'Role updated successfully', data: result.rows[0] });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ success: false, message: 'Level or Level Title already exists' });
+        }
+        console.error('Update role error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+router.delete('/roles/:id', requireAuth, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+
+        const { id } = req.params;
+        const roleRes = await db.query('SELECT level FROM roles WHERE id = $1', [id]);
+        if (roleRes.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Role not found' });
+        }
+        const currentLvl = parseInt(roleRes.rows[0].level, 10);
+        if (!isAdmin && currentLvl >= req.user.role_level) {
+            return res.status(403).json({ success: false, message: 'Upper level users can only delete lower levels.' });
+        }
+
+        await db.query('DELETE FROM roles WHERE id = $1', [id]);
+        res.status(200).json({ success: true, message: 'Role deleted successfully' });
+    } catch (err) {
+        console.error('Delete role error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// -------------------------------------------------------------
+// SYSTEM SETTINGS ENDPOINTS
+// -------------------------------------------------------------
+router.get('/settings', requireAuth, async (req, res) => {
+    try {
+        const result = await db.query('SELECT key, value FROM system_settings');
+        const settings = {};
+        result.rows.forEach(r => { settings[r.key] = r.value; });
+        res.status(200).json({ success: true, data: settings });
+    } catch (err) {
+        console.error('Get settings error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+router.put('/settings', requireAuth, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden. Admin or editor level access required.' });
+        }
+
+        const { min_completed_level } = req.body;
+        if (min_completed_level !== undefined && min_completed_level !== null) {
+            await db.query(
+                `INSERT INTO system_settings (key, value, updated_at) VALUES ('min_completed_level', $1, CURRENT_TIMESTAMP)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+                [String(min_completed_level)]
+            );
+        }
+
+        const result = await db.query('SELECT key, value FROM system_settings');
+        const settings = {};
+        result.rows.forEach(r => { settings[r.key] = r.value; });
+
+        res.status(200).json({ success: true, message: 'Settings updated successfully', data: settings });
+    } catch (err) {
+        console.error('Update settings error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });

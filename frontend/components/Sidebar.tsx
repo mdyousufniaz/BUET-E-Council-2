@@ -27,8 +27,10 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
     { name: 'Departments', href: '/workspace/departments', icon: Briefcase },
     { name: 'Offices', href: '/workspace/offices', icon: Building2 },
     // User management and the audit log are admin-only.
+    ...(role !== 'viewer' ? [
+      { name: 'Users & Roles', href: '/workspace/users', icon: Shield },
+    ] : []),
     ...(role === 'admin' || role === 'superadmin' ? [
-      { name: 'Users', href: '/workspace/users', icon: Users },
       { name: 'Audit Log', href: '/workspace/audit-log', icon: ScrollText },
     ] : []),
   ];

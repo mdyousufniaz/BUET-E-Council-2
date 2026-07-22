@@ -72,9 +72,19 @@ const createAgendam = async (req, res, next) => {
             }
         }
 
+        const requestedSerial = parseInt(agenda_serial, 10);
+        const targetSuppli = is_suppli === true || is_suppli === 'true';
+
+        if (!Number.isNaN(requestedSerial)) {
+            await db.query(
+                'UPDATE agenda SET agenda_serial = agenda_serial + 1 WHERE meeting_id = $1 AND is_suppli = $2 AND agenda_serial >= $3',
+                [meeting_id, targetSuppli, requestedSerial]
+            );
+        }
+
         const result = await db.query(
             'INSERT INTO agenda (meeting_id, agenda_serial, content, is_executed, execution_status, is_suppli) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-            [meeting_id, agenda_serial, content || '', is_executed || 'no', execution_status, is_suppli || false]
+            [meeting_id, requestedSerial || 1, content || '', is_executed || 'no', execution_status, targetSuppli]
         );
         const agendam = result.rows[0];
 
