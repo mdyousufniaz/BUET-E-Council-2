@@ -7,19 +7,14 @@ import SearchableSelect from "../SearchableSelect";
 import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
-import { canAuthorMeeting } from "../../lib/meetingAccess";
-import { Lock, Unlock, Trash2, Video } from "lucide-react";
+import { canAuthorMeeting, canCompleteMeeting, STATUS_LABELS, STATUS_BADGE_CLASSES, type MeetingStatus } from "../../lib/meetingAccess";
+import { Trash2, Video } from "lucide-react";
 
 const typeOptions = [
   { value: "syndicate", label: "Syndicate" },
   { value: "academic", label: "Academic" }
 ];
 
-const statusOptions = [
-  { value: "draft", label: "Draft" },
-  { value: "ongoing", label: "Ongoing" },
-  { value: "past", label: "Past" }
-];
 
 export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mutate: any }) {
   const [formData, setFormData] = useState({
@@ -33,10 +28,10 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const { confirm, ConfirmModal } = useConfirm();
   const { isAdmin, user, canEditOnlineLink } = useAuth();
   const canEdit = canAuthorMeeting(user, meeting);
+  const meetingStatus: MeetingStatus = (meeting.status as MeetingStatus) || 'draft';
   const router = useRouter();
-  const isLocked = meeting.is_locked;
-  const isPast = formData.status === 'past';
-  const readOnly = isLocked || !canEdit;
+  // Completing the meeting is the lock now; the old manual toggle is gone.
+  const readOnly = !canEdit;
 
   const [saving, setSaving] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
@@ -67,8 +62,12 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     try {
       const requests = [];
       if (!readOnly) {
+        // `status` is deliberately not sent: it is owned by the approval
+        // workflow now, and posting the value captured at mount would revert a
+        // status the workflow changed while this form was open.
+        const { status: _ignoredStatus, ...editable } = formData;
         const payload = {
-          ...formData,
+          ...editable,
           meeting_date: new Date(formData.meeting_date).toISOString()
         };
         requests.push(api.put(`/meetings/${meeting.id}`, payload));
@@ -98,25 +97,11 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
       mutate();
       toast.success("Meeting marked as completed successfully.");
       setIsCompleteModalOpen(false);
-      setFormData(prev => ({ ...prev, status: "past" }));
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to complete meeting');
     } finally {
       setIsCompleting(false);
     }
-  };
-
-  const handleToggleLock = async () => {
-    const actionStr = isLocked ? "unlock" : "lock";
-    confirm(`${isLocked ? 'Unlock' : 'Lock'} Meeting`, `Are you sure you want to ${actionStr} this meeting?`, async () => {
-      try {
-        await api.put(`/meetings/${meeting.id}/lock`);
-        mutate();
-        toast.success(`Meeting ${actionStr}ed successfully.`);
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || `Failed to ${actionStr} meeting`);
-      }
-    });
   };
 
   return (
@@ -127,24 +112,6 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
         <h2 className="text-2xl font-bold">Meeting Info</h2>
         {isAdmin && (
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleToggleLock}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                isLocked
-                  ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300"
-                  : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
-              }`}
-            >
-              {isLocked ? (
-                <>
-                  <Unlock className="w-4 h-4" /> Unlock Meeting
-                </>
-              ) : (
-                <>
-                  <Lock className="w-4 h-4" /> Lock Meeting
-                </>
-              )}
-            </button>
             <button
               onClick={handleDelete}
               disabled={isDeleting}
@@ -212,17 +179,14 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Status</label>
-            {readOnly || isPast ? (
-              <div className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm opacity-50 cursor-not-allowed">
-                {statusOptions.find(o => o.value === formData.status)?.label || formData.status}
-              </div>
-            ) : (
-              <SearchableSelect 
-                options={statusOptions}
-                value={formData.status}
-                onChange={(val) => setFormData({...formData, status: val})}
-              />
-            )}
+            {/* Derived from the approval workflow, never chosen by hand:
+                draft -> ongoing on agenda approval -> past on completion. */}
+            <div className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm flex items-center gap-2">
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_BADGE_CLASSES[meetingStatus]}`}>
+                {STATUS_LABELS[meetingStatus]}
+              </span>
+              <span className="text-xs text-muted-foreground">set automatically by the approval workflow</span>
+            </div>
           </div>
 
           <div className="space-y-1 col-span-1 md:col-span-2">
@@ -275,7 +239,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
           )}
         </form>
 
-        {!isPast && isAdmin && (
+        {canCompleteMeeting(user, meeting) && (
           <>
             <hr className="my-8 border-border" />
             <div>

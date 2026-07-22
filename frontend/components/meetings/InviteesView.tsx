@@ -23,8 +23,7 @@ export default function InviteesView({ meeting, type, mutate }: { meeting: any, 
   const canAttendance = canEditResolution(user, meeting);
   const isPast = meeting.status === 'past';
   const displayType = isPast ? 'Presentees' : 'Invitees';
-  const isLocked = meeting.is_locked;
-  const readOnly = isLocked || !canEdit;
+  const readOnly = !canEdit;
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddPresenteeModalOpen, setIsAddPresenteeModalOpen] = useState(false);

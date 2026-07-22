@@ -2,7 +2,6 @@ const express = require('express');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const { requireMeetingAuthor, requireMeetingOperator, requireResolutionEditor } = require('../middlewares/meetingWorkflowMiddleware');
 const agendaController = require('../controllers/agendaController');
-const { checkMeetingLock } = require('../middlewares/lockMiddleware');
 const { auditLog } = require('../middlewares/auditMiddleware');
 const multer = require('multer');
 const { fileFilter: annexureFileFilter, MAX_FILE_SIZE_MB } = require('../config/annexureUpload');
@@ -18,7 +17,6 @@ const upload = multer({
 const router = express.Router();
 
 router.use(authMiddleware);
-router.use(checkMeetingLock);
 router.use(auditLog('agenda'));
 
 // Agendam routes.

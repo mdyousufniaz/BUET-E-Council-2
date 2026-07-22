@@ -16,7 +16,7 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadType, setUploadType] = useState<string | null>(null);
   const { mutate } = useSWRConfig();
-  const readOnly = meeting.is_locked || !canEdit;
+  const readOnly = !canEdit;
 
   const handleGenerate = async (type: string, filename: string) => {
     setGenerating(type);

@@ -19,7 +19,11 @@ CREATE TYPE member_type_enum AS ENUM ('academic', 'syndicate', 'none');
 
 CREATE TYPE meeting_type AS ENUM ('syndicate', 'academic');
 
-CREATE TYPE meeting_status AS ENUM ('draft', 'ongoing', 'past', 'locked');
+-- Lifecycle of a meeting, derived from the approval workflow rather than picked
+-- by hand: 'draft' while the agenda is being prepared and approved, 'ongoing'
+-- the moment an admin/superadmin approves the agenda, and 'past' only when an
+-- admin hits "Mark Meeting Completed".
+CREATE TYPE meeting_status AS ENUM ('draft', 'ongoing', 'past');
 
 CREATE TYPE annexure_type AS ENUM ('agendaItem', 'resolution');
 
@@ -117,7 +121,6 @@ CREATE TABLE meetings (
     president VARCHAR(255),
     conclusion TEXT,
     meeting_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    is_locked BOOLEAN DEFAULT FALSE,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),
     -- Video-call link (Zoom/Meet/Teams) for attending remotely, editable any
@@ -145,10 +148,14 @@ CREATE TABLE meetings (
     return_source VARCHAR(20),
     moderator_note TEXT,
     admin_note TEXT,
-    -- Resolution/attendance phase: once the agenda is approved and the meeting
-    -- is set "ongoing", initiator/moderator can record resolutions & attendance
-    -- until an admin approves the resolution, which locks them (Phase 2).
-    resolution_approved BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Resolution approval: a SECOND escalation chain that opens once the agenda
+    -- is approved (status 'ongoing'), running the same initiator -> moderator ->
+    -- admin route with its own stage, return source and per-role send-back
+    -- notes. Reaching 'approved' freezes the resolution for good.
+    resolution_stage meeting_stage NOT NULL DEFAULT 'initiator',
+    resolution_return_source VARCHAR(20),
+    resolution_moderator_note TEXT,
+    resolution_admin_note TEXT,
     submitted_at TIMESTAMP WITH TIME ZONE,
     reviewed_by UUID REFERENCES users (id) ON DELETE SET NULL,
     reviewed_at TIMESTAMP WITH TIME ZONE,

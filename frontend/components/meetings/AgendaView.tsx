@@ -58,8 +58,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   };
 
   const title = type === 'suppli-agenda' ? 'Supplementary Agenda' : 'Agenda Items';
-  const isLocked = meeting.is_locked;
-  const readOnly = isLocked || !canEdit;
+  const readOnly = !canEdit;
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -287,7 +286,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               )}
 
               {/* Annexure List placed underneath the agenda content */}
-              <AnnexureList contentId={agenda.id} type="agenda" isLocked={isLocked} readOnly={!canManageAnnexures} />
+              <AnnexureList contentId={agenda.id} type="agenda" readOnly={!canManageAnnexures} />
             </div>
 
             {/* Insertion Strip (UX Magic) */}

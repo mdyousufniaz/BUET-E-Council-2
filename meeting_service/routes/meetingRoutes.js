@@ -3,7 +3,6 @@ const { authMiddleware } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
 const { requireMeetingAuthor, requireMeetingOperator, requireResolutionEditor } = require('../middlewares/meetingWorkflowMiddleware');
 const meetingController = require('../controllers/meetingController');
-const { checkMeetingLock } = require('../middlewares/lockMiddleware');
 const { auditLog } = require('../middlewares/auditMiddleware');
 const multer = require('multer');
 
@@ -20,13 +19,12 @@ const canWorkflow = requireRole('admin', 'superadmin', 'moderator', 'file_initia
 // Only admin/superadmin give final approval.
 const canApprove = requireRole('admin', 'superadmin');
 // Any authenticated role except viewer — used for the online meeting link,
-// which is editable any time regardless of meeting ownership/lock/workflow.
+// which is editable any time regardless of meeting ownership/workflow state.
 // Same role set as canWorkflow, kept separate because it gates on "not a
 // viewer" rather than on taking part in the approval chain.
 const nonViewer = requireRole('admin', 'superadmin', 'moderator', 'file_initiator');
 
 router.use(authMiddleware);
-router.use(checkMeetingLock);
 router.use(auditLog('meeting'));
 
 router.get('/', meetingController.getMeetings);
@@ -43,13 +41,15 @@ router.post('/:id/submit', canWorkflow, meetingController.submitMeeting);      /
 router.post('/:id/approve', canApprove, meetingController.approveMeeting);     // admin/superadmin finalize
 router.post('/:id/return', canWorkflow, meetingController.returnMeeting);      // hand back down (with note)
 
-// Resolution/attendance phase (after agenda approved + meeting ongoing).
+// Resolution approval chain, opened once the agenda is approved. Same
+// initiator -> moderator -> admin escalation as above, on resolution_stage.
+router.post('/:id/submit-resolution', canWorkflow, meetingController.submitResolution);
+router.post('/:id/return-resolution', canWorkflow, meetingController.returnResolution);
 router.post('/:id/approve-resolution', canApprove, meetingController.approveResolution);
 router.post('/:id/reopen-resolution', canApprove, meetingController.reopenResolution);
 
 // Only admin/superadmin can finalize a meeting as completed.
 router.post('/:id/complete', adminOnly, meetingController.completeMeeting);
-router.put('/:id/lock', adminOnly, meetingController.toggleLock);
 
 router.post('/:id/invitees', requireMeetingOperator, meetingController.addInvitees);
 router.get('/:id/invitees', meetingController.getInvitees);

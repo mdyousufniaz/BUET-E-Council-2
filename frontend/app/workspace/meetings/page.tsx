@@ -53,12 +53,6 @@ export default function ManageMeetingsPage() {
     { value: "emergency", label: "Emergency" }
   ];
 
-  const statusOptions = [
-    { value: "draft", label: "Draft" },
-    { value: "ongoing", label: "Ongoing" },
-    { value: "past", label: "Past" },
-  ];
-
   const columns = [
     { key: "title", label: "Meeting No." },
     { key: "meeting_title", label: "Meeting Title" },
@@ -283,24 +277,16 @@ export default function ManageMeetingsPage() {
                 <input required type="date" value={newMeeting.meeting_date} onChange={e => setNewMeeting({ ...newMeeting, meeting_date: e.target.value })} className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Type</label>
-                  <SearchableSelect
-                    options={typeOptions}
-                    value={newMeeting.type}
-                    onChange={(val) => setNewMeeting({ ...newMeeting, type: val })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Status</label>
-                  <SearchableSelect
-                    options={statusOptions}
-                    value={newMeeting.status}
-                    onChange={(val) => setNewMeeting({ ...newMeeting, status: val })}
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Type</label>
+                <SearchableSelect
+                  options={typeOptions}
+                  value={newMeeting.type}
+                  onChange={(val) => setNewMeeting({ ...newMeeting, type: val })}
+                />
               </div>
+              {/* No status picker: a new file always starts as a draft, and the
+                  approval workflow owns the status from then on. */}
 
               <div className="space-y-1">
                 <label className="text-xs font-medium">Meeting Criteria</label>

@@ -19,11 +19,10 @@ interface Annexure {
 interface AnnexureListProps {
   contentId: string;
   type: 'agenda' | 'resolution';
-  isLocked?: boolean;
   readOnly?: boolean;
 }
 
-export default function AnnexureList({ contentId, type, isLocked = false, readOnly = false }: AnnexureListProps) {
+export default function AnnexureList({ contentId, type, readOnly = false }: AnnexureListProps) {
   const { data: response, mutate } = useSWR(`/agendas/${contentId}/annexures?type=${type}`, fetcher, { fallbackData: { data: [] } });
   const annexures: Annexure[] = response?.data || [];
   
@@ -137,7 +136,7 @@ export default function AnnexureList({ contentId, type, isLocked = false, readOn
             ref={fileInputRef} 
             onChange={handleFileUpload} 
           />
-          {!isLocked && !readOnly && (
+          {!readOnly && (
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
@@ -159,14 +158,14 @@ export default function AnnexureList({ contentId, type, isLocked = false, readOn
           annexures.map((annexure) => (
             <div 
               key={annexure.id}
-              draggable={!isLocked && !readOnly}
-              onDragStart={(e) => !isLocked && !readOnly && handleDragStart(e, annexure.id)}
-              onDragEnd={(!isLocked && !readOnly) ? handleDragEnd : undefined}
-              onDragOver={(!isLocked && !readOnly) ? handleDragOver : undefined}
-              onDrop={(e) => !isLocked && !readOnly && handleDrop(e, annexure.id)}
-              className={`flex items-center gap-3 p-3 bg-card border border-border rounded-md group hover:border-primary/30 transition-colors shadow-sm ${(!isLocked && !readOnly) ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              draggable={!readOnly}
+              onDragStart={(e) => !readOnly && handleDragStart(e, annexure.id)}
+              onDragEnd={(!readOnly) ? handleDragEnd : undefined}
+              onDragOver={(!readOnly) ? handleDragOver : undefined}
+              onDrop={(e) => !readOnly && handleDrop(e, annexure.id)}
+              className={`flex items-center gap-3 p-3 bg-card border border-border rounded-md group hover:border-primary/30 transition-colors shadow-sm ${(!readOnly) ? 'cursor-grab active:cursor-grabbing' : ''}`}
             >
-              {!isLocked && !readOnly && (
+              {!readOnly && (
                 <div className="text-muted-foreground/50 group-hover:text-muted-foreground cursor-grab">
                   <GripVertical className="w-4 h-4" />
                 </div>
@@ -201,7 +200,7 @@ export default function AnnexureList({ contentId, type, isLocked = false, readOn
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
-                {!isLocked && !readOnly && (
+                {!readOnly && (
                   <button
                     onClick={() => handleDelete(annexure.id)}
                     className="p-1.5 text-muted-foreground hover:text-destructive bg-muted rounded-md transition-colors"

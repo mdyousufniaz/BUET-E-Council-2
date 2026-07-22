@@ -176,13 +176,14 @@ const getMeetingHistory = async (req, res, next) => {
         const labelForAudit = (log) => {
             const path = log.details?.path || '';
             const fields = log.details?.fields;
-            if (path.includes('/submit')) return 'Submitted the file up the chain';
+            if (path.includes('/submit-resolution')) return 'Submitted the resolution up the chain';
+            if (path.includes('/return-resolution')) return 'Sent the resolution back';
             if (path.includes('/approve-resolution')) return 'Approved the resolution';
             if (path.includes('/reopen-resolution')) return 'Reopened the resolution';
-            if (path.includes('/approve')) return 'Approved the file';
+            if (path.includes('/submit')) return 'Submitted the file up the chain';
+            if (path.includes('/approve')) return 'Approved the agenda';
             if (path.includes('/return')) return 'Sent the file back';
             if (path.includes('/complete')) return 'Marked the meeting completed';
-            if (path.includes('/lock')) return 'Toggled the meeting lock';
             if (path.includes('/materials')) return 'Uploaded a material PDF';
             if (path.includes('/attendance')) return 'Saved attendance';
             if (path.includes('/invitees')) return `${log.action} invitee`;
@@ -368,14 +369,20 @@ const approveMeeting = async (req, res, next) => {
             return next(new CustomError('This file has already been approved.', 409));
         }
 
+        // Approving the agenda is what starts the meeting: the status flips to
+        // 'ongoing' on its own (nobody picks it by hand any more) and the
+        // resolution chain opens at its first stage.
         const result = await db.query(
             `UPDATE meetings
              SET stage = 'approved', return_source = NULL, moderator_note = NULL, admin_note = NULL,
-                 resolution_approved = FALSE, reviewed_by = $2, reviewed_at = NOW()
+                 status = CASE WHEN status = 'past' THEN status ELSE 'ongoing' END,
+                 resolution_stage = 'initiator', resolution_return_source = NULL,
+                 resolution_moderator_note = NULL, resolution_admin_note = NULL,
+                 reviewed_by = $2, reviewed_at = NOW()
              WHERE id = $1 RETURNING *`,
             [id, req.user?.id || null]
         );
-        res.status(200).json({ success: true, message: 'Meeting file approved', data: result.rows[0] });
+        res.status(200).json({ success: true, message: 'Agenda approved — the meeting is now ongoing', data: result.rows[0] });
     } catch (error) {
         next(error);
     }
@@ -421,9 +428,13 @@ const returnMeeting = async (req, res, next) => {
         // Only a return that lands on the initiator sets where they re-submit.
         const returnSource = target === 'initiator' ? tier : null;
 
+        // Sending an approved agenda back down reopens it, so the meeting drops
+        // out of 'ongoing' and back to 'draft' — status follows the workflow.
+        // A completed meeting keeps its 'past' status.
         const result = await db.query(
             `UPDATE meetings
              SET stage = $2, return_source = $3, ${noteColumn} = $4,
+                 status = CASE WHEN status = 'ongoing' THEN 'draft' ELSE status END,
                  reviewed_by = $5, reviewed_at = NOW()
              WHERE id = $1 RETURNING *`,
             [id, target, returnSource, note || null, req.user?.id || null]
@@ -434,20 +445,127 @@ const returnMeeting = async (req, res, next) => {
     }
 };
 
-// admin/superadmin approves the resolution, locking resolution + attendance
-// editing. Requires the agenda approved and the meeting ongoing.
+// --- Resolution approval chain ----------------------------------------------
+// The same initiator -> moderator -> admin escalation as the agenda, run on
+// resolution_stage. It only opens once the agenda is approved (status 'ongoing').
+
+// Guard shared by every resolution transition.
+const loadResolutionMeeting = async (id) => {
+    const check = await db.query(
+        `SELECT created_by, stage, status, resolution_stage, resolution_return_source
+         FROM meetings WHERE id = $1`,
+        [id]
+    );
+    return check.rows[0] || null;
+};
+
+// Forward the resolution one step up the chain.
+const submitResolution = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        if (isAdminRole(req.user)) {
+            return next(new CustomError(
+                'Admins and superadmins approve the resolution directly — there is nobody above them to submit to.', 403));
+        }
+
+        const meeting = await loadResolutionMeeting(id);
+        if (!meeting) return next(new CustomError('Meeting not found', 404));
+        if (meeting.status === 'past') return next(new CustomError('This meeting has been marked completed.', 409));
+        if (meeting.stage !== 'approved') {
+            return next(new CustomError('The agenda must be approved before the resolution can be submitted.', 409));
+        }
+
+        let nextStage;
+        if (meeting.resolution_stage === 'initiator') {
+            if (!isMeetingOwner(meeting, req.user)) {
+                return next(new CustomError('Only the initiator who created this file can submit its resolution.', 403));
+            }
+            nextStage = meeting.resolution_return_source === 'admin' ? 'admin' : 'moderator';
+        } else if (meeting.resolution_stage === 'moderator') {
+            if (req.user?.role !== 'moderator') {
+                return next(new CustomError('Only a moderator can escalate the resolution to the admin.', 403));
+            }
+            nextStage = 'admin';
+        } else {
+            return next(new CustomError(`The resolution cannot be submitted while it is at the "${meeting.resolution_stage}" stage.`, 409));
+        }
+
+        const result = await db.query(
+            `UPDATE meetings
+             SET resolution_stage = $2, resolution_return_source = NULL,
+                 resolution_moderator_note = NULL, resolution_admin_note = NULL,
+                 reviewed_by = $3, reviewed_at = NOW()
+             WHERE id = $1 RETURNING *`,
+            [id, nextStage, req.user?.id || null]
+        );
+        res.status(200).json({ success: true, message: `Resolution submitted to the ${nextStage}`, data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Hand the resolution back down with an optional note, granting that party
+// edit access again. Mirrors returnMeeting.
+const returnResolution = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { note } = req.body;
+        const target = req.body?.target;
+        if (!['initiator', 'moderator'].includes(target)) {
+            return next(new CustomError("A valid target ('initiator' or 'moderator') is required.", 400));
+        }
+
+        const meeting = await loadResolutionMeeting(id);
+        if (!meeting) return next(new CustomError('Meeting not found', 404));
+        if (meeting.status === 'past') return next(new CustomError('This meeting has been marked completed.', 409));
+
+        const admin = isAdminRole(req.user);
+        if (admin) {
+            if (meeting.resolution_stage === target) {
+                return next(new CustomError(`The resolution is already with the ${target}.`, 409));
+            }
+        } else if (req.user?.role === 'moderator') {
+            if (target !== 'initiator' || meeting.resolution_stage !== 'moderator') {
+                return next(new CustomError('You can only return the resolution to the initiator while it is with you for review.', 403));
+            }
+        } else {
+            return next(new CustomError('You do not have permission to return this resolution.', 403));
+        }
+
+        const tier = admin ? 'admin' : 'moderator';
+        const noteColumn = tier === 'admin' ? 'resolution_admin_note' : 'resolution_moderator_note';
+        const returnSource = target === 'initiator' ? tier : null;
+
+        const result = await db.query(
+            `UPDATE meetings
+             SET resolution_stage = $2, resolution_return_source = $3, ${noteColumn} = $4,
+                 reviewed_by = $5, reviewed_at = NOW()
+             WHERE id = $1 RETURNING *`,
+            [id, target, returnSource, note || null, req.user?.id || null]
+        );
+        res.status(200).json({ success: true, message: `Resolution returned to the ${target}`, data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// admin/superadmin gives final approval, freezing the resolution. As with the
+// agenda they can approve from any stage, including one they authored.
 const approveResolution = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const check = await db.query('SELECT stage, status, resolution_approved FROM meetings WHERE id = $1', [id]);
-        if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
-        const m = check.rows[0];
-        if (m.stage !== 'approved') return next(new CustomError('The agenda must be approved before the resolution.', 409));
-        if (m.status !== 'ongoing') return next(new CustomError('The meeting must be "ongoing" to approve its resolution.', 409));
-        if (m.resolution_approved) return next(new CustomError('The resolution has already been approved.', 409));
+        const meeting = await loadResolutionMeeting(id);
+        if (!meeting) return next(new CustomError('Meeting not found', 404));
+        if (meeting.status === 'past') return next(new CustomError('This meeting has been marked completed.', 409));
+        if (meeting.stage !== 'approved') return next(new CustomError('The agenda must be approved before the resolution.', 409));
+        if (meeting.resolution_stage === 'approved') return next(new CustomError('The resolution has already been approved.', 409));
 
         const result = await db.query(
-            `UPDATE meetings SET resolution_approved = TRUE, reviewed_by = $2, reviewed_at = NOW()
+            `UPDATE meetings
+             SET resolution_stage = 'approved', resolution_return_source = NULL,
+                 resolution_moderator_note = NULL, resolution_admin_note = NULL,
+                 reviewed_by = $2, reviewed_at = NOW()
              WHERE id = $1 RETURNING *`,
             [id, req.user?.id || null]
         );
@@ -457,22 +575,30 @@ const approveResolution = async (req, res, next) => {
     }
 };
 
-// admin/superadmin reopens an approved resolution for further edits.
+// admin/superadmin reopens an approved resolution, handing it back to the
+// initiator so the chain can run again.
 const reopenResolution = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.query(
-            `UPDATE meetings SET resolution_approved = FALSE, reviewed_by = $2, reviewed_at = NOW()
-             WHERE id = $1 RETURNING *`,
+            `UPDATE meetings
+             SET resolution_stage = 'initiator', resolution_return_source = 'admin',
+                 reviewed_by = $2, reviewed_at = NOW()
+             WHERE id = $1 AND status <> 'past' RETURNING *`,
             [id, req.user?.id || null]
         );
-        if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        if (result.rows.length === 0) {
+            return next(new CustomError('Meeting not found, or it has been marked completed.', 404));
+        }
         res.status(200).json({ success: true, message: 'Resolution reopened for editing', data: result.rows[0] });
     } catch (error) {
         next(error);
     }
 };
 
+// Marking a meeting completed is the final lock — it replaces the old manual
+// "lock meeting" toggle. Afterwards nothing is editable by anyone except a
+// superadmin, who keeps an escape hatch for a mis-click.
 const completeMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -1028,30 +1154,6 @@ const sendAgendaEmail = async (req, res, next) => {
     }
 };
 
-const toggleLock = async (req, res, next) => {
-    try {
-        const { id } = req.params;
-
-        const meetingCheck = await db.query('SELECT is_locked FROM meetings WHERE id = $1', [id]);
-        if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
-
-        const newLockState = !meetingCheck.rows[0].is_locked;
-
-        const result = await db.query(
-            'UPDATE meetings SET is_locked = $1 WHERE id = $2 RETURNING *',
-            [newLockState, id]
-        );
-
-        res.status(200).json({ 
-            success: true, 
-            message: `Meeting successfully ${newLockState ? 'locked' : 'unlocked'}`, 
-            data: result.rows[0] 
-        });
-    } catch (error) {
-        next(error);
-    }
-};
-
 const bulkImportMeeting = async (req, res, next) => {
     const client = await db.pool.connect();
     try {
@@ -1158,6 +1260,8 @@ module.exports = {
     updateOnlineMeetingLink,
     deleteMeeting,
     submitMeeting,
+    submitResolution,
+    returnResolution,
     approveMeeting,
     returnMeeting,
     approveResolution,
@@ -1176,7 +1280,6 @@ module.exports = {
     generatePdf,
     completeMeeting,
     uploadMaterial,
-    toggleLock,
     bulkImportMeeting,
     getInviteesEmails,
     sendAgendaEmail

@@ -20,7 +20,7 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
   const title = type === 'description' ? 'Meeting Description' : 'Meeting Conclusion';
   const dbField = type === 'description' ? 'description' : 'conclusion';
   const templateType = type === 'description' ? 'description' : 'conclusion';
-  const readOnly = meeting.is_locked || !canEdit;
+  const readOnly = !canEdit;
 
   // Re-initialize content when switching between Description and Conclusion
   useEffect(() => {

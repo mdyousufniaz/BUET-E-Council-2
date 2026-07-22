@@ -17,7 +17,6 @@ import { useConfirm } from "../../hooks/useConfirm";
 
 export default function ResolutionView({ meeting }: { meeting: any }) {
   const { user } = useAuth();
-  const isLocked = meeting.is_locked;
   const canEdit = canEditResolution(user, meeting);
   const readOnly = !canEdit;
   const { confirm, ConfirmModal } = useConfirm();
@@ -256,7 +255,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
             {/* Annexure List placed underneath the resolution content */}
             {agenda.resolution && (
-              <AnnexureList contentId={agenda.id} type="resolution" isLocked={isLocked} readOnly={!canEdit} />
+              <AnnexureList contentId={agenda.id} type="resolution" readOnly={!canEdit} />
             )}
 
             {/* Execution Status (Only for past meetings) */}
