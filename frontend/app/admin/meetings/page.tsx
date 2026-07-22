@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 import JsonImportDialog from "../../../components/meetings/JsonImportDialog";
-import { FileJson, Bell, AlertTriangle } from "lucide-react";
+import { FileJson, Bell, AlertTriangle, Info } from "lucide-react";
 import { useAuth } from "../../../hooks/useAuth";
 import {
   APPROVAL_LABELS,
@@ -35,12 +35,21 @@ export default function ManageMeetingsPage() {
     meeting_title: "",
     meeting_date: "",
     type: "syndicate",
-    status: "draft"
+    status: "draft",
+    // Creation-time-only choice — never sent to / stored on the meetings
+    // table. Emergency meetings are capped at 1 agendum, enforced later on
+    // the Agenda tab via a localStorage flag keyed by the new meeting's id.
+    criteria: "regular"
   });
 
   const typeOptions = [
     { value: "syndicate", label: "Syndicate" },
     { value: "academic", label: "Academic" }
+  ];
+
+  const criteriaOptions = [
+    { value: "regular", label: "Regular" },
+    { value: "emergency", label: "Emergency" }
   ];
 
   const statusOptions = [
@@ -78,15 +87,22 @@ export default function ManageMeetingsPage() {
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const { criteria, ...meetingFields } = newMeeting;
       const payload = {
-        ...newMeeting,
+        ...meetingFields,
         meeting_date: new Date(newMeeting.meeting_date).toISOString() // Convert to ISO for Postgres
       };
 
-      await api.post('/meetings', payload);
+      const res = await api.post('/meetings', payload);
+
+      // Not persisted to the DB by design — stashed client-side so the Agenda
+      // tab can enforce "emergency meetings get 1 agendum only" later.
+      if (criteria === 'emergency' && res.data?.data?.id) {
+        window.localStorage.setItem(`meeting_criteria_${res.data.data.id}`, 'emergency');
+      }
 
       setIsModalOpen(false);
-      setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
+      setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft", criteria: "regular" });
       mutate();
       toast.success('Meeting created successfully');
     } catch (err: any) {
@@ -192,7 +208,7 @@ export default function ManageMeetingsPage() {
           </>
         }
         onAdd={canCreateMeeting ? () => {
-          setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft" });
+          setNewMeeting({ title: "", meeting_title: "", meeting_date: "", type: "syndicate", status: "draft", criteria: "regular" });
           setIsModalOpen(true);
         } : undefined}
         onEdit={handleEdit}
@@ -260,6 +276,22 @@ export default function ManageMeetingsPage() {
                   />
                 </div>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium">Meeting Criteria</label>
+                <SearchableSelect
+                  options={criteriaOptions}
+                  value={newMeeting.criteria}
+                  onChange={(val) => setNewMeeting({ ...newMeeting, criteria: val })}
+                />
+              </div>
+
+              {newMeeting.criteria === 'emergency' && (
+                <div className="flex items-start gap-2 text-xs text-sky-600 dark:text-sky-400 bg-sky-500/10 rounded-md p-3">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Emergency meetings can only have 1 agendum declared.</span>
+                </div>
+              )}
 
               <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm bg-muted text-muted-foreground rounded-md hover:bg-muted/80">Cancel</button>
