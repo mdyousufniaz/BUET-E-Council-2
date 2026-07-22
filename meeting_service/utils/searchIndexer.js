@@ -3,7 +3,68 @@ const { htmlToText } = require('./htmlToText');
 const { embedTexts } = require('./embeddingClient');
 const { embeddingQueue } = require('../queue');
 
-const MAX_CHUNK_WORDS = 180; // LaBSE's effective limit is ~256 wordpieces; this keeps chunks well under that.
+const MAX_CHUNK_WORDS = 500; // BAAI/bge-m3's context window is 8,192 tokens.
+
+// Removes zero-width spaces/joiners and standardizes digits
+const normalizeBanglaText = (text) => {
+    if (!text) return '';
+    return text
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/[\u09E6-\u09EF]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0x09E6 + 0x0030))
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const populateAgendaEntities = async (agendaId, plainText) => {
+    if (!plainText || !plainText.trim()) return;
+    try {
+        await db.query('DELETE FROM agenda_entities WHERE agenda_id = $1', [agendaId]);
+        const lowerText = plainText.toLowerCase();
+
+        const [departments, offices, members, faculties] = await Promise.all([
+            db.query('SELECT id, name_bangla, name_english FROM departments'),
+            db.query('SELECT id, name_bangla, name_english FROM offices'),
+            db.query('SELECT id, name FROM members'),
+            db.query('SELECT id, name_bangla, name_english FROM faculties')
+        ]);
+
+        const entitiesToInsert = [];
+
+        for (const d of departments.rows) {
+            if ((d.name_bangla && lowerText.includes(d.name_bangla.toLowerCase())) ||
+                (d.name_english && lowerText.includes(d.name_english.toLowerCase()))) {
+                entitiesToInsert.push([agendaId, 'department', d.id, d.name_bangla, d.name_english]);
+            }
+        }
+        for (const o of offices.rows) {
+            if ((o.name_bangla && lowerText.includes(o.name_bangla.toLowerCase())) ||
+                (o.name_english && lowerText.includes(o.name_english.toLowerCase()))) {
+                entitiesToInsert.push([agendaId, 'office', o.id, o.name_bangla, o.name_english]);
+            }
+        }
+        for (const m of members.rows) {
+            if (m.name && lowerText.includes(m.name.toLowerCase())) {
+                entitiesToInsert.push([agendaId, 'member', m.id, m.name, null]);
+            }
+        }
+        for (const f of faculties.rows) {
+            if ((f.name_bangla && lowerText.includes(f.name_bangla.toLowerCase())) ||
+                (f.name_english && lowerText.includes(f.name_english.toLowerCase()))) {
+                entitiesToInsert.push([agendaId, 'faculty', f.id, f.name_bangla, f.name_english]);
+            }
+        }
+
+        for (const ent of entitiesToInsert) {
+            await db.query(
+                `INSERT INTO agenda_entities (agenda_id, entity_type, entity_id, entity_name_bangla, entity_name_english)
+                 VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+                ent
+            );
+        }
+    } catch (err) {
+        console.error(`Failed to populate agenda entities for ${agendaId}:`, err.message);
+    }
+};
 
 // Splits a sentence-ending token so long paragraphs can be broken up without
 // cutting mid-sentence. Handles both '.'/'?'/'!' and the Bangla '।' danda.
@@ -69,21 +130,14 @@ const clearSearchCache = async () => {
     await db.query('DELETE FROM search_cache');
 };
 
-// Cheap part: strip HTML and update the plain-text mirror column, which is
-// all keyword search (content_tsv/resolution_tsv) depends on. Runs
-// synchronously in the API process - there's no reason keyword search
-// freshness should wait on the embedding queue.
 const updatePlainText = async (agendaId, html, plainColumn) => {
-    const plainText = htmlToText(html);
+    const plainText = normalizeBanglaText(htmlToText(html));
     await db.query(`UPDATE agenda SET ${plainColumn} = $1 WHERE id = $2`, [plainText, agendaId]);
+    await populateAgendaEntities(agendaId, plainText);
     await clearSearchCache();
     return plainText;
 };
 
-// Heavy part: chunk + embed + store. This is the CPU/RAM-intensive step
-// (calls out to the embedding_service and does N inserts), so it's the part
-// deferred to the embedding-jobs queue and run by the resource-aware worker
-// (see worker.js), never inline in an Express request handler.
 const embedAndStoreChunks = async (agendaId, plainText, tableName) => {
     await db.query(`DELETE FROM ${tableName} WHERE agenda_id = $1`, [agendaId]);
 
@@ -101,10 +155,6 @@ const embedAndStoreChunks = async (agendaId, plainText, tableName) => {
     await clearSearchCache();
 };
 
-// Fire-and-forget from controllers: never let embedding-queue latency or
-// downtime block saving an agenda/resolution. The plain-text/keyword-search
-// update happens immediately; the embedding rebuild is queued for the
-// worker.
 const indexAgendaContent = async (agendaId, html) => {
     try {
         const plainText = await updatePlainText(agendaId, html, 'content_plain');
@@ -123,4 +173,12 @@ const indexResolutionContent = async (agendaId, html) => {
     }
 };
 
-module.exports = { chunkText, embedAndStoreChunks, indexAgendaContent, indexResolutionContent, clearSearchCache };
+module.exports = { 
+    chunkText, 
+    embedAndStoreChunks, 
+    indexAgendaContent, 
+    indexResolutionContent, 
+    clearSearchCache,
+    normalizeBanglaText,
+    populateAgendaEntities
+};

@@ -99,6 +99,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
+      HF_TOKEN: ${HF_TOKEN}
     # mem_limit: 8g
     # cpus: 4
     depends_on:
@@ -126,6 +127,9 @@ services:
       dockerfile: Dockerfile
       args:
         HF_TOKEN: ${HF_TOKEN:-}
+        MODEL_NAME: ${MODEL_NAME:-BAAI/bge-m3}
+    environment:
+      MODEL_NAME: ${MODEL_NAME:-BAAI/bge-m3}
     # Not published to the host: only meeting_service talks to it, over the
     # internal compose network (same reasoning as MinIO below).
     healthcheck:

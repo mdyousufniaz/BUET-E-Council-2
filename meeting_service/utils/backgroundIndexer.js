@@ -3,6 +3,14 @@ const { indexAgendaContent, indexResolutionContent } = require('./searchIndexer'
 
 const reconcileIndex = async () => {
     try {
+        // Purge old 768-dim embeddings if transitioning to 1024-dim
+        try {
+            await db.query(`DELETE FROM agenda_chunks WHERE embedding IS NOT NULL AND vector_dims(embedding) != 1024`);
+            await db.query(`DELETE FROM resolution_chunks WHERE embedding IS NOT NULL AND vector_dims(embedding) != 1024`);
+        } catch (e) {
+            // Ignore if vector_dims check fails
+        }
+
         const query = `
             SELECT a.id, a.content, a.resolution, a.content_plain, a.resolution_plain,
                    (SELECT COUNT(*) FROM agenda_chunks ac WHERE ac.agenda_id = a.id)::int as agenda_chunks_count,

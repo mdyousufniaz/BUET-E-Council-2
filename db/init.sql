@@ -208,7 +208,7 @@ CREATE TABLE agenda_chunks (
     agenda_id UUID REFERENCES agenda (id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding vector (768),
+    embedding vector (1024),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -217,8 +217,18 @@ CREATE TABLE resolution_chunks (
     agenda_id UUID REFERENCES agenda (id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding vector (768),
+    embedding vector (1024),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Pre-indexed agenda entities table
+CREATE TABLE agenda_entities (
+    agenda_id UUID REFERENCES agenda(id) ON DELETE CASCADE,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id UUID,
+    entity_name_bangla VARCHAR(255),
+    entity_name_english VARCHAR(255),
+    PRIMARY KEY (agenda_id, entity_type, entity_id)
 );
 
 -- Search results cache, keyed by a hash of the query + filters. Wiped
@@ -344,6 +354,20 @@ CREATE INDEX idx_agenda_tags_tag_id ON agenda_tags (tag_id);
 CREATE INDEX idx_agenda_chunks_agenda_id ON agenda_chunks (agenda_id);
 CREATE INDEX idx_resolution_chunks_agenda_id ON resolution_chunks (agenda_id);
 CREATE INDEX idx_revisions_content_id ON revisions (content_id);
+
+-- Fast HNSW indexes for vector cosine distance matching
+CREATE INDEX idx_agenda_chunks_hnsw 
+ON agenda_chunks USING hnsw (embedding vector_cosine_ops) 
+WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX idx_resolution_chunks_hnsw 
+ON resolution_chunks USING hnsw (embedding vector_cosine_ops) 
+WITH (m = 16, ef_construction = 64);
+
+-- Fast trigram index on pre-extracted entity names
+CREATE INDEX idx_agenda_entities_trgm ON agenda_entities USING GIN (
+    (entity_name_bangla || ' ' || COALESCE(entity_name_english, '')) gin_trgm_ops
+);
 
 -- Full-text search over agenda/resolution plain-text mirrors.
 CREATE INDEX idx_agenda_content_tsv ON agenda USING GIN (content_tsv);
