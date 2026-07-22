@@ -6,20 +6,53 @@ const { sendMail } = require('../utils/mailer');
 const crypto = require('crypto');
 const { indexAgendaContent, indexResolutionContent } = require('../utils/searchIndexer');
 
+// An initiator hands the file to the moderator and then loses sight of it: they
+// must not be able to watch the moderator/admin review play out. So for them the
+// two in-review stages collapse into a single "forwarded to moderator" label —
+// they can't tell whether it is still with the moderator or has gone up to the
+// admin. The final 'approved' outcome IS shown: they rejoin the file for the
+// resolution/attendance phase and need to know it got there.
+// Display only — `stage` stays accurate so every permission gate still works.
+const displayStageFor = (user, stage) =>
+    user?.role === 'file_initiator' && (stage === 'moderator' || stage === 'admin')
+        ? 'forwarded'
+        : stage;
+
+// Which meeting files a role is allowed to even see in the management list:
+//   admin/superadmin (and viewer, whose read-only browsing is unchanged): all
+//   moderator: anything that has reached them or above, plus their own files and
+//              any they handed back down to an initiator
+//   file_initiator: only the files they created
+const visibilityFilter = (user) => {
+    if (user?.role === 'file_initiator') {
+        return { clause: 'WHERE m.created_by = $1', params: [user.id] };
+    }
+    if (user?.role === 'moderator') {
+        return {
+            clause: "WHERE m.stage <> 'initiator' OR m.created_by = $1 OR m.return_source = 'moderator'",
+            params: [user.id],
+        };
+    }
+    return { clause: '', params: [] };
+};
+
 const getMeetings = async (req, res, next) => {
     try {
+        const { clause, params } = visibilityFilter(req.user);
         const result = await db.query(`
             SELECT m.*,
                    u.username AS creator_username,
                    ROW_NUMBER() OVER (ORDER BY m.legacy_meeting_no DESC NULLS FIRST) as serial
             FROM meetings m
             LEFT JOIN users u ON u.id = m.created_by
+            ${clause}
             ORDER BY m.legacy_meeting_no DESC NULLS FIRST
-        `);
+        `, params);
 
         // Format dates correctly for the frontend
         const data = result.rows.map(meeting => ({
             ...meeting,
+            display_stage: displayStageFor(req.user, meeting.stage),
             date: new Date(meeting.meeting_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
         }));
 
@@ -51,6 +84,7 @@ const getMeetingById = async (req, res, next) => {
 
         const meeting = result.rows[0];
         meeting.date = new Date(meeting.meeting_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        meeting.display_stage = displayStageFor(req.user, meeting.stage);
 
         res.status(200).json({ success: true, data: meeting });
     } catch (error) {

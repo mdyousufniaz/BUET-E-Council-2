@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       const res = await api.post('/auth/signin', { username, password });
       const role = res.data?.data?.user?.role;
-      router.push(role === 'viewer' ? '/viewer/meetings' : '/admin/meetings');
+      router.push(role === 'viewer' ? '/viewer/meetings' : '/workspace/meetings');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {

@@ -58,7 +58,7 @@ export default function MeetingWorkspaceLayout({
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="p-4 border-b border-sidebar-border">
-          <Link href="/admin/meetings" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2">
+          <Link href="/workspace/meetings" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2">
             ← Back to Meetings
           </Link>
         </div>
@@ -76,7 +76,7 @@ export default function MeetingWorkspaceLayout({
             return (
               <Link
                 key={item.name}
-                href={`/admin/meetings/${params.id}?view=${item.view}`}
+                href={`/workspace/meetings/${params.id}?view=${item.view}`}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors ${isActive
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm'

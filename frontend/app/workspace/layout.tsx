@@ -1,7 +1,7 @@
 import Header from "../../components/Header";
-import AdminLayoutWrapper from "../../components/AdminLayoutWrapper";
+import WorkspaceLayoutWrapper from "../../components/WorkspaceLayoutWrapper";
 
-export default function AdminLayout({
+export default function WorkspaceLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -9,9 +9,9 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <AdminLayoutWrapper>
+      <WorkspaceLayoutWrapper>
         {children}
-      </AdminLayoutWrapper>
+      </WorkspaceLayoutWrapper>
     </div>
   );
 }

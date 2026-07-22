@@ -6,7 +6,7 @@ import SidebarToggleButton from "./SidebarToggleButton";
 import { useAuth } from "../hooks/useAuth";
 import { useEffect, useState } from "react";
 
-export default function AdminLayoutWrapper({ children }: { children: React.ReactNode }) {
+export default function WorkspaceLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -28,8 +28,8 @@ export default function AdminLayoutWrapper({ children }: { children: React.React
   }
 
   // Check if we are inside a specific meeting's workspace
-  // Matches /admin/meetings/uuid or any other ID, but NOT /admin/meetings directly.
-  const isMeetingWorkspace = /^\/admin\/meetings\/[^\/]+$/.test(pathname || "");
+  // Matches /workspace/meetings/uuid or any other ID, but NOT /workspace/meetings directly.
+  const isMeetingWorkspace = /^\/workspace\/meetings\/[^\/]+$/.test(pathname || "");
 
   if (isMeetingWorkspace) {
     return (

@@ -15,8 +15,9 @@ import { useAuth } from "../../../hooks/useAuth";
 import {
   STAGE_LABELS,
   STAGE_BADGE_CLASSES,
+  badgeStage,
   isMeetingOwner,
-  type MeetingStage,
+  type DisplayStage,
 } from "../../../lib/meetingAccess";
 
 export default function ManageMeetingsPage() {
@@ -26,7 +27,7 @@ export default function ManageMeetingsPage() {
   const { confirm, ConfirmModal } = useConfirm();
 
   const [typeFilter, setTypeFilter] = useState<'all' | 'academic' | 'syndicate'>('all');
-  const [stageFilter, setStageFilter] = useState<'all' | MeetingStage>('all');
+  const [stageFilter, setStageFilter] = useState<'all' | DisplayStage>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
 
@@ -59,7 +60,7 @@ export default function ManageMeetingsPage() {
   ];
 
   const handleEdit = (meeting: any) => {
-    router.push(`/admin/meetings/${meeting.id}?view=info`);
+    router.push(`/workspace/meetings/${meeting.id}?view=info`);
   };
 
   const handleDelete = (meeting: any) => {
@@ -108,18 +109,18 @@ export default function ManageMeetingsPage() {
 
   const meetings = allMeetings
     .filter((m: any) => typeFilter === 'all' || m.type === typeFilter)
-    .filter((m: any) => stageFilter === 'all' || (m.stage || 'initiator') === stageFilter)
+    .filter((m: any) => stageFilter === 'all' || badgeStage(m) === stageFilter)
     .map((m: any) => {
-      const stage = (m.stage as MeetingStage) || 'initiator';
+      const shown = badgeStage(m);
       return {
         ...m,
         creator_username: m.creator_username || '—',
         stage_label: (
           <span
             title={m.moderator_note || m.admin_note || undefined}
-            className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${STAGE_BADGE_CLASSES[stage]}`}
+            className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${STAGE_BADGE_CLASSES[shown]}`}
           >
-            {STAGE_LABELS[stage]}
+            {STAGE_LABELS[shown]}
           </span>
         ),
       };
@@ -192,14 +193,25 @@ export default function ManageMeetingsPage() {
             <div className="w-52">
               <CustomSelect
                 value={stageFilter}
-                onChange={(val) => setStageFilter(val as 'all' | MeetingStage)}
-                options={[
-                  { value: "all", label: "All Stages" },
-                  { value: "initiator", label: "With initiator" },
-                  { value: "moderator", label: "With moderator" },
-                  { value: "admin", label: "With admin" },
-                  { value: "approved", label: "Approved" }
-                ]}
+                onChange={(val) => setStageFilter(val as 'all' | DisplayStage)}
+                options={
+                  // Initiators can't tell moderator from admin, so they get the
+                  // single collapsed "forwarded" bucket instead of both.
+                  isInitiator
+                    ? [
+                        { value: "all", label: "All Stages" },
+                        { value: "initiator", label: "With me" },
+                        { value: "forwarded", label: "Forwarded to moderator" },
+                        { value: "approved", label: "Approved" }
+                      ]
+                    : [
+                        { value: "all", label: "All Stages" },
+                        { value: "initiator", label: "With initiator" },
+                        { value: "moderator", label: "With moderator" },
+                        { value: "admin", label: "With admin" },
+                        { value: "approved", label: "Approved" }
+                      ]
+                }
               />
             </div>
           </>

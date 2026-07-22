@@ -32,7 +32,7 @@ export default function ManageUsersPage() {
   useEffect(() => {
     // User management is admin-only; bounce anyone else back to the dashboard.
     if (!authLoading && !isAdmin) {
-      router.replace('/admin');
+      router.replace('/workspace');
     }
   }, [authLoading, isAdmin, router]);
 

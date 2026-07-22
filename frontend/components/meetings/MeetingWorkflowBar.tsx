@@ -11,6 +11,7 @@ import {
   returnTargets,
   canApproveResolution,
   canReopenResolution,
+  badgeStage,
   STAGE_LABELS,
   STAGE_BADGE_CLASSES,
   type MeetingStage,
@@ -34,6 +35,8 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
   if (!meeting) return null;
 
   const stage: MeetingStage = (meeting.stage as MeetingStage) || "initiator";
+  // What the viewer is allowed to know the stage is (initiators see "forwarded").
+  const shown = badgeStage(meeting);
   const nextUp = submitTarget(user, meeting);
   const canApprove = canApproveMeeting(user, meeting);
   const targets = returnTargets(user, meeting);
@@ -59,8 +62,8 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
     <div className="mb-6 rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STAGE_BADGE_CLASSES[stage]}`}>
-            {STAGE_LABELS[stage]}
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STAGE_BADGE_CLASSES[shown]}`}>
+            {STAGE_LABELS[shown]}
           </span>
           {meeting.creator_username && (
             <span className="text-xs text-muted-foreground">

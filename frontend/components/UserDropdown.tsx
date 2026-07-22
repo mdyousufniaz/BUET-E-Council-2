@@ -11,7 +11,7 @@ export default function UserDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user, role, error } = useAuth();
-  const dashboardHref = role === 'viewer' ? '/viewer/meetings' : '/admin';
+  const dashboardHref = role === 'viewer' ? '/viewer/meetings' : '/workspace';
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

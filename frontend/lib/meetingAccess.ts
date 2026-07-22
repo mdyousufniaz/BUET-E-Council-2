@@ -6,6 +6,9 @@ import type { Role } from '../hooks/useAuth';
 
 export type MeetingStage = 'initiator' | 'moderator' | 'admin' | 'approved';
 export type ReturnTarget = 'initiator' | 'moderator';
+// What the badge shows. Initiators never see past 'forwarded' — the server
+// collapses every stage above their own into it (see displayStageFor).
+export type DisplayStage = MeetingStage | 'forwarded';
 
 export interface WorkflowUser {
   id?: string;
@@ -15,6 +18,7 @@ export interface WorkflowUser {
 export interface WorkflowMeeting {
   created_by?: string | null;
   stage?: MeetingStage | null;
+  display_stage?: DisplayStage | null;
   return_source?: 'moderator' | 'admin' | null;
   moderator_note?: string | null;
   admin_note?: string | null;
@@ -37,11 +41,16 @@ const stageOf = (meeting?: WorkflowMeeting | null): MeetingStage =>
 //   moderator stage -> any moderator
 //   admin / approved -> admin/superadmin only
 // admin/superadmin may always edit. Never while locked.
+// A moderator only gives up edit access by escalating to the admin — handing the
+// file back down to the initiator keeps them on it.
 export const canEditMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting || meeting.is_locked) return false;
   if (isAdminRole(user)) return true;
   const stage = stageOf(meeting);
-  if (stage === 'initiator') return isMeetingOwner(user, meeting);
+  if (stage === 'initiator') {
+    return isMeetingOwner(user, meeting) ||
+      (user.role === 'moderator' && meeting.return_source === 'moderator');
+  }
   if (stage === 'moderator') return user.role === 'moderator';
   return false;
 };
@@ -90,17 +99,22 @@ export const returnTargets = (user?: WorkflowUser | null, meeting?: WorkflowMeet
   return [];
 };
 
-// --- Resolution / attendance phase (Phase 2) ---------------------------------
-// Open only after the agenda is approved and the meeting is set "ongoing",
-// until an admin approves the resolution.
+// --- Resolution / attendance -------------------------------------------------
+// Editable by whoever currently holds the file (same rule as the agenda), so an
+// initiator with edit access drafts resolutions alongside it; and again during
+// the meeting itself, once approved + "ongoing". Locked once an admin approves
+// the resolution.
 
 const resolutionPhaseOpen = (meeting?: WorkflowMeeting | null): boolean =>
   !!meeting && !meeting.is_locked && meeting.stage === 'approved' &&
   meeting.status === 'ongoing' && !meeting.resolution_approved;
 
 export const canEditResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
-  if (!user || !resolutionPhaseOpen(meeting)) return false;
-  return isAdminRole(user) || isMeetingOwner(user, meeting) || user.role === 'moderator';
+  if (!user || !meeting || meeting.is_locked) return false;
+  if (isAdminRole(user)) return true;
+  if (meeting.resolution_approved) return false;
+  if (canEditMeeting(user, meeting)) return true;
+  return resolutionPhaseOpen(meeting) && (isMeetingOwner(user, meeting) || user.role === 'moderator');
 };
 
 export const canApproveResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean =>
@@ -109,17 +123,24 @@ export const canApproveResolution = (user?: WorkflowUser | null, meeting?: Workf
 export const canReopenResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean =>
   isAdminRole(user) && !!meeting && !meeting.is_locked && !!meeting.resolution_approved;
 
-export const STAGE_LABELS: Record<MeetingStage, string> = {
+export const STAGE_LABELS: Record<DisplayStage, string> = {
   initiator: 'Draft — with initiator',
   moderator: 'With moderator',
   admin: 'With admin',
   approved: 'Approved',
+  forwarded: 'Forwarded to moderator',
 };
 
 // Tailwind classes for a status badge (light + dark friendly).
-export const STAGE_BADGE_CLASSES: Record<MeetingStage, string> = {
+export const STAGE_BADGE_CLASSES: Record<DisplayStage, string> = {
   initiator: 'bg-muted text-muted-foreground',
   moderator: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   admin: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+  forwarded: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
 };
+
+// The badge value to render for the current viewer: the server-masked
+// display_stage when present, otherwise the real stage.
+export const badgeStage = (meeting?: WorkflowMeeting | null): DisplayStage =>
+  (meeting?.display_stage ?? meeting?.stage ?? 'initiator') as DisplayStage;

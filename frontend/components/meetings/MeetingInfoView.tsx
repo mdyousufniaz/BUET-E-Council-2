@@ -49,7 +49,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
       try {
         await api.delete(`/meetings/${meeting.id}`);
         toast.success("Meeting deleted successfully.");
-        router.push('/admin/meetings');
+        router.push('/workspace/meetings');
       } catch (err: any) {
         toast.error(err.response?.data?.message || 'Failed to delete meeting');
       } finally {

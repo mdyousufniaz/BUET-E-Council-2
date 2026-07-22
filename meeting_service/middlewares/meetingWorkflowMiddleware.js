@@ -67,7 +67,7 @@ const loadMeeting = async (req) => {
     }
 
     const result = await db.query(
-        'SELECT id, created_by, stage, status, resolution_approved FROM meetings WHERE id = $1',
+        'SELECT id, created_by, stage, return_source, status, resolution_approved FROM meetings WHERE id = $1',
         [meetingId]
     );
     req._workflowMeeting = result.rows[0] || null;
@@ -80,13 +80,20 @@ const isOwner = (meeting, user) =>
 const isAdminRole = (user) => user && (user.role === 'admin' || user.role === 'superadmin');
 
 // Whoever currently "holds" the file at its stage may edit it:
-//   stage=initiator -> the initiator who created it
+//   stage=initiator -> the initiator who created it, PLUS a moderator who handed
+//                      it back (they keep working on it alongside the initiator)
 //   stage=moderator -> any moderator
 //   stage=admin / approved -> nobody below admin
 // admin/superadmin may always edit.
+//
+// A moderator only loses edit access by escalating the file to the admin —
+// handing it down to the initiator does not give up their own access.
 const canEditAtStage = (meeting, user) => {
     if (isAdminRole(user)) return true;
-    if (meeting.stage === 'initiator') return isOwner(meeting, user);
+    if (meeting.stage === 'initiator') {
+        return isOwner(meeting, user) ||
+            (user?.role === 'moderator' && meeting.return_source === 'moderator');
+    }
     if (meeting.stage === 'moderator') return user?.role === 'moderator';
     return false;
 };
@@ -131,20 +138,28 @@ const requireMeetingAuthor = async (req, res, next) => {
 // follow the same stage rules as content editing.
 const requireMeetingOperator = requireMeetingAuthor;
 
-// Resolution/attendance phase (Phase 2): once the agenda is approved and the
-// meeting is set "ongoing", the initiator/moderator (and admin/superadmin) may
-// record resolutions & attendance until an admin approves the resolution.
+// Resolutions & attendance are editable in two situations:
+//   1. While the file is being built — by whoever currently holds edit access to
+//      it, exactly like the agenda and the meeting info. So an initiator with
+//      edit access drafts resolutions alongside the agenda.
+//   2. During the meeting itself — once the agenda is approved and the status is
+//      "ongoing", the initiator and moderator regain access even though the
+//      approved file is otherwise admin-only.
+// Either way, an admin-approved resolution is locked to everyone but admins.
 const canEditResolutionAtStage = (meeting, user) => {
-    if (meeting.stage !== 'approved' || meeting.status !== 'ongoing' || meeting.resolution_approved) return false;
     if (isAdminRole(user)) return true;
-    return isOwner(meeting, user) || user?.role === 'moderator';
+    if (meeting.resolution_approved) return false;
+    if (canEditAtStage(meeting, user)) return true;
+    return meeting.stage === 'approved' && meeting.status === 'ongoing' &&
+        (isOwner(meeting, user) || user?.role === 'moderator');
 };
 
 const resolutionBlockedMessage = (meeting) => {
     if (meeting.resolution_approved) return 'The resolution has been approved and is now locked.';
-    if (meeting.stage !== 'approved') return 'Resolutions and attendance can only be recorded after the agenda is approved.';
-    if (meeting.status !== 'ongoing') return 'Set the meeting status to "Ongoing" to record resolutions and attendance.';
-    return 'You do not have permission to edit the resolution at this stage.';
+    if (meeting.stage === 'approved' && meeting.status !== 'ongoing') {
+        return 'Set the meeting status to "Ongoing" to record resolutions and attendance.';
+    }
+    return stageBlockedMessage(meeting);
 };
 
 const requireResolutionEditor = async (req, res, next) => {

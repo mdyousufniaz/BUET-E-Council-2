@@ -20,16 +20,16 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
   const pathname = usePathname();
 
   const adminLinks = [
-    { name: 'Meetings', href: '/admin/meetings', icon: Calendar },
-    { name: 'Templates', href: '/admin/templates', icon: FileText },
-    { name: 'Members', href: '/admin/members', icon: Users },
-    { name: 'Faculties', href: '/admin/faculties', icon: Building2 },
-    { name: 'Departments', href: '/admin/departments', icon: Briefcase },
-    { name: 'Offices', href: '/admin/offices', icon: Building2 },
+    { name: 'Meetings', href: '/workspace/meetings', icon: Calendar },
+    { name: 'Templates', href: '/workspace/templates', icon: FileText },
+    { name: 'Members', href: '/workspace/members', icon: Users },
+    { name: 'Faculties', href: '/workspace/faculties', icon: Building2 },
+    { name: 'Departments', href: '/workspace/departments', icon: Briefcase },
+    { name: 'Offices', href: '/workspace/offices', icon: Building2 },
     // User management and the audit log are admin-only.
     ...(role === 'admin' || role === 'superadmin' ? [
-      { name: 'Users', href: '/admin/users', icon: Users },
-      { name: 'Audit Log', href: '/admin/audit-log', icon: ScrollText },
+      { name: 'Users', href: '/workspace/users', icon: Users },
+      { name: 'Audit Log', href: '/workspace/audit-log', icon: ScrollText },
     ] : []),
   ];
 
@@ -43,7 +43,7 @@ export default function Sidebar({ type = 'admin', role, isOpen = false, onClose 
   // Prefer an exact match when one exists (e.g. /profile/sessions matches
   // "Sessions" exactly), so a shorter sibling href like /profile doesn't
   // also light up via prefix-matching. Only fall back to prefix-matching
-  // (for nested routes like /admin/meetings/<id>) when nothing matches exactly.
+  // (for nested routes like /workspace/meetings/<id>) when nothing matches exactly.
   const hasExactMatch = links.some(l => l.href === pathname);
   const isLinkActive = (href: string) =>
     hasExactMatch ? href === pathname : pathname === href || pathname.startsWith(`${href}/`);
