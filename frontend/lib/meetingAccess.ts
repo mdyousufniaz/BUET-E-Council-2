@@ -53,31 +53,36 @@ export const canOperateMeeting = canEditMeeting;
 
 // If the current user can forward the file one step up, returns the destination
 // role label ('moderator' or 'admin'); otherwise null.
+//
+// admin/superadmin never get this button: they are the approving authority and
+// have nobody above them to send a file to.
 export const submitTarget = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): 'moderator' | 'admin' | null => {
-  if (!user || !meeting || meeting.is_locked) return null;
+  if (!user || !meeting || meeting.is_locked || isAdminRole(user)) return null;
   const stage = stageOf(meeting);
-  if (stage === 'initiator' && (isAdminRole(user) || isMeetingOwner(user, meeting))) {
+  if (stage === 'initiator' && isMeetingOwner(user, meeting)) {
     // Re-submit to whoever granted access; a fresh file goes to the moderator.
     return meeting.return_source === 'admin' ? 'admin' : 'moderator';
   }
-  if (stage === 'moderator' && (isAdminRole(user) || user.role === 'moderator')) return 'admin';
+  if (stage === 'moderator' && user.role === 'moderator') return 'admin';
   return null;
 };
 
-// admin/superadmin final approval, only once the file has reached the admin stage.
+// admin/superadmin final approval. They can approve from any stage — a file the
+// moderator escalated to them, or one they authored themselves (which never
+// leaves the initiator stage since admins never submit).
 export const canApproveMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean =>
-  !!user && !!meeting && !meeting.is_locked && isAdminRole(user) && stageOf(meeting) === 'admin';
+  !!user && !!meeting && !meeting.is_locked && isAdminRole(user) && stageOf(meeting) !== 'approved';
 
-// Which lower stages the current user may hand the file back down to.
-//   admin/superadmin: moderator/initiator from admin & approved; initiator from moderator.
+// Which lower stages the current user may hand the file back down to, granting
+// that party edit access.
+//   admin/superadmin: any stage they don't already hold — including re-opening
+//     an approved file for the moderator or the initiator to modify.
 //   moderator: initiator, whenever the file is at the moderator stage.
 export const returnTargets = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): ReturnTarget[] => {
   if (!user || !meeting || meeting.is_locked) return [];
   const stage = stageOf(meeting);
   if (isAdminRole(user)) {
-    if (stage === 'moderator') return ['initiator'];
-    if (stage === 'admin' || stage === 'approved') return ['moderator', 'initiator'];
-    return [];
+    return (['moderator', 'initiator'] as ReturnTarget[]).filter((t) => t !== stage);
   }
   if (user.role === 'moderator' && stage === 'moderator') {
     return ['initiator'];

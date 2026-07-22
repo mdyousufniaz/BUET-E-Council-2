@@ -214,24 +214,32 @@ const isAdminRole = (user) => user && (user.role === 'admin' || user.role === 's
 // to whoever last granted edit access (return_source): the moderator by default,
 // or straight back to the admin if an admin handed it down. From the moderator it
 // escalates to the admin. Submitting up clears the pending send-back notes.
+//
+// admin/superadmin never submit: they sit at the top of the chain and approve
+// directly, so there is nobody above them to send a file to.
 const submitMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
+
+        if (isAdminRole(req.user)) {
+            return next(new CustomError(
+                'Admins and superadmins approve files directly — there is nobody above them to submit to.', 403));
+        }
+
         const check = await db.query('SELECT created_by, stage, return_source FROM meetings WHERE id = $1', [id]);
         if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
 
         const meeting = check.rows[0];
-        const admin = isAdminRole(req.user);
         let nextStage;
 
         if (meeting.stage === 'initiator') {
-            if (!admin && !isMeetingOwner(meeting, req.user)) {
+            if (!isMeetingOwner(meeting, req.user)) {
                 return next(new CustomError('Only the initiator who created this file can submit it.', 403));
             }
             // Re-submit to whoever granted access; a fresh file goes to the moderator.
             nextStage = meeting.return_source === 'admin' ? 'admin' : 'moderator';
         } else if (meeting.stage === 'moderator') {
-            if (!admin && req.user?.role !== 'moderator') {
+            if (req.user?.role !== 'moderator') {
                 return next(new CustomError('Only a moderator can escalate this file to the admin.', 403));
             }
             nextStage = 'admin';
@@ -252,15 +260,18 @@ const submitMeeting = async (req, res, next) => {
     }
 };
 
-// admin/superadmin approves a file that has reached the admin stage. Once
-// approved only admin/superadmin can edit it (enforced in the workflow gate).
+// admin/superadmin gives final approval. They are the approving authority, so
+// they can approve a file at ANY stage — normally one the moderator escalated to
+// them, but also one they authored themselves (which never leaves the initiator
+// stage, since admins have no one to submit to). Once approved only
+// admin/superadmin can edit it (enforced in the workflow gate).
 const approveMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
         const check = await db.query('SELECT stage FROM meetings WHERE id = $1', [id]);
         if (check.rows.length === 0) return next(new CustomError('Meeting not found', 404));
-        if (check.rows[0].stage !== 'admin') {
-            return next(new CustomError('Only a file that has reached the admin stage can be approved.', 409));
+        if (check.rows[0].stage === 'approved') {
+            return next(new CustomError('This file has already been approved.', 409));
         }
 
         const result = await db.query(
@@ -297,8 +308,10 @@ const returnMeeting = async (req, res, next) => {
 
         const admin = isAdminRole(req.user);
         if (admin) {
-            if (meeting.stage === 'initiator') {
-                return next(new CustomError('This file is already with the initiator.', 409));
+            // Admins may grant edit access from any stage — including an already
+            // approved file — as long as it isn't already sitting with that party.
+            if (meeting.stage === target) {
+                return next(new CustomError(`This file is already with the ${target}.`, 409));
             }
         } else if (req.user?.role === 'moderator') {
             if (target !== 'initiator' || meeting.stage !== 'moderator') {

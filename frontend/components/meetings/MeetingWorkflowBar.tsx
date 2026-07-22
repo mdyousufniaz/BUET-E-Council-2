@@ -100,7 +100,9 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
               onClick={() => setReturnTo((cur) => (cur === t ? null : t))}
               className="inline-flex items-center gap-2 bg-destructive text-destructive-foreground text-sm font-medium px-4 py-2 rounded-md hover:opacity-90 disabled:opacity-50"
             >
-              <CornerDownLeft className="w-4 h-4" /> Send back to {TARGET_LABEL[t]}
+              <CornerDownLeft className="w-4 h-4" />
+              {/* An approved file isn't "sent back" so much as re-opened for edits. */}
+              {stage === "approved" ? `Reopen for ${TARGET_LABEL[t]}` : `Send back to ${TARGET_LABEL[t]}`}
             </button>
           ))}
         </div>
@@ -154,7 +156,11 @@ export default function MeetingWorkflowBar({ meeting, onChanged }: { meeting: an
       )}
       {meeting.admin_note && (
         <div className="mt-3 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-800 dark:text-red-300">
-          <span className="font-semibold">Sent back by admin/superadmin:</span> {meeting.admin_note}
+          <span className="font-semibold">
+            Sent back by admin/superadmin
+            {meeting.return_source === "admin" && meeting.reviewer_username ? ` (${meeting.reviewer_username})` : ""}:
+          </span>{" "}
+          {meeting.admin_note}
         </div>
       )}
 
