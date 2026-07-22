@@ -49,8 +49,8 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
       const tag = res.data.data;
       mutateTags();
       setEditTagIds(prev => [...prev, tag.id]);
-    } catch (err) {
-      toast.error("Failed to create tag");
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || err.response?.data?.message || "Failed to create tag");
     }
   };
 
