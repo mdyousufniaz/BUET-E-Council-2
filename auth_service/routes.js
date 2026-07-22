@@ -479,9 +479,21 @@ router.put('/users/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // 11. POST /upload-csv (users)
+// Expected CSV columns: username, password, email, role, type (type -> member_type).
+// Strict all-or-nothing: the whole file is validated up front, and nothing is
+// written to the DB unless every row passes and the insert transaction succeeds.
+const CSV_REQUIRED_COLUMNS = ['username', 'password', 'email', 'role', 'type'];
+const CSV_VALID_ROLES = ['admin', 'superadmin', 'moderator', 'file_initiator', 'viewer'];
+const CSV_VALID_TYPES = ['academic', 'syndicate', 'none'];
+
 router.post('/upload-csv', requireAuth, requireAdmin, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+        const filename = (req.file.originalname || '').toLowerCase();
+        if (!filename.endsWith('.csv')) {
+            return res.status(400).json({ success: false, message: 'File must be a .csv file' });
+        }
 
         const results = [];
         const stream = Readable.from(req.file.buffer);
@@ -489,36 +501,92 @@ router.post('/upload-csv', requireAuth, requireAdmin, upload.single('file'), asy
         stream
             .pipe(csv())
             .on('data', (data) => results.push(data))
+            .on('error', (err) => {
+                console.error('CSV parse error:', err);
+                res.status(400).json({ success: false, message: 'Failed to parse CSV file' });
+            })
             .on('end', async () => {
-                const client = await db.pool.connect();
                 try {
-                    await client.query('BEGIN');
-                    let count = 0;
-                    for (const row of results) {
-                        if (row.username && row.email && row.password) {
-                            const salt = await bcrypt.genSalt(10);
-                            const hashedPassword = await bcrypt.hash(row.password, salt);
-                            
-                            await client.query(
-                                `INSERT INTO users (username, email, password, role, status) 
-                                 VALUES ($1, $2, $3, $4, $5) 
-                                 ON CONFLICT (username) DO NOTHING`,
-                                [row.username, row.email, hashedPassword, row.role || 'viewer', row.status || 'active']
-                            );
-                            count++;
-                        }
+                    if (results.length === 0) {
+                        return res.status(400).json({ success: false, message: 'CSV file is empty' });
                     }
-                    await client.query('COMMIT');
-                    logAudit({
-                        userId: req.user.id, username: req.user.username, action: 'create',
-                        entityType: 'user', details: { bulk_import_count: count }, ip: req.ip
+
+                    const headerColumns = Object.keys(results[0]);
+                    const missingColumns = CSV_REQUIRED_COLUMNS.filter(c => !headerColumns.includes(c));
+                    if (missingColumns.length > 0) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `CSV is missing required column(s): ${missingColumns.join(', ')}. Expected format: username, password, email, role, type`
+                        });
+                    }
+
+                    // Validate every row before writing anything — no partial imports.
+                    const errors = [];
+                    const seenUsernames = new Set();
+                    results.forEach((row, idx) => {
+                        const rowNum = idx + 2; // +1 for 0-index, +1 for header row
+                        const username = (row.username || '').trim();
+                        const password = (row.password || '').trim();
+                        const email = (row.email || '').trim();
+                        const role = (row.role || '').trim();
+                        const type = (row.type || '').trim();
+
+                        if (!username) errors.push(`Row ${rowNum}: username is required`);
+                        if (!password) errors.push(`Row ${rowNum}: password is required`);
+                        if (!email) errors.push(`Row ${rowNum}: email is required`);
+                        if (role && !CSV_VALID_ROLES.includes(role)) errors.push(`Row ${rowNum}: invalid role "${role}"`);
+                        if (type && !CSV_VALID_TYPES.includes(type)) errors.push(`Row ${rowNum}: invalid type "${type}"`);
+                        if (username) {
+                            if (seenUsernames.has(username)) errors.push(`Row ${rowNum}: duplicate username "${username}" in file`);
+                            seenUsernames.add(username);
+                        }
                     });
-                    res.status(200).json({ success: true, message: `${count} users uploaded` });
+
+                    if (errors.length > 0) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `CSV validation failed (${errors.length} issue${errors.length > 1 ? 's' : ''}). No users were added.`,
+                            errors: errors.slice(0, 20)
+                        });
+                    }
+
+                    const client = await db.pool.connect();
+                    try {
+                        await client.query('BEGIN');
+                        for (const row of results) {
+                            const salt = await bcrypt.genSalt(10);
+                            const hashedPassword = await bcrypt.hash(row.password.trim(), salt);
+
+                            await client.query(
+                                `INSERT INTO users (username, email, password, role, member_type)
+                                 VALUES ($1, $2, $3, $4, $5)`,
+                                [
+                                    row.username.trim(),
+                                    row.email.trim(),
+                                    hashedPassword,
+                                    row.role.trim() || 'viewer',
+                                    row.type.trim() || 'none'
+                                ]
+                            );
+                        }
+                        await client.query('COMMIT');
+                        logAudit({
+                            userId: req.user.id, username: req.user.username, action: 'create',
+                            entityType: 'user', details: { bulk_import_count: results.length }, ip: req.ip
+                        });
+                        res.status(200).json({ success: true, message: `${results.length} users added successfully` });
+                    } catch (err) {
+                        await client.query('ROLLBACK');
+                        if (err.code === '23505') {
+                            return res.status(409).json({ success: false, message: 'One or more usernames/emails already exist. No users were added.' });
+                        }
+                        throw err;
+                    } finally {
+                        client.release();
+                    }
                 } catch (err) {
-                    await client.query('ROLLBACK');
-                    throw err;
-                } finally {
-                    client.release();
+                    console.error('Upload CSV error:', err);
+                    res.status(500).json({ success: false, message: 'Internal server error' });
                 }
             });
     } catch (err) {

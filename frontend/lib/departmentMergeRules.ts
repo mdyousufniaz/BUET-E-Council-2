@@ -1,5 +1,6 @@
-// Mirrors the consolidated rule set documented in MERGE_RULES.md (as of migration 010).
-// Rules are matched in order against the raw department string; the first match wins.
+// Mirrors the rule set documented in MERGE_RULES.md — that file is the source
+// of truth; keep this table in sync with it. Rules are matched in order
+// against the raw department string; the first match wins.
 //
 // JS `\b` is ASCII-only and never matches after Bangla characters (unlike Python's
 // Unicode-aware `\b`), so the two rules that relied on it (#24, #26) use an explicit
@@ -30,7 +31,7 @@ export const DEPARTMENT_MERGE_RULES: MergeRule[] = [
   { pattern: /স্থাপত্য ও পরিকল্পনা|স্হাপত্য ও পরিকল্পনা/, target: "Architecture" },
   { pattern: /নগর ও (অঞ্চল )?পরিকল্পনা|^পরিকল্পনা বিভাগ$|আই[,.\s]*উ[,.\s]*আর[,.\s]*পি|ইউ[,.\s]*আর[,.\s]*পি/, target: "Urban and Regional Planning" },
   { pattern: /পানিসম্পদ|পানি সম্পদ/, target: "Water Resources Engineering" },
-  { pattern: /কেমিকেল ইনজিনিয়ারিং|^কেমিকৌশল বিভাগ/, target: "Chemical Engineering" },
+  { pattern: /কেমিকেল ইনজিনিয়ারিং|^কেমিকৌশল(\s+বিজ্ঞান)?/, target: "Chemical Engineering" },
   { pattern: /সিভিল ইনজিনিয়ারিং|^পুরকৌশল (বিভাগ|বিভা|অনুষদ)|^প্রকৌশল অনুষদ$/, target: "Civil Engineering" },
   { pattern: /কেমিষ্ট্রি বিভাগ|^রসায়ন বিভাগ$/, target: "Chemistry" },
   { pattern: /^মানবিক বিভাগ$/, target: "Humanities" },
@@ -39,6 +40,8 @@ export const DEPARTMENT_MERGE_RULES: MergeRule[] = [
   { pattern: /^ত[.,\s]*ই[.,\s]*,?\s*কৌশল/, target: "Electrical and Electronic Engineering" },
   { pattern: new RegExp(`^পি[.,\\s]*এম[.,\\s]*আর[.,\\s]*ই${NOT_BANGLA_OR_END}`), target: "Petroleum and Mineral Resources Engineering" },
   { pattern: /^যন্ত্রকৌশল বিভাগ বাপ্রবি/, target: "Mechanical Engineering" },
+  { pattern: /বায়োমেডিক্যাল|বায়োমেডিকেল/, target: "Biomedical Engineering" },
+  { pattern: new RegExp(`^সি[.,\\s]*ই[.,\\s]*ই${NOT_BANGLA_OR_END}`), target: "Civil Engineering" },
 ];
 
 /**

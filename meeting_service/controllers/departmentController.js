@@ -130,18 +130,29 @@ const uploadCsv = async (req, res, next) => {
                 try {
                     await client.query('BEGIN');
                     let count = 0;
+                    let nextSerial = null;
                     for (const row of results) {
                         if (row.name_bangla && row.name_english && row.faculty_id) {
+                            let serial = row.serial ? parseInt(row.serial) : null;
+                            if (serial === null) {
+                                if (nextSerial === null) {
+                                    const maxSerialResult = await client.query('SELECT MAX(serial) as max_serial FROM departments');
+                                    nextSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+                                } else {
+                                    nextSerial++;
+                                }
+                                serial = nextSerial;
+                            }
                             await client.query(
-                                `INSERT INTO departments (name_bangla, name_english, alias_bangla, alias_english, faculty_id, serial) 
-                                 VALUES ($1, $2, $3, $4, $5, $6) 
-                                 ON CONFLICT (name_bangla) DO UPDATE 
-                                 SET name_english = EXCLUDED.name_english, 
-                                     alias_bangla = EXCLUDED.alias_bangla, 
-                                     alias_english = EXCLUDED.alias_english, 
+                                `INSERT INTO departments (name_bangla, name_english, alias_bangla, alias_english, faculty_id, serial)
+                                 VALUES ($1, $2, $3, $4, $5, $6)
+                                 ON CONFLICT (name_bangla) DO UPDATE
+                                 SET name_english = EXCLUDED.name_english,
+                                     alias_bangla = EXCLUDED.alias_bangla,
+                                     alias_english = EXCLUDED.alias_english,
                                      faculty_id = EXCLUDED.faculty_id,
                                      serial = EXCLUDED.serial`,
-                                [row.name_bangla, row.name_english, row.alias_bangla, row.alias_english, row.faculty_id, row.serial ? parseInt(row.serial) : null]
+                                [row.name_bangla, row.name_english, row.alias_bangla, row.alias_english, row.faculty_id, serial]
                             );
                             count++;
                         }

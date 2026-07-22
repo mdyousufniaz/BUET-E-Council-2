@@ -26,7 +26,8 @@ export default function ManageDepartmentsPage() {
     name_english: "",
     alias_bangla: "",
     alias_english: "",
-    faculty_id: ""
+    faculty_id: "",
+    serial: ""
   });
 
   const columns = [
@@ -73,7 +74,8 @@ export default function ManageDepartmentsPage() {
       name_english: department.name_english || "",
       alias_bangla: department.alias_bangla || "",
       alias_english: department.alias_english || "",
-      faculty_id: department.faculty_id || ""
+      faculty_id: department.faculty_id || "",
+      serial: department.serial != null ? String(department.serial) : ""
     });
     setIsModalOpen(true);
   };
@@ -94,15 +96,19 @@ export default function ManageDepartmentsPage() {
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...newDepartment,
+        serial: newDepartment.serial === "" ? undefined : parseInt(newDepartment.serial, 10)
+      };
       if (isEditMode && editingId) {
-        await api.put(`/departments/${editingId}`, newDepartment);
+        await api.put(`/departments/${editingId}`, payload);
       } else {
-        await api.post('/departments', newDepartment);
+        await api.post('/departments', payload);
       }
       setIsModalOpen(false);
       setIsEditMode(false);
       setEditingId(null);
-      setNewDepartment({ name_bangla: "", name_english: "", alias_bangla: "", alias_english: "", faculty_id: "" });
+      setNewDepartment({ name_bangla: "", name_english: "", alias_bangla: "", alias_english: "", faculty_id: "", serial: "" });
       mutate();
       toast.success(isEditMode ? 'Department updated successfully' : 'Department created successfully');
     } catch (err: any) {
@@ -128,7 +134,7 @@ export default function ManageDepartmentsPage() {
         onAdd={canEdit ? () => {
           setIsEditMode(false);
           setEditingId(null);
-          setNewDepartment({ name_bangla: "", name_english: "", alias_bangla: "", alias_english: "", faculty_id: "" });
+          setNewDepartment({ name_bangla: "", name_english: "", alias_bangla: "", alias_english: "", faculty_id: "", serial: "" });
           setIsModalOpen(true);
         } : undefined}
         onEdit={canEdit ? handleEdit : undefined}
@@ -166,11 +172,22 @@ export default function ManageDepartmentsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Faculty</label>
-                  <SearchableSelect 
+                  <SearchableSelect
                     options={faculties.map((f: any) => ({ value: f.id, label: f.name_english }))}
                     value={newDepartment.faculty_id}
                     onChange={(val) => setNewDepartment({...newDepartment, faculty_id: val})}
                     placeholder="Select Faculty..."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Serial No</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newDepartment.serial}
+                    onChange={e => setNewDepartment({...newDepartment, serial: e.target.value})}
+                    placeholder="Auto-assigned if left blank"
+                    className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm"
                   />
                 </div>
               </div>

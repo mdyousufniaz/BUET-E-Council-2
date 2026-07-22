@@ -19,6 +19,11 @@ const canCreate = requireRole('admin', 'superadmin', 'moderator', 'file_initiato
 const canWorkflow = requireRole('admin', 'superadmin', 'moderator', 'file_initiator');
 // Only admin/superadmin give final approval.
 const canApprove = requireRole('admin', 'superadmin');
+// Any authenticated role except viewer — used for the online meeting link,
+// which is editable any time regardless of meeting ownership/lock/workflow.
+// Same role set as canWorkflow, kept separate because it gates on "not a
+// viewer" rather than on taking part in the approval chain.
+const nonViewer = requireRole('admin', 'superadmin', 'moderator', 'file_initiator');
 
 router.use(authMiddleware);
 router.use(checkMeetingLock);
@@ -30,6 +35,7 @@ router.post('/bulk-import', canCreate, meetingController.bulkImportMeeting);
 router.get('/:id', meetingController.getMeetingById);
 router.get('/:id/history', adminOnly, meetingController.getMeetingHistory); // admin/superadmin only
 router.put('/:id', requireMeetingAuthor, meetingController.updateMeeting);
+router.put('/:id/online-link', nonViewer, meetingController.updateOnlineMeetingLink);
 router.delete('/:id', adminOnly, meetingController.deleteMeeting); // critical - admin-only
 
 // File approval escalation chain: initiator -> moderator -> admin -> approved.

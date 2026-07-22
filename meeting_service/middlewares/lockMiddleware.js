@@ -3,8 +3,9 @@ const CustomError = require('../errors/CustomError');
 
 const checkMeetingLock = async (req, res, next) => {
     // Only block mutating endpoints.
-    // Also explicitly do not block the lock toggle route itself!
-    if (req.method === 'GET' || req.path.endsWith('/lock')) {
+    // Also explicitly do not block the lock toggle route itself, nor the
+    // online meeting link (editable any time regardless of lock state)!
+    if (req.method === 'GET' || req.path.endsWith('/lock') || req.path.endsWith('/online-link')) {
         return next();
     }
 

@@ -52,10 +52,24 @@ const getAgendams = async (req, res, next) => {
 
 const createAgendam = async (req, res, next) => {
     try {
-        const { meeting_id, agenda_serial, content, is_executed, execution_status, is_suppli, tag_ids } = req.body;
+        const { meeting_id, agenda_serial, content, is_executed, execution_status, is_suppli, tag_ids, meeting_criteria } = req.body;
 
         if (!meeting_id) {
             return next(new CustomError('meeting_id is required', 400));
+        }
+
+        // "Emergency" is a creation-time-only choice that is never persisted on
+        // the meeting row, so the client re-sends it on every create call; cap
+        // enforcement here only ever sees one request at a time (no DB column
+        // to check against), which is the intended tradeoff for not storing it.
+        if (meeting_criteria === 'emergency' && !is_suppli) {
+            const existing = await db.query(
+                'SELECT COUNT(*) FROM agenda WHERE meeting_id = $1 AND is_suppli = false',
+                [meeting_id]
+            );
+            if (parseInt(existing.rows[0].count, 10) >= 1) {
+                return next(new CustomError('Emergency meetings can only have 1 agendum.', 400));
+            }
         }
 
         const result = await db.query(

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useConfirm } from "../../hooks/useConfirm";
 import { useAuth } from "../../hooks/useAuth";
 import { canAuthorMeeting } from "../../lib/meetingAccess";
-import { Lock, Unlock, Trash2 } from "lucide-react";
+import { Lock, Unlock, Trash2, Video } from "lucide-react";
 
 const typeOptions = [
   { value: "syndicate", label: "Syndicate" },
@@ -27,10 +27,11 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     meeting_title: meeting.meeting_title || "",
     meeting_date: meeting.meeting_date ? new Date(meeting.meeting_date).toISOString().split('T')[0] : "",
     type: meeting.type || "syndicate",
-    status: meeting.status || "draft"
+    status: meeting.status || "draft",
+    agenda_prefix: meeting.agenda_prefix || ""
   });
   const { confirm, ConfirmModal } = useConfirm();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, canEditOnlineLink } = useAuth();
   const canEdit = canAuthorMeeting(user, meeting);
   const router = useRouter();
   const isLocked = meeting.is_locked;
@@ -42,6 +43,8 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const [confirmTitle, setConfirmTitle] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [onlineMeetingLink, setOnlineMeetingLink] = useState(meeting.online_meeting_link || "");
 
   const handleDelete = () => {
     confirm("Delete Meeting", "Are you sure you want to delete this meeting? This action cannot be undone.", async () => {
@@ -62,11 +65,18 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
     if (e) e.preventDefault();
     setSaving(true);
     try {
-      const payload = {
-        ...formData,
-        meeting_date: new Date(formData.meeting_date).toISOString()
-      };
-      await api.put(`/meetings/${meeting.id}`, payload);
+      const requests = [];
+      if (!readOnly) {
+        const payload = {
+          ...formData,
+          meeting_date: new Date(formData.meeting_date).toISOString()
+        };
+        requests.push(api.put(`/meetings/${meeting.id}`, payload));
+      }
+      if (canEditOnlineLink) {
+        requests.push(api.put(`/meetings/${meeting.id}/online-link`, { online_meeting_link: onlineMeetingLink.trim() || null }));
+      }
+      await Promise.all(requests);
       mutate();
       toast.success("Meeting info updated successfully.");
     } catch (err: any) {
@@ -215,7 +225,44 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
             )}
           </div>
 
-          {!readOnly && (
+          <div className="space-y-1 col-span-1 md:col-span-2">
+            <label className="text-sm font-medium">প্রস্তাব নং (Agenda Prefix)</label>
+            <input
+              disabled={readOnly}
+              value={formData.agenda_prefix}
+              onChange={e => setFormData({...formData, agenda_prefix: e.target.value})}
+              className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm disabled:opacity-50"
+              placeholder="e.g., ২১০৬ (same for every agendum in this meeting; leave blank to show each agendum's own serial)"
+            />
+          </div>
+
+          <div className="space-y-1 col-span-1 md:col-span-2">
+            <label className="text-sm font-medium flex items-center gap-2">
+              <Video className="w-4 h-4" /> Online Meeting Link
+            </label>
+            {canEditOnlineLink ? (
+              <input
+                type="url"
+                value={onlineMeetingLink}
+                onChange={e => setOnlineMeetingLink(e.target.value)}
+                placeholder="e.g., https://meet.google.com/xxx-xxxx-xxx"
+                className="w-full px-3 py-2 bg-input/20 border border-input rounded-md focus:ring-1 focus:ring-ring text-sm"
+              />
+            ) : meeting.online_meeting_link ? (
+              <a
+                href={meeting.online_meeting_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-sm text-primary hover:underline break-all px-3 py-2"
+              >
+                {meeting.online_meeting_link}
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground italic px-3 py-2">No online meeting link set.</p>
+            )}
+          </div>
+
+          {(!readOnly || canEditOnlineLink) && (
             <div className="col-span-1 md:col-span-2 flex justify-end mt-4">
               <button
                 type="submit"

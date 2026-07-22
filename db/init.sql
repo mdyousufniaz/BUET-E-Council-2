@@ -11,7 +11,8 @@ CREATE TYPE user_role AS ENUM ('admin', 'superadmin', 'moderator', 'file_initiat
 -- Approval escalation stage of a meeting "file". Editing rights follow the
 -- stage: the file climbs initiator -> moderator -> admin, and an admin/superadmin
 -- finally approves it. admin/superadmin can always edit and can hand the file
--- back down the chain (see moderator_can_return on the meetings table).
+-- back down the chain, recording who did so in return_source so the receiver
+-- knows which reviewer to re-submit to.
 CREATE TYPE meeting_stage AS ENUM ('initiator', 'moderator', 'admin', 'approved');
 
 CREATE TYPE member_type_enum AS ENUM ('academic', 'syndicate', 'none');
@@ -119,6 +120,16 @@ CREATE TABLE meetings (
     is_locked BOOLEAN DEFAULT FALSE,
     type meeting_type NOT NULL,
     meeting_link VARCHAR(255),
+    -- Video-call link (Zoom/Meet/Teams) for attending remotely, editable any
+    -- time by any non-viewer role independent of the meeting's lock/workflow
+    -- state (see PUT /meetings/:id/online-link).
+    online_meeting_link VARCHAR(255),
+    -- Meeting-wide proposal-code prefix (e.g. "২১০৬"), the same for every
+    -- agendum in this meeting. Extracted from the first OCR-imported
+    -- agendum's leading "প্রস্তাব নং <4 Bangla digits>" marker, or entered
+    -- manually via Meeting Info. NULL means each agendum falls back to
+    -- showing its own agenda_serial (in Bangla digits) instead.
+    agenda_prefix VARCHAR(10),
     agenda_pdf_link VARCHAR(255),
     transcript VARCHAR(255),
     resolution_pdf_link VARCHAR(255),

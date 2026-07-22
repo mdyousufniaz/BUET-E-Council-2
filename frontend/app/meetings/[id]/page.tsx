@@ -6,10 +6,11 @@ import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
 import { fetcher } from "../../../lib/api";
 import { sanitizeHtml } from "../../../lib/sanitize";
+import { toBanglaDigits } from "../../../lib/banglaNumerals";
 import Header from "../../../components/Header";
 
 // Component to render a single agenda and its annexures
-function AgendaItem({ agenda, meetingStatus, highlightId, highlightType }: { agenda: any, meetingStatus: string, highlightId: string | null, highlightType: string | null }) {
+function AgendaItem({ agenda, agendaPrefix, meetingStatus, highlightId, highlightType }: { agenda: any, agendaPrefix: string | null, meetingStatus: string, highlightId: string | null, highlightType: string | null }) {
   const { data: annexuresRes } = useSWR(`/agendas/${agenda.id}/annexures`, fetcher);
   const annexures = annexuresRes?.data || [];
 
@@ -33,7 +34,7 @@ function AgendaItem({ agenda, meetingStatus, highlightId, highlightType }: { age
       className={`border border-border rounded-lg p-6 bg-card transition-shadow ${isAgendaHighlight && showHighlight ? 'ring-2 ring-primary' : ''}`}
     >
       <h3 className="font-semibold text-lg mb-4 text-foreground">
-        প্রস্তাব নং: {agenda.agenda_serial}
+        প্রস্তাব নং: {(agendaPrefix || '') + toBanglaDigits(agenda.agenda_serial)}
       </h3>
       <div
         className="prose prose-sm dark:prose-invert max-w-none mb-4 text-muted-foreground"
@@ -303,7 +304,7 @@ export default function PublicMeetingView() {
               <section>
                 <div className="space-y-6">
                   {agendas.map((agenda: any) => (
-                    <AgendaItem key={agenda.id} agenda={agenda} meetingStatus={meeting.status} highlightId={highlightId} highlightType={highlightType} />
+                    <AgendaItem key={agenda.id} agenda={agenda} agendaPrefix={meeting.agenda_prefix} meetingStatus={meeting.status} highlightId={highlightId} highlightType={highlightType} />
                   ))}
                 </div>
               </section>

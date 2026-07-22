@@ -14,7 +14,11 @@ const parseFilters = (req) => {
         : null;
     const dateFrom = req.query.dateFrom || null;
     const dateTo = req.query.dateTo || null;
-    return { q, scope, tags, dateFrom, dateTo };
+    const serialFromVal = req.query.serialFrom ? parseInt(req.query.serialFrom, 10) : null;
+    const serialToVal = req.query.serialTo ? parseInt(req.query.serialTo, 10) : null;
+    const serialFrom = Number.isNaN(serialFromVal) ? null : serialFromVal;
+    const serialTo = Number.isNaN(serialToVal) ? null : serialToVal;
+    return { q, scope, tags, dateFrom, dateTo, serialFrom, serialTo };
 };
 
 const resultRow = (row, matchType) => ({
@@ -42,15 +46,18 @@ const seenKey = (row) => `${row.agenda_id}:${row.matched_in}`;
 
 // Keyword bucket: Postgres full-text search over the plain-text mirrors,
 // with an ILIKE fallback for short/partial tokens that tsquery misses.
-const runKeywordSearch = async (tsqueryText, { scope, tags, dateFrom, dateTo }, seen) => {
+const runKeywordSearch = async (tsqueryText, { scope, tags, dateFrom, dateTo, serialFrom, serialTo }, seen) => {
     const filterSql = `
+        AND m.status = 'past'
         AND ($2::uuid[] IS NULL OR EXISTS (SELECT 1 FROM agenda_tags at2 WHERE at2.agenda_id = a.id AND at2.tag_id = ANY($2::uuid[])))
         AND ($3::date IS NULL OR m.meeting_date >= $3::date)
         AND ($4::date IS NULL OR m.meeting_date <= $4::date)
-        AND a.id <> ALL($5::uuid[])
+        AND ($5::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) >= $5::numeric)
+        AND ($6::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) <= $6::numeric)
+        AND a.id <> ALL($7::uuid[])
     `;
 
-    const agendaParams = [tsqueryText, tags, dateFrom, dateTo, idsFor(seen, 'agenda')];
+    const agendaParams = [tsqueryText, tags, dateFrom, dateTo, serialFrom, serialTo, idsFor(seen, 'agenda')];
     const agendaQuery = `
         SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
                'agenda' as matched_in,
@@ -67,7 +74,7 @@ const runKeywordSearch = async (tsqueryText, { scope, tags, dateFrom, dateTo }, 
     const queries = [db.query(agendaQuery, agendaParams)];
 
     if (scope === 'both') {
-        const resolutionParams = [tsqueryText, tags, dateFrom, dateTo, idsFor(seen, 'resolution')];
+        const resolutionParams = [tsqueryText, tags, dateFrom, dateTo, serialFrom, serialTo, idsFor(seen, 'resolution')];
         const resolutionQuery = `
             SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
                    'resolution' as matched_in,
@@ -214,12 +221,15 @@ const analyzeQuery = async (q) => {
 
 const runKeywordSearchRaw = async (queryText, filters) => {
     const filterSql = `
+        AND m.status = 'past'
         AND ($2::uuid[] IS NULL OR EXISTS (SELECT 1 FROM agenda_tags at2 WHERE at2.agenda_id = a.id AND at2.tag_id = ANY($2::uuid[])))
         AND ($3::date IS NULL OR m.meeting_date >= $3::date)
         AND ($4::date IS NULL OR m.meeting_date <= $4::date)
+        AND ($5::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) >= $5::numeric)
+        AND ($6::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) <= $6::numeric)
     `;
 
-    const agendaParams = [queryText, filters.tags, filters.dateFrom, filters.dateTo];
+    const agendaParams = [queryText, filters.tags, filters.dateFrom, filters.dateTo, filters.serialFrom, filters.serialTo];
     const agendaQuery = `
         SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
                'agenda' as matched_in,
@@ -235,7 +245,7 @@ const runKeywordSearchRaw = async (queryText, filters) => {
     const queries = [db.query(agendaQuery, agendaParams)];
 
     if (filters.scope === 'both') {
-        const resolutionParams = [queryText, filters.tags, filters.dateFrom, filters.dateTo];
+        const resolutionParams = [queryText, filters.tags, filters.dateFrom, filters.dateTo, filters.serialFrom, filters.serialTo];
         const resolutionQuery = `
             SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
                    'resolution' as matched_in,
@@ -257,9 +267,12 @@ const runKeywordSearchRaw = async (queryText, filters) => {
 const runSemanticSearchRaw = async (queryVector, filters) => {
     const vectorLiteral = JSON.stringify(queryVector);
     const filterSql = `
+        AND m.status = 'past'
         AND ($2::uuid[] IS NULL OR EXISTS (SELECT 1 FROM agenda_tags at2 WHERE at2.agenda_id = a.id AND at2.tag_id = ANY($2::uuid[])))
         AND ($3::date IS NULL OR m.meeting_date >= $3::date)
         AND ($4::date IS NULL OR m.meeting_date <= $4::date)
+        AND ($5::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) >= $5::numeric)
+        AND ($6::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) <= $6::numeric)
     `;
 
     const buildQuery = (chunkTable, matchedIn) => `
@@ -280,11 +293,11 @@ const runSemanticSearchRaw = async (queryVector, filters) => {
     `;
 
     const queries = [
-        db.query(buildQuery('agenda_chunks', 'agenda'), [vectorLiteral, filters.tags, filters.dateFrom, filters.dateTo])
+        db.query(buildQuery('agenda_chunks', 'agenda'), [vectorLiteral, filters.tags, filters.dateFrom, filters.dateTo, filters.serialFrom, filters.serialTo])
     ];
     if (filters.scope === 'both') {
         queries.push(
-            db.query(buildQuery('resolution_chunks', 'resolution'), [vectorLiteral, filters.tags, filters.dateFrom, filters.dateTo])
+            db.query(buildQuery('resolution_chunks', 'resolution'), [vectorLiteral, filters.tags, filters.dateFrom, filters.dateTo, filters.serialFrom, filters.serialTo])
         );
     }
 
@@ -296,7 +309,7 @@ const search = async (req, res, next) => {
     try {
         const filters = parseFilters(req);
         if (!filters.q) {
-            if (filters.tags && filters.tags.length > 0) {
+            if ((filters.tags && filters.tags.length > 0) || filters.serialFrom || filters.serialTo) {
                 // Cleanup search cache periodically
                 db.query("DELETE FROM search_cache WHERE created_at < NOW() - INTERVAL '24 hours'").catch(() => {});
 
@@ -307,12 +320,15 @@ const search = async (req, res, next) => {
                 }
 
                 const filterSql = `
+                    AND m.status = 'past'
                     AND ($1::uuid[] IS NULL OR EXISTS (SELECT 1 FROM agenda_tags at2 WHERE at2.agenda_id = a.id AND at2.tag_id = ANY($1::uuid[])))
                     AND ($2::date IS NULL OR m.meeting_date >= $2::date)
                     AND ($3::date IS NULL OR m.meeting_date <= $3::date)
+                    AND ($4::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) >= $4::numeric)
+                    AND ($5::numeric IS NULL OR (CASE WHEN m.title ~ '^\s*[0-9]+\s*$' THEN trim(m.title)::numeric ELSE NULL END) <= $5::numeric)
                 `;
 
-                const agendaParams = [filters.tags, filters.dateFrom, filters.dateTo];
+                const agendaParams = [filters.tags, filters.dateFrom, filters.dateTo, filters.serialFrom, filters.serialTo];
                 const agendaQuery = `
                     SELECT a.id as agenda_id, a.meeting_id, m.title, m.meeting_title, m.type, m.meeting_date, m.status,
                            'agenda' as matched_in,

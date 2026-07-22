@@ -49,17 +49,24 @@ export default function ManageUsersPage() {
   };
 
   const handleUploadCsv = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('File must be a .csv file');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     try {
-      await api.post('/auth/upload-csv', formData, {
+      const res = await api.post('/auth/upload-csv', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       mutate();
-      toast.success('CSV uploaded successfully!');
-    } catch (err) {
+      toast.success(res.data?.message || 'CSV uploaded successfully!');
+    } catch (err: any) {
       console.error(err);
-      toast.error('Failed to upload CSV');
+      const data = err.response?.data;
+      const detail = Array.isArray(data?.errors) && data.errors.length > 0 ? ` ${data.errors[0]}` : '';
+      toast.error((data?.message || 'Failed to upload CSV') + detail);
     }
   };
 

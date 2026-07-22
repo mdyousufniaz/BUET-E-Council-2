@@ -5,6 +5,14 @@ const storageService = require('../utils/storageService');
 const { sendMail } = require('../utils/mailer');
 const crypto = require('crypto');
 const { indexAgendaContent, indexResolutionContent } = require('../utils/searchIndexer');
+const { extractAgendaPrefix } = require('../utils/agendaSerial');
+
+// A viewer whose account is scoped to a specific member_type (academic/syndicate)
+// only sees meetings of that type; 'none' (and every non-viewer role) sees both.
+const viewerTypeRestriction = (user) =>
+    (user?.role === 'viewer' && ['academic', 'syndicate'].includes(user?.member_type))
+        ? user.member_type
+        : null;
 
 // An initiator hands the file to the moderator and then loses sight of it: they
 // must not be able to watch the moderator/admin review play out. So for them the
@@ -19,26 +27,52 @@ const displayStageFor = (user, stage) =>
         : stage;
 
 // Which meeting files a role is allowed to even see in the management list:
-//   admin/superadmin (and viewer, whose read-only browsing is unchanged): all
+//   admin/superadmin: all
 //   moderator: anything that has reached them or above, plus their own files and
 //              any they handed back down to an initiator
 //   file_initiator: only the files they created
-const visibilityFilter = (user) => {
+//   viewer: all (their read-only browsing is narrowed by type instead, below)
+// Returns SQL conditions rather than a full WHERE clause so it can be AND-ed
+// with the viewer type restriction. $-placeholders start at `from`.
+const visibilityConditions = (user, from) => {
     if (user?.role === 'file_initiator') {
-        return { clause: 'WHERE m.created_by = $1', params: [user.id] };
+        return { conditions: [`m.created_by = $${from}`], params: [user.id] };
     }
     if (user?.role === 'moderator') {
         return {
-            clause: "WHERE m.stage <> 'initiator' OR m.created_by = $1 OR m.return_source = 'moderator'",
+            conditions: [`(m.stage <> 'initiator' OR m.created_by = $${from} OR m.return_source = 'moderator')`],
             params: [user.id],
         };
     }
-    return { clause: '', params: [] };
+    return { conditions: [], params: [] };
+};
+
+// Both gates apply at once: the workflow-role visibility above, AND a viewer's
+// member_type restriction. They answer different questions (which files does
+// this role take part in, vs. which meeting types may this viewer read).
+const meetingListFilter = (user) => {
+    const conditions = [];
+    const params = [];
+
+    const restrictedType = viewerTypeRestriction(user);
+    if (restrictedType) {
+        params.push(restrictedType);
+        conditions.push(`m.type = $${params.length}`);
+    }
+
+    const visibility = visibilityConditions(user, params.length + 1);
+    conditions.push(...visibility.conditions);
+    params.push(...visibility.params);
+
+    return {
+        clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+        params,
+    };
 };
 
 const getMeetings = async (req, res, next) => {
     try {
-        const { clause, params } = visibilityFilter(req.user);
+        const { clause, params } = meetingListFilter(req.user);
         const result = await db.query(`
             SELECT m.*,
                    u.username AS creator_username,
@@ -83,6 +117,12 @@ const getMeetingById = async (req, res, next) => {
         }
 
         const meeting = result.rows[0];
+
+        const restrictedType = viewerTypeRestriction(req.user);
+        if (restrictedType && meeting.type !== restrictedType) {
+            return next(new CustomError('You do not have access to this meeting.', 403));
+        }
+
         meeting.date = new Date(meeting.meeting_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         meeting.display_stage = displayStageFor(req.user, meeting.stage);
 
@@ -200,10 +240,10 @@ const createMeeting = async (req, res, next) => {
 const updateMeeting = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript } = req.body;
+        const { title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, agenda_prefix } = req.body;
 
         const result = await db.query(
-            `UPDATE meetings SET 
+            `UPDATE meetings SET
                 title = COALESCE($1, title),
                 meeting_title = COALESCE($2, meeting_title),
                 description = COALESCE($3, description),
@@ -214,13 +254,33 @@ const updateMeeting = async (req, res, next) => {
                 meeting_link = COALESCE($8, meeting_link),
                 agenda_pdf_link = COALESCE($9, agenda_pdf_link),
                 resolution_pdf_link = COALESCE($10, resolution_pdf_link),
-                transcript = COALESCE($11, transcript)
-             WHERE id = $12 RETURNING *`,
-            [title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, id]
+                transcript = COALESCE($11, transcript),
+                agenda_prefix = COALESCE($12, agenda_prefix)
+             WHERE id = $13 RETURNING *`,
+            [title, meeting_title, description, conclusion, meeting_date, type, status, meeting_link, agenda_pdf_link, resolution_pdf_link, transcript, agenda_prefix, id]
         );
 
         if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));
         res.status(200).json({ success: true, message: 'Meeting updated', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Separate from updateMeeting so any non-viewer role can set/change this any
+// time, regardless of meeting ownership, lock, or approval workflow state.
+const updateOnlineMeetingLink = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { online_meeting_link } = req.body;
+
+        const result = await db.query(
+            'UPDATE meetings SET online_meeting_link = $1 WHERE id = $2 RETURNING *',
+            [online_meeting_link || null, id]
+        );
+
+        if (result.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        res.status(200).json({ success: true, message: 'Online meeting link updated', data: result.rows[0] });
     } catch (error) {
         next(error);
     }
@@ -996,14 +1056,21 @@ const bulkImportMeeting = async (req, res, next) => {
     const client = await db.pool.connect();
     try {
         const { meeting, presentees, agendas } = req.body;
-        
+
+        // The proposal-code prefix is meeting-wide (same for every agendum),
+        // so it's only ever extracted from the first imported agendum.
+        const hasAgendas = agendas && Array.isArray(agendas) && agendas.length > 0;
+        const firstAgendaExtraction = hasAgendas ? extractAgendaPrefix(agendas[0].content) : { agendaPrefix: null, content: null };
+
         await client.query('BEGIN');
 
         // 1. Insert Meeting
         const meetingResult = await client.query(
             `INSERT INTO meetings
-            (title, meeting_title, meeting_date, type, status, description, president, conclusion, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            -- No approval_status: that column is gone, replaced by stage, whose
+            -- 'initiator' default is the equivalent of the old 'draft'.
+            (title, meeting_title, meeting_date, type, status, description, president, conclusion, created_by, agenda_prefix)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id`,
             [
                 meeting.title,
@@ -1014,10 +1081,11 @@ const bulkImportMeeting = async (req, res, next) => {
                 meeting.description,
                 meeting.president,
                 meeting.conclusion,
-                req.user?.id || null
+                req.user?.id || null,
+                firstAgendaExtraction.agendaPrefix
             ]
         );
-        
+
         const meetingId = meetingResult.rows[0].id;
 
         // 2. Insert Presentees
@@ -1045,23 +1113,25 @@ const bulkImportMeeting = async (req, res, next) => {
         }
 
         // 3. Insert Agendas
-        if (agendas && Array.isArray(agendas)) {
-            for (const a of agendas) {
+        if (hasAgendas) {
+            for (const [index, a] of agendas.entries()) {
+                // Only the first agendum had its marker stripped (if any); the rest use their content as-is.
+                const content = index === 0 ? firstAgendaExtraction.content : a.content;
                 const res = await client.query(
-                    `INSERT INTO agenda 
-                    (content, resolution, agenda_serial, meeting_id) 
+                    `INSERT INTO agenda
+                    (content, resolution, agenda_serial, meeting_id)
                     VALUES ($1, $2, $3, $4) RETURNING id`,
                     [
-                        a.content,
+                        content,
                         a.resolution,
                         a.agenda_serial,
                         meetingId
                     ]
                 );
                 const agendaId = res.rows[0].id;
-                
-                if (a.content) {
-                    indexAgendaContent(agendaId, a.content).catch(() => {});
+
+                if (content) {
+                    indexAgendaContent(agendaId, content).catch(() => {});
                 }
                 if (a.resolution) {
                     indexResolutionContent(agendaId, a.resolution).catch(() => {});
@@ -1085,6 +1155,7 @@ module.exports = {
     getMeetingHistory,
     createMeeting,
     updateMeeting,
+    updateOnlineMeetingLink,
     deleteMeeting,
     submitMeeting,
     approveMeeting,

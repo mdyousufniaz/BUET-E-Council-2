@@ -37,5 +37,9 @@ export function useAuth() {
     canManageTemplates: isAdmin || isModerator || isInitiator,
     // Who may act as a reviewer somewhere in the escalation chain.
     canReview: isAdmin || isModerator,
+    // Any authenticated role except viewer — e.g. the online meeting link,
+    // which any staff role can set/change any time regardless of meeting
+    // ownership/lock/workflow state.
+    canEditOnlineLink: !!role && role !== 'viewer',
   };
 }

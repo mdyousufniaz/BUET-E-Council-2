@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import SearchableSelect from "../SearchableSelect";
 import { resolveDepartmentByMergeRule } from "../../lib/departmentMergeRules";
+import { resolveOfficeByMergeRule } from "../../lib/officeMergeRules";
 
 interface ImportItem {
   key: string;
@@ -88,7 +89,12 @@ export default function JsonImportDialog({ onClose, onImportSuccess }: { onClose
 
       Array.from(offs).forEach(o => {
         const found = offices.find((existing: any) => existing.name_english?.toLowerCase() === o.toLowerCase() || existing.name_bangla?.toLowerCase() === o.toLowerCase());
-        if (found) officeMapping[o] = found.id;
+        if (found) {
+          officeMapping[o] = found.id;
+          return;
+        }
+        const mergeRuleMatch = resolveOfficeByMergeRule(o, offices);
+        if (mergeRuleMatch) officeMapping[o] = mergeRuleMatch;
         else unresolvedOffices.push(o);
       });
 
