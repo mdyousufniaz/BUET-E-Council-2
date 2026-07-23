@@ -32,7 +32,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
   const { data: rolesRes } = useSWR('/auth/roles', fetcher);
   const allRoles: any[] = rolesRes?.data || [];
 
-  const userLevel = user?.role_level !== null && user?.role_level !== undefined ? Number(user.role_level) : 999;
+  const userLevel = user?.role_level !== null && user?.role_level !== undefined ? Number(user.role_level) : (isAdmin ? 999999 : 999999);
   const lowerRoles = allRoles.filter((r: any) => isAdmin || Number(r.level) < userLevel);
 
   const [selectedTargetLevel, setSelectedTargetLevel] = useState<string>("");

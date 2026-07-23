@@ -1263,7 +1263,7 @@ const handoverAgenda = async (req, res, next) => {
             return next(new CustomError('You do not have permission to handover agenda for this meeting.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET agenda_handover_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Agenda handed over to upper levels successfully.' });
     } catch (err) {
@@ -1285,7 +1285,7 @@ const handoverSuppliAgenda = async (req, res, next) => {
             return next(new CustomError('You do not have permission to handover supplementary agenda.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET suppli_agenda_handover_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Supplementary agenda handed over to upper levels.' });
     } catch (err) {
@@ -1304,7 +1304,7 @@ const lockSuppliAgenda = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock supplementary agenda.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET suppli_agenda_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Supplementary agenda locked successfully.' });
     } catch (err) {
@@ -1344,7 +1344,7 @@ const handoverResolution = async (req, res, next) => {
             return next(new CustomError('You do not have permission to handover resolution for this meeting.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET resolution_handover_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Resolution handed over to upper levels successfully.' });
     } catch (err) {
@@ -1363,7 +1363,7 @@ const lockAgenda = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock agenda.', 403));
         }
 
-        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET agenda_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Agenda locked successfully.' });
     } catch (err) {
@@ -1400,7 +1400,7 @@ const lockResolution = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock resolution.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET resolution_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Resolution locked successfully.' });
     } catch (err) {
@@ -1437,7 +1437,7 @@ const lockMeeting = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock meeting.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET meeting_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Meeting locked successfully.' });
     } catch (err) {
@@ -1474,7 +1474,7 @@ const lockInvitees = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock invitees.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET invitees_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Invitees locked successfully.' });
     } catch (err) {
@@ -1511,7 +1511,7 @@ const lockPresentees = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock presentees.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET presentees_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Presentees locked successfully.' });
     } catch (err) {
@@ -1548,7 +1548,7 @@ const lockConclusion = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock conclusion.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET conclusion_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Conclusion locked successfully.' });
     } catch (err) {
@@ -1719,7 +1719,7 @@ const handoverResolutionStatus = async (req, res, next) => {
             return next(new CustomError('You do not have permission to handover resolution status.', 403));
         }
 
-        const levelToSet = req.user.role === 'admin' ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET resolution_status_handover_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Resolution Status handed over to upper levels.' });
     } catch (err) {
@@ -1738,7 +1738,7 @@ const lockResolutionStatus = async (req, res, next) => {
             return next(new CustomError('You do not have permission to lock resolution status.', 403));
         }
 
-        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999 : req.user.role_level;
+        const levelToSet = (req.user.role === 'admin' || req.user.role === 'superadmin') ? 999999 : req.user.role_level;
         await db.query('UPDATE meetings SET resolution_status_locked_level = $1 WHERE id = $2', [levelToSet, id]);
         res.status(200).json({ success: true, message: 'Resolution Status locked successfully.' });
     } catch (err) {

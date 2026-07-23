@@ -81,6 +81,10 @@ const calculateMeetingAccess = (meeting, user) => {
         canHandoverSuppliAgenda: false,
         canHandoverResolution: false,
         canHandoverResolutionStatus: false,
+        canSendBackAgenda: false,
+        canSendBackSuppliAgenda: false,
+        canSendBackResolution: false,
+        canSendBackResolutionStatus: false,
         canLockAgenda: false,
         canLockSuppliAgenda: false,
         canLockResolution: false,
@@ -101,7 +105,7 @@ const calculateMeetingAccess = (meeting, user) => {
 
     if (!user) return emptyAccess;
 
-    const isAdmin = user.role === 'admin';
+    const isAdmin = user.role === 'admin' || user.role === 'superadmin';
     if (isAdmin) {
         return {
             canEditMeeting: true,
@@ -117,6 +121,10 @@ const calculateMeetingAccess = (meeting, user) => {
             canHandoverSuppliAgenda: true,
             canHandoverResolution: true,
             canHandoverResolutionStatus: true,
+            canSendBackAgenda: meeting?.agenda_handover_level !== null && meeting?.agenda_handover_level !== undefined,
+            canSendBackSuppliAgenda: meeting?.suppli_agenda_handover_level !== null && meeting?.suppli_agenda_handover_level !== undefined,
+            canSendBackResolution: meeting?.resolution_handover_level !== null && meeting?.resolution_handover_level !== undefined,
+            canSendBackResolutionStatus: meeting?.resolution_status_handover_level !== null && meeting?.resolution_status_handover_level !== undefined,
             canLockAgenda: true,
             canLockSuppliAgenda: true,
             canLockResolution: true,
@@ -140,7 +148,7 @@ const calculateMeetingAccess = (meeting, user) => {
         return emptyAccess;
     }
 
-    const userLevel = parseInt(user.role_level, 10);
+    const userLevel = isAdmin ? 999999 : parseInt(user.role_level, 10);
     const isCompleted = meeting.is_completed === true;
 
     const getLock = (lvl) => (lvl !== null && lvl !== undefined ? parseInt(lvl, 10) : null);

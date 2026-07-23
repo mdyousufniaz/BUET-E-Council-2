@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useConfirm } from "../../../hooks/useConfirm";
 import { useAuth } from "../../../hooks/useAuth";
 import { Users, Shield, Settings, Plus, Pencil, Trash2, Check } from "lucide-react";
+import DataTable from "../../../components/DataTable";
 
 export default function RoleAndUserManagementPage() {
   const router = useRouter();
@@ -169,6 +170,22 @@ export default function RoleAndUserManagementPage() {
         toast.error(err.response?.data?.message || "Failed to delete role.");
       }
     });
+  };
+
+  const handleRoleReorder = async (newOrder: any[]) => {
+    try {
+      const existingLevels = roles.map((r: any) => Number(r.level)).sort((a, b) => b - a);
+      const reorderedItems = newOrder.map((r: any, idx: number) => ({
+        id: r.id,
+        level: existingLevels[idx] !== undefined ? existingLevels[idx] : (newOrder.length - idx)
+      }));
+      await api.put('/auth/roles/reorder', { items: reorderedItems });
+      toast.success("Role levels reordered successfully.");
+      mutateRoles();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to reorder role levels.");
+    }
   };
 
   const openUserCreateModal = () => {
@@ -346,67 +363,24 @@ export default function RoleAndUserManagementPage() {
       {/* ----------------- TAB 2: ROLE LEVELS ----------------- */}
       {activeTab === 'roles' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" /> Editor Roles ({roles.length})
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Higher level roles have full edit access over lower level roles.
-              </p>
-            </div>
-            <button
-              onClick={openRoleCreateModal}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Create Role Title
-            </button>
-          </div>
-
-          <div className="bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted/50 border-b border-border text-muted-foreground font-medium">
-                <tr>
-                  <th className="p-4">Role Title</th>
-                  <th className="p-4">Created Date</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {roles.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 font-semibold text-foreground">{r.level_title}</td>
-                    <td className="p-4 text-muted-foreground text-xs">
-                      {new Date(r.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                      <button
-                        onClick={() => openRoleEditModal(r)}
-                        className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
-                        title="Edit Role Title"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRole(r)}
-                        className="p-1.5 text-destructive/80 hover:text-destructive rounded-md hover:bg-destructive/10 transition-colors"
-                        title="Delete Role Title"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {roles.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="p-8 text-center text-muted-foreground">
-                      No custom role titles created yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              { key: "level_title", label: "Role Title" },
+              { key: "level", label: "Access Level" },
+              { key: "created_at_formatted", label: "Created Date" }
+            ]}
+            data={roles.map((r: any) => ({
+              ...r,
+              created_at_formatted: r.created_at ? new Date(r.created_at).toLocaleDateString() : ''
+            }))}
+            title={`Editor Roles (${roles.length})`}
+            searchable
+            searchPlaceholder="Search roles..."
+            onAdd={isAdmin || (currentUser?.role_level !== null && currentUser?.role_level !== undefined) ? openRoleCreateModal : undefined}
+            onEdit={openRoleEditModal}
+            onDelete={handleDeleteRole}
+            onReorder={isAdmin || (currentUser?.role_level !== null && currentUser?.role_level !== undefined) ? handleRoleReorder : undefined}
+          />
         </div>
       )}
 

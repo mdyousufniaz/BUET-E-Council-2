@@ -782,7 +782,7 @@ router.put('/me', requireAuth, async (req, res) => {
 // -------------------------------------------------------------
 router.get('/roles', requireAuth, async (req, res) => {
     try {
-        const result = await db.query('SELECT id, level, level_title, created_at FROM roles ORDER BY level ASC');
+        const result = await db.query('SELECT id, level, level_title, created_at FROM roles ORDER BY level DESC');
         res.status(200).json({ success: true, data: result.rows });
     } catch (err) {
         console.error('Get roles error:', err);
@@ -821,6 +821,44 @@ router.post('/roles', requireAuth, async (req, res) => {
             return res.status(409).json({ success: false, message: 'Level or Level Title already exists' });
         }
         console.error('Create role error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+router.put('/roles/reorder', requireAuth, async (req, res) => {
+    try {
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+        if (!isAdmin && req.user.role_level === null) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+
+        const { items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'items array is required' });
+        }
+
+        const currentRolesRes = await db.query('SELECT id, level FROM roles');
+        const roleMap = new Map(currentRolesRes.rows.map(r => [r.id, parseInt(r.level, 10)]));
+        const sortedLevels = Array.from(roleMap.values()).sort((a, b) => b - a);
+
+        await db.query('BEGIN');
+
+        for (let i = 0; i < items.length; i++) {
+            await db.query('UPDATE roles SET level = $1 WHERE id = $2', [-(i + 999999), items[i].id]);
+        }
+
+        for (let i = 0; i < items.length; i++) {
+            const targetLevel = items[i].level !== undefined && items[i].level !== null
+                ? parseInt(items[i].level, 10)
+                : (sortedLevels[i] !== undefined ? sortedLevels[i] : (items.length - i));
+            await db.query('UPDATE roles SET level = $1 WHERE id = $2', [targetLevel, items[i].id]);
+        }
+
+        await db.query('COMMIT');
+        res.status(200).json({ success: true, message: 'Roles reordered successfully' });
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error('Reorder roles error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });

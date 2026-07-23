@@ -60,7 +60,7 @@ export interface WorkflowMeeting {
 }
 
 export const isAdminRole = (user?: WorkflowUser | null): boolean =>
-  user?.role === 'admin';
+  user?.role === 'admin' || user?.role === 'superadmin';
 
 export const isCompleted = (meeting?: WorkflowMeeting | null): boolean =>
   meeting?.is_completed === true;
