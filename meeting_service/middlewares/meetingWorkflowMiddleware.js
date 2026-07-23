@@ -148,13 +148,13 @@ const calculateMeetingAccess = (meeting, user) => {
 
     // Meeting editing check (Locking at L removes edit rights from < L, so >= L retains access)
     const meetingLock = getLock(meeting.meeting_locked_level);
-    const canEditMeeting = !isCompleted && (meetingLock === null || userLevel >= meetingLock);
+    const canEditMeeting = meetingLock === null || userLevel >= meetingLock;
     const canUnlockMeeting = meetingLock === null || userLevel >= meetingLock;
 
     // Agenda editing check (Handover: <= L loses access; Lock: < L loses access)
     const agendaHandover = getHandover(meeting.agenda_handover_level);
     const agendaLock = getLock(meeting.agenda_locked_level);
-    let canEditAgenda = !isCompleted;
+    let canEditAgenda = true;
     if (agendaHandover !== null && userLevel <= agendaHandover) canEditAgenda = false;
     if (agendaLock !== null && userLevel < agendaLock) canEditAgenda = false;
     const canUnlockAgenda = agendaLock === null || userLevel >= agendaLock;
@@ -162,7 +162,7 @@ const calculateMeetingAccess = (meeting, user) => {
     // Supplementary Agenda editing check
     const suppliHandover = getHandover(meeting.suppli_agenda_handover_level);
     const suppliLock = getLock(meeting.suppli_agenda_locked_level);
-    let canEditSuppliAgenda = !isCompleted;
+    let canEditSuppliAgenda = true;
     if (suppliHandover !== null && userLevel <= suppliHandover) canEditSuppliAgenda = false;
     if (suppliLock !== null && userLevel < suppliLock) canEditSuppliAgenda = false;
     const canUnlockSuppliAgenda = suppliLock === null || userLevel >= suppliLock;
@@ -170,7 +170,7 @@ const calculateMeetingAccess = (meeting, user) => {
     // Resolution editing check
     const resHandover = getHandover(meeting.resolution_handover_level);
     const resLock = getLock(meeting.resolution_locked_level);
-    let canEditResolution = !isCompleted;
+    let canEditResolution = true;
     if (resHandover !== null && userLevel <= resHandover) canEditResolution = false;
     if (resLock !== null && userLevel < resLock) canEditResolution = false;
     const canUnlockResolution = resLock === null || userLevel >= resLock;
@@ -178,24 +178,24 @@ const calculateMeetingAccess = (meeting, user) => {
     // Resolution Status editing check
     const resStatusHandover = getHandover(meeting.resolution_status_handover_level);
     const resStatusLock = getLock(meeting.resolution_status_locked_level);
-    let canEditResolutionStatus = !isCompleted;
+    let canEditResolutionStatus = true;
     if (resStatusHandover !== null && userLevel <= resStatusHandover) canEditResolutionStatus = false;
     if (resStatusLock !== null && userLevel < resStatusLock) canEditResolutionStatus = false;
     const canUnlockResolutionStatus = resStatusLock === null || userLevel >= resStatusLock;
 
     // Invitees editing check
     const inviteesLock = getLock(meeting.invitees_locked_level);
-    const canEditInvitees = !isCompleted && (inviteesLock === null || userLevel >= inviteesLock);
+    const canEditInvitees = inviteesLock === null || userLevel >= inviteesLock;
     const canUnlockInvitees = inviteesLock === null || userLevel >= inviteesLock;
 
     // Presentees editing check
     const presenteesLock = getLock(meeting.presentees_locked_level);
-    const canEditPresentees = !isCompleted && (presenteesLock === null || userLevel >= presenteesLock);
+    const canEditPresentees = presenteesLock === null || userLevel >= presenteesLock;
     const canUnlockPresentees = presenteesLock === null || userLevel >= presenteesLock;
 
     // Conclusion editing check
     const conclusionLock = getLock(meeting.conclusion_locked_level);
-    const canEditConclusion = !isCompleted && (conclusionLock === null || userLevel >= conclusionLock);
+    const canEditConclusion = conclusionLock === null || userLevel >= conclusionLock;
     const canUnlockConclusion = conclusionLock === null || userLevel >= conclusionLock;
 
     // Send Back checks: Only strictly higher levels (> handoverLevel) or admin can send back a handed-over item.

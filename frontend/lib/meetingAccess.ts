@@ -84,7 +84,6 @@ export const canSendBack = (user?: WorkflowUser | null, handoverLevel?: number |
 export const canEditMeeting = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditMeeting;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -102,7 +101,6 @@ export const canOperateMeeting = canEditMeeting;
 export const canEditAgenda = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditAgenda;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -120,7 +118,6 @@ export const canEditAgenda = (user?: WorkflowUser | null, meeting?: WorkflowMeet
 export const canEditSuppliAgenda = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditSuppliAgenda;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -138,7 +135,6 @@ export const canEditSuppliAgenda = (user?: WorkflowUser | null, meeting?: Workfl
 export const canEditResolution = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditResolution;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -156,7 +152,6 @@ export const canEditResolution = (user?: WorkflowUser | null, meeting?: Workflow
 export const canEditResolutionStatus = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditResolutionStatus;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -174,7 +169,6 @@ export const canEditResolutionStatus = (user?: WorkflowUser | null, meeting?: Wo
 export const canEditInvitees = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditInvitees;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -189,7 +183,6 @@ export const canEditInvitees = (user?: WorkflowUser | null, meeting?: WorkflowMe
 export const canEditPresentees = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditPresentees;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
@@ -204,7 +197,6 @@ export const canEditPresentees = (user?: WorkflowUser | null, meeting?: Workflow
 export const canEditConclusion = (user?: WorkflowUser | null, meeting?: WorkflowMeeting | null): boolean => {
   if (!user || !meeting) return false;
   if (meeting.access) return meeting.access.canEditConclusion;
-  if (isCompleted(meeting)) return false;
   if (isAdminRole(user)) return true;
   if (user.role === 'viewer') return false;
   if (user.role_level === null || user.role_level === undefined) return false;
