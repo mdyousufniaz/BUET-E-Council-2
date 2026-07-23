@@ -161,7 +161,7 @@ export default function ManageMembersPage() {
   if (error) return <div className="p-8">Failed to load members</div>;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
       <ConfirmModal />
       <DataTable
         key={`${designationFilter}-${departmentFilter}-${officeFilter}-${typeFilter}`}

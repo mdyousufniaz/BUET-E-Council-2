@@ -32,9 +32,8 @@ export default function ManageDepartmentsPage() {
 
   const columns = [
     { key: "serial", label: "Serial No" },
-    { key: "name_english", label: "Department Name" },
-    { key: "alias_english", label: "Alias" },
-    { key: "faculty_name", label: "Faculty" },
+    { key: "name_bangla", label: "Department Name (Bangla)" },
+    { key: "faculty_name_bangla", label: "Faculty (Bangla)" },
   ];
 
   const handleReorder = async (newOrder: any[]) => {
@@ -119,12 +118,18 @@ export default function ManageDepartmentsPage() {
   if (error) return <div className="p-8">Failed to load departments</div>;
   if (!response) return <div className="p-8">Loading...</div>;
 
+  const departmentsData = (response?.data || []).map((d: any, idx: number) => ({
+    ...d,
+    serial: d.serial ?? idx + 1,
+    faculty_name_bangla: d.faculty_name_bangla || d.faculty_name || ""
+  }));
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="space-y-6">
       <ConfirmModal />
       <DataTable
         columns={columns}
-        data={response.data || []}
+        data={departmentsData}
         title="Manage Departments"
         searchable
         searchPlaceholder="Search departments..."

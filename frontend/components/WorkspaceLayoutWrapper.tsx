@@ -43,7 +43,7 @@ export default function WorkspaceLayoutWrapper({ children }: { children: React.R
   return (
     <div className="flex flex-1 overflow-hidden">
       <Sidebar type="admin" role={role} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8 bg-background">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-background">
         <SidebarToggleButton onClick={() => setSidebarOpen(true)} />
         {children}
       </main>

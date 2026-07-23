@@ -114,7 +114,7 @@ export default function ManageTemplatesPage() {
   if (!response) return <div className="p-8 text-muted-foreground animate-pulse">Loading templates...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6">
       <ConfirmModal />
       <div className="flex justify-between items-center mb-8">
         <div>

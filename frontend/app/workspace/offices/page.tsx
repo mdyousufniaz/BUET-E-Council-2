@@ -100,7 +100,7 @@ export default function ManageOfficesPage() {
   if (!response) return <div className="p-8">Loading...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="space-y-6">
       <ConfirmModal />
       <DataTable
         columns={columns}

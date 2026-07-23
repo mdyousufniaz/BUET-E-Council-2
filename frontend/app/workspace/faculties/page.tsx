@@ -99,12 +99,17 @@ export default function ManageFacultiesPage() {
   if (error) return <div className="p-8">Failed to load faculties</div>;
   if (!response) return <div className="p-8">Loading...</div>;
 
+  const facultiesData = (response?.data || []).map((f: any, idx: number) => ({
+    ...f,
+    serial: f.serial ?? idx + 1
+  }));
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="space-y-6">
       <ConfirmModal />
       <DataTable
         columns={columns}
-        data={response.data || []}
+        data={facultiesData}
         title="Manage Faculties"
         searchable
         searchPlaceholder="Search faculties..."

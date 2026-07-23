@@ -115,7 +115,7 @@ export default function ManageMeetingsPage() {
     });
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="space-y-6">
       <ConfirmModal />
 
       <DataTable

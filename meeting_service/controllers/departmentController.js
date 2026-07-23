@@ -7,7 +7,7 @@ const { Readable } = require('stream');
 const getDepartments = async (req, res, next) => {
     try {
         const result = await db.query(`
-            SELECT d.*, f.name_english as faculty_name 
+            SELECT d.*, f.name_english as faculty_name, f.name_bangla as faculty_name_bangla 
             FROM departments d
             LEFT JOIN faculties f ON d.faculty_id = f.id
             ORDER BY d.serial ASC NULLS LAST, d.created_at DESC
@@ -27,9 +27,18 @@ const createDepartment = async (req, res, next) => {
         }
 
         let assignedSerial = serial;
-        if (!assignedSerial) {
+        if (!assignedSerial && assignedSerial !== 0) {
             const maxSerialResult = await db.query('SELECT MAX(serial) as max_serial FROM departments');
             assignedSerial = (maxSerialResult.rows[0].max_serial || 0) + 1;
+        } else {
+            assignedSerial = parseInt(assignedSerial, 10);
+        }
+
+        await db.query('BEGIN');
+
+        const taken = await db.query('SELECT id FROM departments WHERE serial = $1', [assignedSerial]);
+        if (taken.rows.length > 0) {
+            await db.query('UPDATE departments SET serial = serial + 1 WHERE serial >= $1', [assignedSerial]);
         }
 
         const result = await db.query(
@@ -37,8 +46,11 @@ const createDepartment = async (req, res, next) => {
             [name_bangla, name_english, alias_bangla, alias_english, faculty_id, assignedSerial]
         );
 
+        await db.query('COMMIT');
+
         res.status(201).json({ success: true, message: 'Department created', data: result.rows[0] });
     } catch (error) {
+        await db.query('ROLLBACK').catch(() => {});
         if (error.code === '23505') {
             return next(new CustomError('Department names/aliases must be unique', 409));
         }
@@ -51,24 +63,59 @@ const updateDepartment = async (req, res, next) => {
         const { id } = req.params;
         const { name_bangla, name_english, alias_bangla, alias_english, faculty_id, serial } = req.body;
 
-        const result = await db.query(
-            `UPDATE departments 
-             SET name_bangla = COALESCE($1, name_bangla), 
-                 name_english = COALESCE($2, name_english),
-                 alias_bangla = COALESCE($3, alias_bangla),
-                 alias_english = COALESCE($4, alias_english),
-                 faculty_id = COALESCE($5, faculty_id),
-                 serial = COALESCE($6, serial)
-             WHERE id = $7 RETURNING *`,
-            [name_bangla, name_english, alias_bangla, alias_english, faculty_id, serial, id]
-        );
+        await db.query('BEGIN');
 
-        if (result.rows.length === 0) {
-            return next(new CustomError('Department not found', 404));
+        if (serial !== undefined && serial !== null && serial !== '') {
+            const targetSerial = parseInt(serial, 10);
+            const currentDep = await db.query('SELECT serial FROM departments WHERE id = $1', [id]);
+            const currentSerial = currentDep.rows[0]?.serial;
+
+            if (currentSerial !== targetSerial) {
+                const taken = await db.query('SELECT id FROM departments WHERE serial = $1 AND id != $2', [targetSerial, id]);
+                if (taken.rows.length > 0) {
+                    await db.query('UPDATE departments SET serial = serial + 1 WHERE serial >= $1 AND id != $2', [targetSerial, id]);
+                }
+            }
+
+            const result = await db.query(
+                `UPDATE departments 
+                 SET name_bangla = COALESCE($1, name_bangla), 
+                     name_english = COALESCE($2, name_english),
+                     alias_bangla = COALESCE($3, alias_bangla),
+                     alias_english = COALESCE($4, alias_english),
+                     faculty_id = COALESCE($5, faculty_id),
+                     serial = $6
+                 WHERE id = $7 RETURNING *`,
+                [name_bangla, name_english, alias_bangla, alias_english, faculty_id, targetSerial, id]
+            );
+
+            await db.query('COMMIT');
+
+            if (result.rows.length === 0) {
+                return next(new CustomError('Department not found', 404));
+            }
+            return res.status(200).json({ success: true, message: 'Department updated', data: result.rows[0] });
+        } else {
+            const result = await db.query(
+                `UPDATE departments 
+                 SET name_bangla = COALESCE($1, name_bangla), 
+                     name_english = COALESCE($2, name_english),
+                     alias_bangla = COALESCE($3, alias_bangla),
+                     alias_english = COALESCE($4, alias_english),
+                     faculty_id = COALESCE($5, faculty_id)
+                 WHERE id = $6 RETURNING *`,
+                [name_bangla, name_english, alias_bangla, alias_english, faculty_id, id]
+            );
+
+            await db.query('COMMIT');
+
+            if (result.rows.length === 0) {
+                return next(new CustomError('Department not found', 404));
+            }
+            return res.status(200).json({ success: true, message: 'Department updated', data: result.rows[0] });
         }
-
-        res.status(200).json({ success: true, message: 'Department updated', data: result.rows[0] });
     } catch (error) {
+        await db.query('ROLLBACK').catch(() => {});
         if (error.code === '23505') {
             return next(new CustomError('Department names/aliases must be unique', 409));
         }
