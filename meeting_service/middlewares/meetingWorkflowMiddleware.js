@@ -58,7 +58,8 @@ const loadMeeting = async (req) => {
                 agenda_locked_level, suppli_agenda_locked_level, resolution_locked_level, resolution_status_locked_level, meeting_locked_level,
                 invitees_locked_level, presentees_locked_level, conclusion_locked_level,
                 is_completed, completed_at, completed_by,
-                (SELECT value FROM system_settings WHERE key = 'min_completed_level') as min_completed_level
+                (SELECT value FROM system_settings WHERE key = 'min_completed_level') as min_completed_level,
+                (SELECT MAX(level) FROM roles) as max_role_level
          FROM meetings WHERE id = $1`,
         [meetingId]
     );
@@ -149,6 +150,9 @@ const calculateMeetingAccess = (meeting, user) => {
     }
 
     const userLevel = isAdmin ? 999999 : parseInt(user.role_level, 10);
+    const maxRoleLevel = meeting?.max_role_level !== null && meeting?.max_role_level !== undefined ? parseInt(meeting.max_role_level, 10) : null;
+    const hasHigherRole = maxRoleLevel === null || userLevel < maxRoleLevel;
+
     const isCompleted = meeting.is_completed === true;
 
     const getLock = (lvl) => (lvl !== null && lvl !== undefined ? parseInt(lvl, 10) : null);
@@ -228,18 +232,18 @@ const calculateMeetingAccess = (meeting, user) => {
         canEditPresentees,
         canEditConclusion,
         canMarkCompleted,
-        canHandoverAgenda: canEditAgenda,
-        canHandoverSuppliAgenda: canEditSuppliAgenda,
-        canHandoverResolution: canEditResolution,
-        canHandoverResolutionStatus: canEditResolutionStatus,
+        canHandoverAgenda: canEditAgenda && hasHigherRole,
+        canHandoverSuppliAgenda: canEditSuppliAgenda && hasHigherRole,
+        canHandoverResolution: canEditResolution && hasHigherRole,
+        canHandoverResolutionStatus: canEditResolutionStatus && hasHigherRole,
         canSendBackAgenda,
         canSendBackSuppliAgenda,
         canSendBackResolution,
         canSendBackResolutionStatus,
-        canLockAgenda: true,
-        canLockSuppliAgenda: true,
-        canLockResolution: true,
-        canLockResolutionStatus: true,
+        canLockAgenda: agendaHandover === null || userLevel > agendaHandover,
+        canLockSuppliAgenda: suppliHandover === null || userLevel > suppliHandover,
+        canLockResolution: resHandover === null || userLevel > resHandover,
+        canLockResolutionStatus: resStatusHandover === null || userLevel > resStatusHandover,
         canLockMeeting: true,
         canLockInvitees: true,
         canLockPresentees: true,

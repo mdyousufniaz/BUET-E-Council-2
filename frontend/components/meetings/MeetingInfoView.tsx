@@ -407,6 +407,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                     <button
                       onClick={() => openHandoverModal('handover-agenda', 'Main Agenda handed over to upper levels.')}
                       disabled={!access.canHandoverAgenda}
+                      title={!access.canHandoverAgenda ? (meeting.agenda_handover_level !== null ? "Already handed over" : "Highest editor level available - no upper level to handover to") : ""}
                       className="w-full text-left px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30 rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                     >
                       <span>Handover Main Agenda</span>
@@ -420,6 +421,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                     <button
                       onClick={() => openHandoverModal('handover-suppli-agenda', 'Supplementary Agenda handed over to upper levels.')}
                       disabled={!access.canHandoverSuppliAgenda}
+                      title={!access.canHandoverSuppliAgenda ? (meeting.suppli_agenda_handover_level !== null ? "Already handed over" : "Highest editor level available - no upper level to handover to") : ""}
                       className="w-full text-left px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30 rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                     >
                       <span>Handover Suppli Agenda</span>
@@ -433,6 +435,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                     <button
                       onClick={() => openHandoverModal('handover-resolution', 'Resolution handed over to upper levels.')}
                       disabled={!access.canHandoverResolution}
+                      title={!access.canHandoverResolution ? (meeting.resolution_handover_level !== null ? "Already handed over" : "Highest editor level available - no upper level to handover to") : ""}
                       className="w-full text-left px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30 rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                     >
                       <span>Handover Resolution</span>
@@ -446,6 +449,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                     <button
                       onClick={() => openHandoverModal('handover-resolution-status', 'Resolution Status handed over to upper levels.')}
                       disabled={!access.canHandoverResolutionStatus}
+                      title={!access.canHandoverResolutionStatus ? (meeting.resolution_status_handover_level !== null ? "Already handed over" : "Highest editor level available - no upper level to handover to") : ""}
                       className="w-full text-left px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30 rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                     >
                       <span>Handover Resolution Status</span>
@@ -577,6 +581,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                       <button
                         onClick={() => handleControlAction('lock-agenda', 'Main Agenda locked for lower levels.')}
                         disabled={!access.canLockAgenda || actionLoading === 'lock-agenda'}
+                        title={!access.canLockAgenda ? "Handed over by your level. You can no longer lock this item." : ""}
                         className="w-full text-left px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                       >
                         <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Lock Main Agenda</span>
@@ -597,6 +602,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                       <button
                         onClick={() => handleControlAction('lock-suppli-agenda', 'Supplementary Agenda locked for lower levels.')}
                         disabled={!access.canLockSuppliAgenda || actionLoading === 'lock-suppli-agenda'}
+                        title={!access.canLockSuppliAgenda ? "Handed over by your level. You can no longer lock this item." : ""}
                         className="w-full text-left px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                       >
                         <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5" /> Lock Suppli Agenda</span>
@@ -617,6 +623,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                       <button
                         onClick={() => handleControlAction('lock-resolution', 'Resolution locked for lower levels.')}
                         disabled={!access.canLockResolution || actionLoading === 'lock-resolution'}
+                        title={!access.canLockResolution ? "Handed over by your level. You can no longer lock this item." : ""}
                         className="w-full text-left px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                       >
                         <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Lock Resolution</span>
@@ -637,6 +644,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                       <button
                         onClick={() => handleControlAction('lock-resolution-status', 'Resolution Status locked for lower levels.')}
                         disabled={!access.canLockResolutionStatus || actionLoading === 'lock-resolution-status'}
+                        title={!access.canLockResolutionStatus ? "Handed over by your level. You can no longer lock this item." : ""}
                         className="w-full text-left px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-40 flex items-center justify-between"
                       >
                         <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Lock Resolution Status</span>
