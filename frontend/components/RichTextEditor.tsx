@@ -4761,17 +4761,24 @@ const WordRuler = ({ viewMode, pageWidthMm, marginLeftMm, marginRightMm }: { vie
   );
 };
 
-export default function RichTextEditor({ 
-  content, 
+export default function RichTextEditor({
+  content,
   onChange,
   className = "p-4 min-h-[300px]",
-  editable = true
-}: { 
-  content: string; 
+  editable = true,
+  onSave
+}: {
+  content: string;
   onChange: (html: string) => void;
   className?: string;
   editable?: boolean;
+  /** Invoked when the user presses Ctrl/Cmd+S while the editor has focus. */
+  onSave?: () => void;
 }) {
+  // Keep the latest onSave in a ref so the editor's keydown handler (created once)
+  // always calls the current callback without re-instantiating the editor.
+  const onSaveRef = useRef(onSave);
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   const [viewMode, setViewMode] = useState<'fluid' | 'pageView'>('fluid');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false);
@@ -4798,6 +4805,23 @@ export default function RichTextEditor({
     window.addEventListener('keydown', handleFullscreenKeys);
     return () => window.removeEventListener('keydown', handleFullscreenKeys);
   }, [isFullscreen]);
+
+  // Ctrl/Cmd+S triggers the host's save handler even when focus has moved to the
+  // toolbar or a nearby field. The editor's own keydown handler covers the
+  // in-content case; this covers the rest of the editing panel.
+  useEffect(() => {
+    if (!editable) return;
+    const handleSaveKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+        if (onSaveRef.current) {
+          e.preventDefault();
+          onSaveRef.current();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleSaveKey);
+    return () => window.removeEventListener('keydown', handleSaveKey);
+  }, [editable]);
 
   const editor = useEditor({
     extensions: [
@@ -4883,6 +4907,10 @@ export default function RichTextEditor({
             return handleTableShiftEnterNavigation(view);
           }
         }
+
+        // Ctrl/Cmd+S is handled by the window-level listener above (it also fires
+        // for this in-content case as the event bubbles), so it is intentionally
+        // not intercepted here to avoid triggering the host's save twice.
 
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
           event.preventDefault();

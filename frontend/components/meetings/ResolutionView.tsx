@@ -384,6 +384,7 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                       <RichTextEditor
                         content={editContent}
                         onChange={setEditContent}
+                        onSave={() => { if (!isSaving) handleSave(); }}
                         className="p-4 min-h-[300px] font-bold"
                       />
                       <div className="bg-muted p-2 flex justify-between items-center border-t border-border">

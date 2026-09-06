@@ -47,6 +47,16 @@ const getSignatureImageBase64 = async (imageKey) => {
 function convertMarkdownTablesToHtml(content) {
     if (!content || typeof content !== 'string') return content || '';
     if (content.includes('<table') || content.includes('<TABLE')) return content;
+
+    // Normalise things that otherwise defeat table detection outright:
+    //  - pipe written as an HTML entity by some editors
+    //  - non-breaking / exotic spaces that survive .trim() and stop a
+    //    separator row from matching
+    content = content
+        .replace(/&#124;|&#x7c;|&vert;/gi, '|')
+        .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+        .replace(/[\u00a0\u2007\u202f\u2009\u200a\u2002\u2003]/g, ' ');
+
     if (!content.includes('|')) return content;
 
     // Step 1: Replace line breaks and paragraph tags with newlines
@@ -58,34 +68,22 @@ function convertMarkdownTablesToHtml(content) {
     // Step 2: Replace double pipes `| |` -> `|\n|`
     raw = raw.replace(/\|\s*\|/g, '|\n|');
 
-    const isSep = (str) => /^\|?\s*[:\-]{2,}(?:\s*\|\s*[:\-]{2,})*\s*\|?$/.test(str.trim());
+    // A separator row: every pipe-delimited cell is only dashes with an
+    // optional leading/trailing colon (`---`, `:--`, `--:`, `:-:`, or even a
+    // lone `-`). Unicode dashes from editor autocorrect are treated as `-`.
+    const isSep = (str) => {
+        const s = str.trim().replace(/[\u2010-\u2015\u2212\u2043\uFE58\uFE63\uFF0D]/g, '-');
+        if (!s.includes('-') || !/^[\s|:\-]+$/.test(s)) return false;
+        const cells = s.split('|').map(c => c.trim()).filter(Boolean);
+        return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c));
+    };
 
-    let rawLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    let lines = [];
-
-    for (let i = 0; i < rawLines.length; i++) {
-        let line = rawLines[i];
-        if (i + 1 < rawLines.length && isSep(rawLines[i + 1])) {
-            if (line.includes('|')) {
-                let parts = line.split('|').map(s => s.trim());
-                let items = [];
-                for (let k = 0; k < parts.length; k++) {
-                    let p = parts[k];
-                    if (!p) continue;
-                    if (k > 0 && k < parts.length - 1) {
-                        items.push(`| ${p} |`);
-                    } else {
-                        items.push(p);
-                    }
-                }
-                if (items.length > 1) {
-                    items.forEach(it => lines.push(it));
-                    continue;
-                }
-            }
-        }
-        lines.push(line);
-    }
+    // One physical line per array entry. (An earlier version tried to "helpfully"
+    // explode a header row's cells onto separate lines here — that shattered
+    // every multi-column header into one-cell rows, leaking the first cell out
+    // as a stray paragraph and dropping the rest of the header. Just keep the
+    // lines as written.)
+    let lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
 
     let result = [];
     let idx = 0;
@@ -125,9 +123,12 @@ function convertMarkdownTablesToHtml(content) {
             const headers = headerTablePart.split('|').map(s => s.trim()).filter((s, k, arr) => !(k === 0 && s === '') && !(k === arr.length - 1 && s === ''));
             if (headers.length === 0 && headerTablePart) headers.push(headerTablePart.replace(/\|/g, '').trim());
 
-            let tableHtml = '<table class="meeting-table" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;margin:12px 0;"><thead><tr>';
+            // Borders are set inline so the table is self-contained: the agenda
+            // stylesheet's `th, td { border: none }` would otherwise leave these
+            // gridless, and the DOCX path has no matching class rule either.
+            let tableHtml = '<table class="meeting-table" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;margin:12px 0;border:1px solid #444;"><thead><tr>';
             headers.forEach(h => {
-                tableHtml += `<th style="padding:6px;background-color:rgba(0,0,0,0.05);font-weight:bold;text-align:left;">${h}</th>`;
+                tableHtml += `<th style="padding:6px;border:1px solid #444;background-color:rgba(0,0,0,0.05);font-weight:bold;text-align:left;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">${h}</th>`;
             });
             tableHtml += '</tr></thead><tbody>';
 
@@ -136,7 +137,7 @@ function convertMarkdownTablesToHtml(content) {
                 if (cells.length > 0) {
                     tableHtml += '<tr>';
                     cells.forEach(c => {
-                        tableHtml += `<td style="padding:6px;">${c}</td>`;
+                        tableHtml += `<td style="padding:6px;border:1px solid #444;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;">${c}</td>`;
                     });
                     tableHtml += '</tr>';
                 }
@@ -330,11 +331,75 @@ const warmUp = async () => {
     }
 };
 
+// ---------------------------------------------------------------------------
+// Optional per-request page-layout overrides (driven by the PDF Preview page).
+// When nothing is supplied every value falls back to the historical
+// A4 / 20mm / 1x defaults, so existing callers and cached PDFs are unaffected.
+// ---------------------------------------------------------------------------
+const ALLOWED_PAGE_SIZES = ['A3', 'A4', 'A5', 'Letter', 'Legal', 'Tabloid'];
+
+const DEFAULT_PDF_LAYOUT = {
+    pageSize: 'A4',
+    orientation: 'portrait',
+    margin: { top: 20, right: 20, bottom: 20, left: 20 }, // millimetres
+    scale: 1,          // proportional zoom of the whole document (0.7 - 1.6)
+    lineHeight: null,   // null => keep the template's per-element line-heights
+    // 'heading' => classic bold "প্রস্তাব নং <n>" line above an indented body.
+    // 'inline'  => body starts with a bold, non-editable "<prefix><n>:" run
+    //              (matches the PDF Preview page's 3-column layout).
+    agendaNumberStyle: 'heading'
+};
+
+const clampNum = (val, min, max, fallback) => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+};
+
+/**
+ * Validate and clamp a raw layout object (typically parsed from query params)
+ * into a safe shape. Returns { layout, isCustom }; isCustom is false when the
+ * result is identical to DEFAULT_PDF_LAYOUT so callers can keep the canonical
+ * cache entry / filesystem copy untouched.
+ */
+const normalizePdfLayout = (raw) => {
+    if (!raw || typeof raw !== 'object') {
+        return { layout: { ...DEFAULT_PDF_LAYOUT }, isCustom: false };
+    }
+    const sizeReq = String(raw.pageSize || '').trim().toLowerCase();
+    const pageSize = ALLOWED_PAGE_SIZES.find(s => s.toLowerCase() === sizeReq) || DEFAULT_PDF_LAYOUT.pageSize;
+    const orientation = String(raw.orientation || '').toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
+    const m = (raw.margin && typeof raw.margin === 'object') ? raw.margin : {};
+    const margin = {
+        top: clampNum(m.top, 0, 60, DEFAULT_PDF_LAYOUT.margin.top),
+        right: clampNum(m.right, 0, 60, DEFAULT_PDF_LAYOUT.margin.right),
+        bottom: clampNum(m.bottom, 0, 60, DEFAULT_PDF_LAYOUT.margin.bottom),
+        left: clampNum(m.left, 0, 60, DEFAULT_PDF_LAYOUT.margin.left)
+    };
+    const scale = clampNum(raw.scale, 0.7, 1.6, DEFAULT_PDF_LAYOUT.scale);
+    const lineHeight = (raw.lineHeight == null || raw.lineHeight === '')
+        ? null
+        : clampNum(raw.lineHeight, 1, 3, 1.6);
+    const agendaNumberStyle = String(raw.agendaNumberStyle || '').toLowerCase() === 'inline'
+        ? 'inline'
+        : 'heading';
+
+    const layout = { pageSize, orientation, margin, scale, lineHeight, agendaNumberStyle };
+    const isCustom = JSON.stringify(layout) !== JSON.stringify(DEFAULT_PDF_LAYOUT);
+    return { layout, isCustom };
+};
+
+const layoutCacheTag = (layout) => 'l' + crypto.createHash('sha1')
+    .update(JSON.stringify(layout)).digest('hex').slice(0, 12);
+
 /**
  * Render an HTML string to a PDF Buffer using the shared browser. Extracted so
- * both generators share identical rendering/cleanup behaviour.
+ * both generators share identical rendering/cleanup behaviour. `layout` is an
+ * already-normalized object from normalizePdfLayout(); omitting it renders with
+ * the historical A4 / 20mm defaults.
  */
-const renderPdf = async (html) => {
+const renderPdf = async (html, layout) => {
+    const L = layout || DEFAULT_PDF_LAYOUT;
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
@@ -356,8 +421,15 @@ const renderPdf = async (html) => {
         await page.evaluate(() => document.fonts.ready.then(() => true));
 
         const pdfBuffer = await page.pdf({
-            format: 'A4',
-            margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
+            format: L.pageSize || 'A4',
+            landscape: L.orientation === 'landscape',
+            margin: {
+                top: `${L.margin.top}mm`,
+                right: `${L.margin.right}mm`,
+                bottom: `${L.margin.bottom}mm`,
+                left: `${L.margin.left}mm`
+            },
+            scale: clampNum(L.scale, 0.1, 2, 1),
             printBackground: true
         });
 
@@ -419,7 +491,8 @@ const storeCachedPdf = async (cacheKey, pdfBuffer, fingerprint) => {
     }
 };
 
-const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
+const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, layoutIsCustom = false) => {
+    const pdfLayout = layout || DEFAULT_PDF_LAYOUT;
     try {
         const meetingQuery = `SELECT title, meeting_date, description, conclusion, agenda_prefix, type, president_signature, secretary_signature, is_regular FROM meetings WHERE id = $1`;
         const presenteesQuery = `
@@ -538,15 +611,20 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
             if (secretarySignatureImage) secretarySignatureBase64 = await getSignatureImageBase64(secretarySignatureImage);
         }
 
-        // Serve a cached PDF when the underlying data is unchanged.
+        // Serve a cached PDF when the underlying data is unchanged. A custom page
+        // layout gets its own cache slot (and fingerprint dimension) so it never
+        // clobbers the canonical default-layout PDF used by email/status sync.
         const cacheType = cacheVariant || (isResolution ? 'resolution' : 'agenda');
-        const cacheKey = pdfCacheKey(meetingId, cacheType);
+        const cacheKey = layoutIsCustom
+            ? pdfCacheKey(meetingId, `${cacheType}--${layoutCacheTag(pdfLayout)}`)
+            : pdfCacheKey(meetingId, cacheType);
         const fingerprint = computeFingerprint({
             type: cacheType,
             meeting: { title: meeting.title, meeting_date: meeting.meeting_date, description: meeting.description, conclusion: meeting.conclusion, agenda_prefix: meeting.agenda_prefix, is_regular: meeting.is_regular },
             presentees: stableRows(presentees),
             agendas: stableRows(agendas),
-            signatures: { presidentSignature, secretarySignature, presidentSignatureImage, secretarySignatureImage }
+            signatures: { presidentSignature, secretarySignature, presidentSignatureImage, secretarySignatureImage },
+            ...(layoutIsCustom ? { layout: pdfLayout } : {})
         });
 
         const topLeadership = [];
@@ -1081,6 +1159,28 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
                     </table>`;
                 }
 
+                // 'inline' agenda-number style (PDF Preview page): the body opens
+                // with a bold "<prefix-rest><serial>:" run instead of a separate
+                // heading line. `prefixRest` is agenda_prefix minus its first
+                // whitespace token (that token is the A/C part).
+                const inlineNum = pdfLayout.agendaNumberStyle === 'inline';
+                const prefixRest = (() => {
+                    const raw = String(meeting.agenda_prefix || '').trim();
+                    if (!raw) return '';
+                    const t = raw.split(/\s+/);
+                    return t.length <= 1 ? raw : t.slice(1).join(' ');
+                })();
+                const injectInlinePrefix = (rawHtml, prefix) => {
+                    if (!prefix) return rawHtml;
+                    const bold = `<b>${prefix}</b> `;
+                    const m = rawHtml.match(/<p\b[^>]*>/i);
+                    if (m) {
+                        const at = m.index + m[0].length;
+                        return rawHtml.slice(0, at) + bold + rawHtml.slice(at);
+                    }
+                    return bold + rawHtml;
+                };
+
                 return targetAgendas.map(ag => {
                     const agSerialStr = ag.is_suppli
                         ? toBanglaDigits(mainAgendaCount + (ag.agenda_serial || 1), serialWidth)
@@ -1127,11 +1227,16 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
 
                     const catHeader = categoryHeaderMap.get(ag.id);
 
+                    const inlinePrefix = inlineNum
+                        ? (isBibidha ? 'বিবিধ:' : `${prefixRest}${agSerialStr}:`)
+                        : '';
+                    const bodyHtml = inlineNum ? injectInlinePrefix(contentHtml || '', inlinePrefix) : contentHtml;
+
                     return `
                     ${catHeader ? `<div class="category-header" style="font-weight: bold; font-size: 15px; margin-top: 25px; margin-bottom: 15px;"><b>${catHeader}</b></div>` : ''}
                     <div class="agenda-block" style="margin-bottom: 30px;">
-                        <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>
-                        ${contentHtml ? `<div class="agenda-content" style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(contentHtml, true)}</div>` : ''}
+                        ${inlineNum ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
+                        ${bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: justify; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : ''}
                         ${isResolution ? `
                         <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px;"><b>সিদ্ধান্ত:</b></div>
                         <div class="agenda-resolution" style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
@@ -1169,25 +1274,37 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
         </html>
         `;
 
+        // Optional global line-height override from the PDF Preview page. Applied
+        // last so it wins over the template's inline per-element line-heights.
+        if (pdfLayout.lineHeight) {
+            html = html.replace('</head>', `<style>body, body p, body div, body td, body th, body li, body span { line-height: ${pdfLayout.lineHeight} !important; }</style></head>`);
+        }
+
         return { html, cacheKey, fingerprint };
     } catch (error) {
         throw error;
     }
 };
 
-const generatePdf = async (meetingId, isResolution, cacheVariant) => {
+const generatePdf = async (meetingId, isResolution, cacheVariant, rawLayout) => {
     try {
-        const { html, cacheKey, fingerprint } = await buildMeetingHtml(meetingId, isResolution, cacheVariant);
+        const { layout, isCustom } = normalizePdfLayout(rawLayout);
+        const { html, cacheKey, fingerprint } = await buildMeetingHtml(meetingId, isResolution, cacheVariant, layout, isCustom);
         const cached = await getCachedPdf(cacheKey, fingerprint);
         if (cached) return cached;
 
-        const pdfBuffer = await renderPdf(html);
+        const pdfBuffer = await renderPdf(html, layout);
         await storeCachedPdf(cacheKey, pdfBuffer, fingerprint);
-        try {
-            const pdfType = cacheVariant || (isResolution ? 'resolution' : 'agenda');
-            await meetingFileSystem.saveMeetingPdf(meetingId, pdfType, pdfBuffer);
-        } catch (e) {
-            console.error('Error saving meeting PDF to filesystem:', e);
+        // Only the canonical default-layout PDF is mirrored to the meeting
+        // filesystem (email attachments / status sync read from there). Custom
+        // layout variants stay cache-only.
+        if (!isCustom) {
+            try {
+                const pdfType = cacheVariant || (isResolution ? 'resolution' : 'agenda');
+                await meetingFileSystem.saveMeetingPdf(meetingId, pdfType, pdfBuffer);
+            } catch (e) {
+                console.error('Error saving meeting PDF to filesystem:', e);
+            }
         }
         return pdfBuffer;
     } catch (error) {

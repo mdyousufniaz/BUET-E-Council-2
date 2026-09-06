@@ -28,8 +28,9 @@ export default function WorkspaceLayoutWrapper({ children }: { children: React.R
   }
 
   // Check if we are inside a specific meeting's workspace
-  // Matches /workspace/meetings/uuid or any other ID, but NOT /workspace/meetings directly.
-  const isMeetingWorkspace = /^\/workspace\/meetings\/[^\/]+$/.test(pathname || "");
+  // Matches /workspace/meetings/uuid (and its /pdf-preview sub-route), but NOT
+  // /workspace/meetings directly. These render without the admin sidebar.
+  const isMeetingWorkspace = /^\/workspace\/meetings\/[^\/]+(\/pdf-preview)?$/.test(pathname || "");
 
   if (isMeetingWorkspace) {
     return (

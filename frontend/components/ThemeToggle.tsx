@@ -54,6 +54,54 @@ const THEMES = [
     badge: "New"
   },
   {
+    id: "slate",
+    name: "Slate Professional",
+    description: "Calm blue-grey, tinted surfaces",
+    color: "#3d5a80",
+    bgClass: "bg-[#3d5a80]",
+    badge: "Soothing"
+  },
+  {
+    id: "sage",
+    name: "Sage Calm",
+    description: "Muted green, easy on the eyes",
+    color: "#4c6b52",
+    bgClass: "bg-[#4c6b52]",
+    badge: "Soothing"
+  },
+  {
+    id: "sepia",
+    name: "Warm Sepia",
+    description: "Parchment tone for official work",
+    color: "#7a5a3a",
+    bgClass: "bg-[#7a5a3a]",
+    badge: "Soothing"
+  },
+  {
+    id: "teal",
+    name: "Teal Horizon",
+    description: "Teal & coral — fresh and vivid",
+    color: "#0d9488",
+    bgClass: "bg-[#0d9488]",
+    badge: "Colourful"
+  },
+  {
+    id: "indigo",
+    name: "Indigo Scholar",
+    description: "Indigo & gold — rich academic tone",
+    color: "#4f46e5",
+    bgClass: "bg-[#4f46e5]",
+    badge: "Colourful"
+  },
+  {
+    id: "emerald",
+    name: "Emerald Meadow",
+    description: "Emerald & sky blue — lively pairing",
+    color: "#059669",
+    bgClass: "bg-[#059669]",
+    badge: "Colourful"
+  },
+  {
     id: "dark",
     name: "Midnight Dark",
     description: "Dark Crimson & Night",

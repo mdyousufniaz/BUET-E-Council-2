@@ -57,6 +57,7 @@ export default function DescriptionView({ meeting, type, mutate }: { meeting: an
             setContent(html);
             setIsDirty(true);
           }}
+          onSave={handleSave}
           className="p-8 flex-1 min-h-[350px]"
         />
 

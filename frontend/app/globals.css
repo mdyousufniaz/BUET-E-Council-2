@@ -329,6 +329,240 @@
   --radius: 0.5rem;
 }
 
+.slate {
+  /* ── Slate Professional ── calm blue-grey, tinted surfaces ── */
+  --background: #eceef2;
+  --foreground: #1b2432;
+  --card: #f7f8fb;
+  --card-foreground: #1b2432;
+  --popover: #f7f8fb;
+  --popover-foreground: #1b2432;
+
+  --primary: #3d5a80;
+  --primary-foreground: #f4f7fb;
+
+  --secondary: #dfe4ec;
+  --secondary-foreground: #2b3a52;
+
+  --muted: #e4e7ee;
+  --muted-foreground: #5c6675;
+
+  --accent: #d9e2f0;
+  --accent-foreground: #223049;
+
+  --destructive: #b4232a;
+  --destructive-foreground: #fef2f2;
+
+  --border: #d3d9e3;
+  --input: #cdd4e0;
+  --ring: #3d5a80;
+
+  --sidebar-background: #e3e7ef;
+  --sidebar-foreground: #2f3a4c;
+  --sidebar-primary: #3d5a80;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d5dded;
+  --sidebar-accent-foreground: #1b2432;
+  --sidebar-border: #c7cedd;
+
+  --radius: 0.5rem;
+}
+
+.sage {
+  /* ── Sage Calm ── muted green, soothing for long sessions ── */
+  --background: #eef2ea;
+  --foreground: #1f2a20;
+  --card: #f7faf4;
+  --card-foreground: #1f2a20;
+  --popover: #f7faf4;
+  --popover-foreground: #1f2a20;
+
+  --primary: #4c6b52;
+  --primary-foreground: #f3f8f2;
+
+  --secondary: #e0e8dc;
+  --secondary-foreground: #33452f;
+
+  --muted: #e5ebe1;
+  --muted-foreground: #5d6a58;
+
+  --accent: #dbe7d4;
+  --accent-foreground: #2b3a28;
+
+  --destructive: #b23b2e;
+  --destructive-foreground: #fef3f1;
+
+  --border: #d5ded0;
+  --input: #ced9c9;
+  --ring: #4c6b52;
+
+  --sidebar-background: #e4ebdf;
+  --sidebar-foreground: #34412f;
+  --sidebar-primary: #4c6b52;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d7e3d0;
+  --sidebar-accent-foreground: #1f2a20;
+  --sidebar-border: #c9d5c3;
+
+  --radius: 0.5rem;
+}
+
+.sepia {
+  /* ── Warm Sepia ── parchment tone, easy official-document feel ── */
+  --background: #f3ebdd;
+  --foreground: #2f2618;
+  --card: #fbf5e9;
+  --card-foreground: #2f2618;
+  --popover: #fbf5e9;
+  --popover-foreground: #2f2618;
+
+  --primary: #7a5a3a;
+  --primary-foreground: #fbf5ea;
+
+  --secondary: #ecdfc8;
+  --secondary-foreground: #5a4327;
+
+  --muted: #ebe1cd;
+  --muted-foreground: #6c5c45;
+
+  --accent: #e6d7ba;
+  --accent-foreground: #4a3922;
+
+  --destructive: #a83432;
+  --destructive-foreground: #fdf1ef;
+
+  --border: #ddccae;
+  --input: #d6c4a4;
+  --ring: #7a5a3a;
+
+  --sidebar-background: #ece0c9;
+  --sidebar-foreground: #4a3b28;
+  --sidebar-primary: #7a5a3a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2d3b4;
+  --sidebar-accent-foreground: #2f2618;
+  --sidebar-border: #d3c1a1;
+
+  --radius: 0.5rem;
+}
+
+.teal {
+  /* ── Teal Horizon ── teal primary paired with a warm coral accent ── */
+  --background: #f0fbf9;
+  --foreground: #10312e;
+  --card: #ffffff;
+  --card-foreground: #10312e;
+  --popover: #ffffff;
+  --popover-foreground: #10312e;
+
+  --primary: #0d9488;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ffe9e2;
+  --secondary-foreground: #9a3412;
+
+  --muted: #e6f4f1;
+  --muted-foreground: #4b6560;
+
+  --accent: #fddfd3;
+  --accent-foreground: #9a3412;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #cfe8e3;
+  --input: #c3e0da;
+  --ring: #0d9488;
+
+  --sidebar-background: #e4f4f0;
+  --sidebar-foreground: #1d3d39;
+  --sidebar-primary: #0d9488;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffe1d6;
+  --sidebar-accent-foreground: #10312e;
+  --sidebar-border: #c7e2dc;
+
+  --radius: 0.5rem;
+}
+
+.indigo {
+  /* ── Indigo Scholar ── indigo primary with a gold / amber accent ── */
+  --background: #f5f4fe;
+  --foreground: #1e1b3a;
+  --card: #ffffff;
+  --card-foreground: #1e1b3a;
+  --popover: #ffffff;
+  --popover-foreground: #1e1b3a;
+
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+
+  --secondary: #fdf0d5;
+  --secondary-foreground: #92400e;
+
+  --muted: #eeecfb;
+  --muted-foreground: #57538a;
+
+  --accent: #fde9c8;
+  --accent-foreground: #854d0e;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #ded9f7;
+  --input: #d2ccf2;
+  --ring: #4f46e5;
+
+  --sidebar-background: #ecebfb;
+  --sidebar-foreground: #2c2860;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fceaca;
+  --sidebar-accent-foreground: #1e1b3a;
+  --sidebar-border: #d8d2f3;
+
+  --radius: 0.5rem;
+}
+
+.emerald {
+  /* ── Emerald Meadow ── emerald primary with a bright sky-blue accent ── */
+  --background: #eefbf3;
+  --foreground: #0d2c1c;
+  --card: #ffffff;
+  --card-foreground: #0d2c1c;
+  --popover: #ffffff;
+  --popover-foreground: #0d2c1c;
+
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+
+  --secondary: #d9f0fb;
+  --secondary-foreground: #075985;
+
+  --muted: #e2f4ea;
+  --muted-foreground: #46685a;
+
+  --accent: #cdeafa;
+  --accent-foreground: #075985;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #c9ecd8;
+  --input: #bce4cf;
+  --ring: #059669;
+
+  --sidebar-background: #e1f4ea;
+  --sidebar-foreground: #17452f;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d2ebfa;
+  --sidebar-accent-foreground: #0d2c1c;
+  --sidebar-border: #c1e6d1;
+
+  --radius: 0.5rem;
+}
+
 .dark {
   --background: #151010;
   --foreground: #ede4e0;

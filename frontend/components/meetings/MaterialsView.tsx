@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2, LayoutTemplate } from "lucide-react";
 import api, { getTabSessionToken } from "../../lib/api";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -133,8 +134,15 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
 
   return (
     <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 gap-4">
         <h2 className="text-2xl font-bold">Meeting Materials</h2>
+        <Link
+          href={`/workspace/meetings/${meeting.id}/pdf-preview`}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors shrink-0"
+        >
+          <LayoutTemplate className="w-4 h-4" />
+          Preview &amp; Layout
+        </Link>
       </div>
 
       <input 
