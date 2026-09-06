@@ -18,6 +18,8 @@ import Superscript from '@tiptap/extension-superscript';
 import CharacterCount from '@tiptap/extension-character-count';
 import Link from '@tiptap/extension-link';
 import OrderedList from '@tiptap/extension-ordered-list';
+import BulletList from '@tiptap/extension-bullet-list';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { goToNextCell, addRowAfter, TableMap } from '@tiptap/pm/tables';
 import { TextSelection } from '@tiptap/pm/state';
 import { Node, Extension, wrappingInputRule, mergeAttributes } from '@tiptap/core';
@@ -371,6 +373,55 @@ export const CustomOrderedList = OrderedList.extend({
         getAttributes: () => ({ style: 'list-style-type: bengali;' }),
       }),
     ];
+  },
+});
+
+// Custom BulletList extension with support for an inline style attribute,
+// mirroring CustomOrderedList — without this, the ribbon's Circle/Square
+// bullet options had nowhere to persist their style onto the <ul>, so they
+// silently no-opped and every bullet list rendered (and reported back) as
+// a plain disc regardless of which style was picked.
+export const CustomBulletList = BulletList.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() || {}),
+      style: {
+        default: null,
+        parseHTML: element => element.getAttribute('style') || null,
+        renderHTML: attributes => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+});
+
+// Custom HorizontalRule that preserves class/style — the default node drops
+// both, so every "Page Break" insertion (ribbon buttons and Ctrl+Enter alike)
+// lost its `page-break` class and dashed-line style and rendered as an
+// indistinguishable plain <hr>.
+export const CustomHorizontalRule = HorizontalRule.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() || {}),
+      class: {
+        default: null,
+        parseHTML: element => element.getAttribute('class') || null,
+        renderHTML: attributes => {
+          if (!attributes.class) return {};
+          return { class: attributes.class };
+        },
+      },
+      style: {
+        default: null,
+        parseHTML: element => element.getAttribute('style') || null,
+        renderHTML: attributes => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+    };
   },
 });
 
@@ -1072,12 +1123,28 @@ const KEYBOARD_SHORTCUTS_DATA = [
   {
     category: "Indentation & Paragraphs",
     shortcuts: [
-      { key: "Tab", desc: "Increase Paragraph / List Indent (Shift Right)" },
-      { key: "Shift + Tab", desc: "Decrease Paragraph / List Indent (Shift Left)" },
+      { key: "Tab", desc: "Increase Paragraph / List Indent (Shift Right) — moves to the next cell instead if the cursor is inside a table" },
+      { key: "Shift + Tab", desc: "Decrease Paragraph / List Indent (Shift Left) — moves to the previous cell instead if the cursor is inside a table" },
       { key: "Ctrl + L", desc: "Align Text Left" },
       { key: "Ctrl + E", desc: "Align Text Center" },
       { key: "Ctrl + R", desc: "Align Text Right" },
       { key: "Ctrl + J", desc: "Justify Paragraph Alignment" }
+    ]
+  },
+  {
+    category: "Tables",
+    shortcuts: [
+      { key: "Ctrl + Alt + T", desc: "Open Insert Table Dialog" },
+      { key: "Tab", desc: "Move to Next Cell (creates a new row if pressed in the last cell)" },
+      { key: "Shift + Tab", desc: "Move to Previous Cell" },
+      { key: "Shift + Enter", desc: "Move to the Same Column in the Next Row (continuing a bullet/number list into it)" }
+    ]
+  },
+  {
+    category: "Page Layout",
+    shortcuts: [
+      { key: "Ctrl + Enter", desc: "Insert Page Break at Cursor" },
+      { key: "Ctrl + Alt + P", desc: "Toggle Word A4 Page View / Fluid Canvas" }
     ]
   },
   {
@@ -1489,10 +1556,18 @@ const MenuBar = ({
         e.preventDefault();
         setIsShortcutsModalOpen(prev => !prev);
       }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setIsTableModalOpen(prev => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setViewMode(viewMode === 'pageView' ? 'fluid' : 'pageView');
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isTableModalOpen, isSymbolModalOpen, isEquationModalOpen, isShortcutsModalOpen, isBanglaKeyboardOpen, isLinkModalOpen]);
+  }, [isTableModalOpen, isSymbolModalOpen, isEquationModalOpen, isShortcutsModalOpen, isBanglaKeyboardOpen, isLinkModalOpen, viewMode, setViewMode]);
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [isRibbonEnlarged, setIsRibbonEnlarged] = useState(false);
@@ -2808,7 +2883,7 @@ const MenuBar = ({
                   type="button"
                   onClick={() => setIsTableModalOpen(true)}
                   className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
-                  title="Insert interactive Table Grid"
+                  title="Insert interactive Table Grid (Ctrl+Alt+T)"
                 >
                   <Grid className="w-4 h-4 text-primary" />
                   <span>Table Grid</span>
@@ -2818,7 +2893,7 @@ const MenuBar = ({
                   type="button"
                   onClick={() => setIsTableModalOpen(true)}
                   className="px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 text-xs font-bold cursor-pointer shadow-xs"
-                  title="Draw & customize table with specific dimensions and borders"
+                  title="Draw & customize table with specific dimensions and borders (Ctrl+Alt+T)"
                 >
                   <TableIcon className="w-4 h-4" />
                   <span>Draw Table</span>
@@ -2837,6 +2912,7 @@ const MenuBar = ({
                     toast.success("Inserted Page Break");
                   }}
                   className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
+                  title="Insert Page Break (Ctrl+Enter)"
                 >
                   <SplitSquareVertical className="w-4 h-4 text-primary" />
                   <span>Page Break</span>
@@ -2909,6 +2985,7 @@ const MenuBar = ({
                   className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 border cursor-pointer ${
                     viewMode === 'pageView' ? 'bg-primary text-primary-foreground border-primary shadow-xs' : 'bg-muted hover:bg-muted/80 text-foreground border-border'
                   }`}
+                  title="Word A4 Page View (Ctrl+Alt+P)"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Word A4 Page</span>
@@ -2919,6 +2996,7 @@ const MenuBar = ({
                   className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 border cursor-pointer ${
                     viewMode === 'fluid' ? 'bg-primary text-primary-foreground border-primary shadow-xs' : 'bg-muted hover:bg-muted/80 text-foreground border-border'
                   }`}
+                  title="Fluid Canvas View (Ctrl+Alt+P)"
                 >
                   <Layout className="w-4 h-4" />
                   <span>Fluid Canvas</span>
@@ -4725,8 +4803,12 @@ export default function RichTextEditor({
     extensions: [
       StarterKit.configure({
         orderedList: false,
+        bulletList: false,
+        horizontalRule: false,
       }),
       CustomOrderedList,
+      CustomBulletList,
+      CustomHorizontalRule,
       ColumnSection,
       ColumnBreak,
       ColumnItem,
@@ -4805,6 +4887,12 @@ export default function RichTextEditor({
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
           event.preventDefault();
           setIsFindReplaceOpen(true);
+          return true;
+        }
+
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === 'Enter') {
+          event.preventDefault();
+          editor?.chain().focus().insertContent('<hr class="page-break" style="page-break-after: always; border-top: 2px dashed #94a3b8; margin: 24px 0;" />').run();
           return true;
         }
         return false;

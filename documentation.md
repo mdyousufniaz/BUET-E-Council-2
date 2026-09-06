@@ -45,6 +45,7 @@ This document serves as the comprehensive technical specification and developer 
   - [5.5 Resolution PDF — Dynamic Column Layout](#55-resolution-pdf--dynamic-column-layout)
   - [5.6 Signed Persona — Resolution Signature Configuration](#56-signed-persona--resolution-signature-configuration)
   - [5.7 Resolution Status — Single-Select UI](#57-resolution-status--single-select-ui)
+  - [5.8 Rich Text Editor — Word-Style Ribbon & Multi-Theme System](#58-rich-text-editor--word-style-ribbon--multi-theme-system)
 - [6. Development, Maintenance & Troubleshooting](#6-development-maintenance--troubleshooting)
   - [6.1 Running via Docker Compose](#61-running-via-docker-compose)
   - [6.2 Local Microservice Development Setup](#62-local-microservice-development-setup)
@@ -1010,6 +1011,56 @@ The selected status itself is stored in `agenda.resolution_status` (explicit sou
 #### Simple text input (no rich text editor)
 
 The status value field is a plain text input: it loads prefilled with the status default (or the saved text when re-editing), with Edit / Save / Cancel buttons. Preset statuses (Not Executed, Executed, Submit) auto-save their default text on radio select and remain editable via Edit afterwards; Custom opens a blank input and requires manual Save (blank/unsaved falls back to the previous selection). Selecting Submit archives the agendum (`copy-to-archive`); switching away removes the archive copy unless it was already deleted from the archive list.
+
+### 5.8 Rich Text Editor — Word-Style Ribbon & Multi-Theme System
+
+Implementation: [`frontend/components/RichTextEditor.tsx`](frontend/components/RichTextEditor.tsx) (TipTap 3 / ProseMirror), [`frontend/app/globals.css`](frontend/app/globals.css), [`frontend/components/ThemeProvider.tsx`](frontend/components/ThemeProvider.tsx), [`frontend/components/ThemeToggle.tsx`](frontend/components/ThemeToggle.tsx).
+
+The agenda/resolution editor is a Microsoft Word–style ribbon UI built on TipTap, used everywhere rich text is authored (agenda bodies, supplementary agendas, resolutions). The ribbon has six tabs: **Home** (font/paragraph/styles), **Insert** (tables, links, equations, symbols, callouts), **Page Layout**, **Table Tools** (contextual — only shown with the cursor inside a table), **Bijoy & Tools** (Bijoy→Unicode conversion, Bangla virtual keyboard), and **View**.
+
+#### Page Layout Tab
+
+- **Page Setup**: Margins (Normal/Narrow/Moderate/Wide presets or custom mm), Orientation (Portrait/Landscape), Size (A4/Letter/Legal/A3) — these drive the "Word A4 Page" view's actual rendered dimensions (`width`/`min-height`/`padding` computed from `PageSettings` state), not just cosmetic labels.
+- **Columns & Breaks**: 2/3-column text layout, Page Break, Column Break.
+- **Page Background**: Watermark (text/color/opacity, diagonal overlay), Page Color, Page Borders (style/width/color).
+
+Ribbon dropdowns (Page Layout's included) render through a `LayoutPopover` helper that portals to `document.body` with `position: fixed`. This is required, not cosmetic: the ribbon toolbar sets `overflow-x-auto`, and per the CSS spec, setting only one of `overflow-x`/`overflow-y` forces the other to compute as `auto` too — so a plain `position: absolute` dropdown gets silently clipped by the ribbon's own height. Any new ribbon dropdown must use `LayoutPopover` (or an equivalent portal) rather than `absolute` positioning.
+
+#### Table Tools Tab
+
+Columns/Rows insert & delete, Row Height presets, Cell Shading, Vertical Alignment (Top/Middle/Bottom), Merge/Split Cells, Split/Merge Tables, Rotate Text 90°, per-cell bullet/number list styling, a 6-option Border style picker (`data-border` attribute), a 4-preset Table Style gallery (`data-table-style` — Plain/Blue Grid/Gray Bands/Crimson Header) and Table Alignment on the page (`data-align`). Row/column dragging is handled by TipTap's built-in column resizing plus a custom `rowResizing` ProseMirror plugin ([`frontend/lib/tableRowResizing.ts`](frontend/lib/tableRowResizing.ts)) that mirrors it for rows.
+
+Row Height, Cell Shading, and Vertical Alignment all persist into the same table-cell `style` attribute. They go through a `mergeCellStyle` helper that parses the existing `style` string into a property map, patches only the property being changed, and re-serializes it — setting one no longer silently erases the other two.
+
+#### Custom Node Extensions (attribute-preservation pattern)
+
+Several TipTap StarterKit default nodes don't declare a `style`/`class` attribute, so setting one via `updateAttributes(...)` or `insertContent('<tag style="...">')` is a silent no-op — the attribute never reaches the rendered DOM (and reading it back via `editor.getAttributes(...)` returns `undefined`). Wherever this editor needs an inline style or class on a StarterKit node, that node is disabled in `StarterKit.configure({...: false})` and replaced with a `.extend()`'d version that adds the attribute explicitly (mirroring `@tiptap/extension-ordered-list`'s pattern):
+
+| Node | Custom extension | Why |
+|---|---|---|
+| `orderedList` | `CustomOrderedList` | `start` + `style` (numbering style, Bangla digit input rule) |
+| `bulletList` | `CustomBulletList` | `style` (Disc/Circle/Square marker) |
+| `horizontalRule` | `CustomHorizontalRule` | `class` + `style` (the "Page Break" `<hr>` needs its `page-break` class and dashed-line style to survive) |
+| `table` | `CustomTable` | `data-border`, `data-table-style`, `data-align` |
+
+When adding a new node-level style/attribute to this editor, check this table first — it is the recurring root cause of "I set it but nothing happened" bugs here.
+
+#### Multi-Theme System
+
+Seven themes (`maroon` (default) / `blue` / `monochrome` / `forest` / `purple` / `amber` / `dark`), each a `:root`-scoped CSS class in `globals.css` defining the same set of `--primary`/`--background`/`--card`/`--border`/etc. custom properties. `ThemeProvider.tsx` wraps `next-themes` with `attribute="class"` so the selected theme id is applied as a class on `<html>`; `ThemeToggle.tsx` is the picker UI. All ribbon/editor chrome (active tab highlight, group-box borders, scrollbar thumb, callout boxes, table hover/selection) must reference `var(--primary)` (via `color-mix(in srgb, var(--primary) X%, transparent)` for translucent variants) rather than a literal color — a batch of these were previously hardcoded to `#800000`/`rgba(128,0,0,...)` and stayed maroon regardless of the active theme until fixed. The "Crimson Header" table style and a few named brand-color presets (e.g. "BUET Crimson Red" text color) are intentionally exempt, since those are meant to render a fixed brand color regardless of app theme.
+
+#### Keyboard Shortcuts
+
+Full list lives in `KEYBOARD_SHORTCUTS_DATA` in `RichTextEditor.tsx` and is rendered in-app via the "Shortcuts" button (or `Ctrl+/`). Beyond standard formatting shortcuts:
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl + Alt + T` | Open Insert Table dialog |
+| `Tab` / `Shift + Tab` (in a table) | Move to next/previous cell |
+| `Shift + Enter` (in a table) | Move to the same column in the next row |
+| `Ctrl + Enter` | Insert a Page Break at the cursor |
+| `Ctrl + Alt + P` | Toggle Word A4 Page view / Fluid Canvas |
+| `Ctrl + Shift + F` | Toggle editor full-screen mode |
 
 ## 6. Development, Maintenance & Troubleshooting
 
