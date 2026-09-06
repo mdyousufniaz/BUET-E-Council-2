@@ -166,7 +166,7 @@ export default function ThemeToggle() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 max-h-[60vh] overflow-y-auto overscroll-contain pr-1 -mr-1">
             {THEMES.map((t) => {
               const isActive = theme === t.id;
               return (
