@@ -212,6 +212,123 @@
   --radius: 0.5rem;
 }
 
+.forest {
+  /* ── Forest Green Theme ── */
+  --background: #f7faf7;
+  --foreground: #0f1f13;
+  --card: #ffffff;
+  --card-foreground: #0f1f13;
+  --popover: #ffffff;
+  --popover-foreground: #0f1f13;
+
+  --primary: #15803d;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ecfdf3;
+  --secondary-foreground: #14532d;
+
+  --muted: #f1f5f2;
+  --muted-foreground: #4b5f4e;
+
+  --accent: #dcfce7;
+  --accent-foreground: #14532d;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #d8e6db;
+  --input: #d8e6db;
+  --ring: #15803d;
+
+  --sidebar-background: #f0f7f1;
+  --sidebar-foreground: #1c3a24;
+  --sidebar-primary: #15803d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2f0e4;
+  --sidebar-accent-foreground: #0f1f13;
+  --sidebar-border: #d3e3d6;
+
+  --radius: 0.5rem;
+}
+
+.purple {
+  /* ── Royal Purple Theme ── */
+  --background: #faf8fd;
+  --foreground: #1e1533;
+  --card: #ffffff;
+  --card-foreground: #1e1533;
+  --popover: #ffffff;
+  --popover-foreground: #1e1533;
+
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f3ecfe;
+  --secondary-foreground: #4c1d95;
+
+  --muted: #f3f0f7;
+  --muted-foreground: #5b5568;
+
+  --accent: #ede9fe;
+  --accent-foreground: #4c1d95;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #e3daf3;
+  --input: #e3daf3;
+  --ring: #7c3aed;
+
+  --sidebar-background: #f5f1fb;
+  --sidebar-foreground: #2e1f4d;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ece3fa;
+  --sidebar-accent-foreground: #1e1533;
+  --sidebar-border: #ddd0f0;
+
+  --radius: 0.5rem;
+}
+
+.amber {
+  /* ── Sunset Amber Theme ── */
+  --background: #fffaf3;
+  --foreground: #2a1a08;
+  --card: #ffffff;
+  --card-foreground: #2a1a08;
+  --popover: #ffffff;
+  --popover-foreground: #2a1a08;
+
+  --primary: #d97706;
+  --primary-foreground: #ffffff;
+
+  --secondary: #fef3e2;
+  --secondary-foreground: #92400e;
+
+  --muted: #f7f1e8;
+  --muted-foreground: #6b5a44;
+
+  --accent: #fde8cc;
+  --accent-foreground: #92400e;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #f0ddc0;
+  --input: #f0ddc0;
+  --ring: #d97706;
+
+  --sidebar-background: #fdf5e9;
+  --sidebar-foreground: #3d2a10;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f9e6c8;
+  --sidebar-accent-foreground: #2a1a08;
+  --sidebar-border: #f0ddbb;
+
+  --radius: 0.5rem;
+}
+
 .dark {
   --background: #151010;
   --foreground: #ede4e0;
@@ -262,8 +379,8 @@ body {
 
 /* ── Selection ── */
 ::selection {
-  background-color: #80000022;
-  color: #4a0000;
+  background-color: color-mix(in srgb, var(--primary) 13%, transparent);
+  color: var(--foreground);
 }
 
 /* ── Focus rings ── */
@@ -284,12 +401,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #80000040;
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #80000070;
+  background: color-mix(in srgb, var(--primary) 44%, transparent);
 }
 
 /* ── Smooth transitions on interactive elements ── */
@@ -341,7 +458,7 @@ div[data-type="column-group"][data-cols="3"] {
 blockquote,
 .callout-box {
   border-left: 4px solid var(--primary) !important;
-  background: linear-gradient(90deg, rgba(128, 0, 0, 0.08) 0%, rgba(128, 0, 0, 0.02) 100%) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 0%, color-mix(in srgb, var(--primary) 2%, transparent) 100%) !important;
   padding: 14px 18px !important;
   margin: 14px 0 !important;
   border-radius: 0 10px 10px 0 !important;
@@ -349,13 +466,13 @@ blockquote,
   max-width: none !important;
   box-sizing: border-box !important;
   overflow-x: auto !important;
-  box-shadow: inset 1px 0 0 rgba(128, 0, 0, 0.15);
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--primary) 15%, transparent);
   transition: all 0.2s ease-in-out !important;
 }
 
 blockquote:hover,
 .callout-box:hover {
-  background: linear-gradient(90deg, rgba(128, 0, 0, 0.12) 0%, rgba(128, 0, 0, 0.04) 100%) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 12%, transparent) 0%, color-mix(in srgb, var(--primary) 4%, transparent) 100%) !important;
   box-shadow: inset 2px 0 0 var(--primary), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
 }
 
@@ -368,7 +485,7 @@ blockquote:hover,
 div[data-type="column-item"] {
   min-height: 85px !important;
   padding: 14px !important;
-  border: 1.5px dashed rgba(128, 0, 0, 0.3) !important;
+  border: 1.5px dashed color-mix(in srgb, var(--primary) 30%, transparent) !important;
   border-radius: 10px !important;
   box-sizing: border-box !important;
   background: rgba(255, 255, 255, 0.3) !important;
@@ -384,15 +501,15 @@ div[data-type="column-item"] {
 div[data-type="column-item"]:hover {
   border-color: var(--primary) !important;
   border-style: solid !important;
-  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.06) !important;
-  background: rgba(128, 0, 0, 0.02) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 6%, transparent) !important;
+  background: color-mix(in srgb, var(--primary) 2%, transparent) !important;
 }
 
 div[data-type="column-item"]:focus-within {
   border-color: var(--primary) !important;
   border-style: solid !important;
-  background-color: rgba(128, 0, 0, 0.04) !important;
-  box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.18), 0 4px 14px rgba(128, 0, 0, 0.08) !important;
+  background-color: color-mix(in srgb, var(--primary) 4%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent), 0 4px 14px color-mix(in srgb, var(--primary) 8%, transparent) !important;
 }
 
 /* Prevent prose max-width from constraining column cells */
@@ -884,7 +1001,7 @@ table[data-border="none"] th {
 
 .ProseMirror table td:hover,
 .ProseMirror table th:hover {
-  background-color: rgba(128, 0, 0, 0.04) !important;
+  background-color: color-mix(in srgb, var(--primary) 4%, transparent) !important;
 }
 
 .dark .ProseMirror table td:hover,
@@ -901,7 +1018,7 @@ table[data-border="none"] th {
   right: 0;
   top: 0;
   bottom: 0;
-  background: rgba(128, 0, 0, 0.18);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
   box-shadow: inset 0 0 0 1.5px var(--primary);
   pointer-events: none;
 }
@@ -915,7 +1032,7 @@ table[data-border="none"] th {
   width: 4px;
   z-index: 20;
   background-color: var(--primary);
-  box-shadow: 0 0 8px rgba(128, 0, 0, 0.6);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 60%, transparent);
   pointer-events: none;
 }
 
@@ -934,7 +1051,7 @@ table[data-border="none"] th {
   height: 4px;
   z-index: 20;
   background-color: var(--primary);
-  box-shadow: 0 0 8px rgba(128, 0, 0, 0.6);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 60%, transparent);
   pointer-events: none;
 }
 
@@ -945,9 +1062,9 @@ table[data-border="none"] th {
 
 /* ── MS Word Ribbon & Dynamic UI Design Tokens ── */
 .word-ribbon-bg {
-  background: linear-gradient(180deg, #f3f7fd 0%, #e1ebf9 45%, #cbdef8 50%, #dbe8fa 100%);
-  border-bottom: 1px solid #b8d2f5;
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.04);
+  background: linear-gradient(180deg, var(--card) 0%, color-mix(in srgb, var(--primary) 5%, var(--card)) 45%, color-mix(in srgb, var(--primary) 9%, var(--card)) 50%, color-mix(in srgb, var(--primary) 6%, var(--card)) 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .dark .word-ribbon-bg {
@@ -957,17 +1074,17 @@ table[data-border="none"] th {
 }
 
 .word-group-box {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(128, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 8%, transparent);
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   transition: all 0.2s ease-in-out;
 }
 
 .word-group-box:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(128, 0, 0, 0.2);
-  box-shadow: 0 2px 6px rgba(128, 0, 0, 0.06);
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
 .dark .word-group-box {
@@ -983,12 +1100,12 @@ table[data-border="none"] th {
 }
 
 .word-ribbon-tab-active {
-  background: linear-gradient(180deg, #ffffff 0%, #f4f8fe 100%) !important;
-  color: #800000 !important;
+  background: linear-gradient(180deg, var(--card) 0%, color-mix(in srgb, var(--primary) 4%, var(--card)) 100%) !important;
+  color: var(--primary) !important;
   font-weight: 700 !important;
-  border-color: #9cbde8 !important;
-  border-bottom-color: #ffffff !important;
-  box-shadow: 0 -3px 8px rgba(128, 0, 0, 0.12), inset 0 2px 0 var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border)) !important;
+  border-bottom-color: var(--card) !important;
+  box-shadow: 0 -3px 8px color-mix(in srgb, var(--primary) 12%, transparent), inset 0 2px 0 var(--primary);
   border-top-left-radius: 6px !important;
   border-top-right-radius: 6px !important;
 }
@@ -1011,23 +1128,23 @@ table[data-border="none"] th {
 
 .btn-dynamic:hover {
   transform: translateY(-1.5px);
-  box-shadow: 0 4px 10px rgba(128, 0, 0, 0.15);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .btn-dynamic:active {
   transform: translateY(0) scale(0.98);
-  box-shadow: 0 1px 3px rgba(128, 0, 0, 0.2);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .btn-maroon-gradient {
-  background: linear-gradient(135deg, #800000 0%, #991b1b 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(128, 0, 0, 0.25);
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 75%, black) 100%) !important;
+  color: var(--primary-foreground) !important;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
 .btn-maroon-gradient:hover {
-  background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%) !important;
-  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.35);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 75%, black) 0%, color-mix(in srgb, var(--primary) 55%, black) 100%) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 /* Word 2007 Quick Styles Gallery Cards */
@@ -1037,7 +1154,7 @@ table[data-border="none"] th {
 
 .word-style-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(128, 0, 0, 0.15);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 15%, transparent);
   border-color: var(--primary) !important;
 }
 
@@ -1056,8 +1173,8 @@ table[data-border="none"] th {
 
 /* Horizontal & Vertical Ruler Markers */
 .word-ruler {
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, var(--card) 0%, var(--muted) 100%);
+  border-bottom: 1px solid var(--border);
 }
 
 .dark .word-ruler {

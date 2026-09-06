@@ -30,6 +30,30 @@ const THEMES = [
     badge: "Clean"
   },
   {
+    id: "forest",
+    name: "Forest Green",
+    description: "Fresh Green & White",
+    color: "#15803d",
+    bgClass: "bg-[#15803d]",
+    badge: "New"
+  },
+  {
+    id: "purple",
+    name: "Royal Purple",
+    description: "Rich Violet Accent",
+    color: "#7c3aed",
+    bgClass: "bg-[#7c3aed]",
+    badge: "New"
+  },
+  {
+    id: "amber",
+    name: "Sunset Amber",
+    description: "Warm Amber & Cream",
+    color: "#d97706",
+    bgClass: "bg-[#d97706]",
+    badge: "New"
+  },
+  {
     id: "dark",
     name: "Midnight Dark",
     description: "Dark Crimson & Night",
