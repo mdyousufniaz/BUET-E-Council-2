@@ -1107,6 +1107,7 @@ const KEYBOARD_SHORTCUTS_DATA = [
     category: "View & Navigation",
     shortcuts: [
       { key: "Ctrl + /", desc: "Open Keyboard Shortcuts Guide" },
+      { key: "Ctrl + Shift + F", desc: "Toggle Full Screen Window Mode" },
       { key: "Esc", desc: "Exit Fullscreen Mode or Close Open Modals" }
     ]
   }
@@ -2189,7 +2190,7 @@ const MenuBar = ({
                 ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
                 : 'btn-maroon-gradient shadow-2xs'
             }`}
-            title={isFullscreen ? "Exit Fullscreen (Esc)" : "Full Screen Window Mode"}
+            title={isFullscreen ? "Exit Fullscreen (Esc / Ctrl+Shift+F)" : "Full Screen Window Mode (Ctrl+Shift+F)"}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             <span>{isFullscreen ? "Exit Fullscreen" : "Full Screen"}</span>
@@ -4706,13 +4707,18 @@ export default function RichTextEditor({
   const pageHeightMm = pageSettings.orientation === 'landscape' ? rawPageW : rawPageH;
 
   useEffect(() => {
-    const handleEscKey = (e: KeyboardEvent) => {
+    const handleFullscreenKeys = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isFullscreen) {
         setIsFullscreen(false);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setIsFullscreen(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleEscKey);
-    return () => window.removeEventListener('keydown', handleEscKey);
+    window.addEventListener('keydown', handleFullscreenKeys);
+    return () => window.removeEventListener('keydown', handleFullscreenKeys);
   }, [isFullscreen]);
 
   const editor = useEditor({
