@@ -1034,17 +1034,26 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant) => {
                             </tr>`;
                         }
 
-                        // Single-select mirror of UI/backend: submitted > custom > executed > not_executed.
-                        const isSubmitted = ag.is_submitted_for_next_meeting === true || ag.is_submitted_for_next_meeting === 'true' || ag.is_submitted_for_next_meeting === 't' || ag.is_submitted_for_next_meeting === 1;
+                        // Resolution status: every status stores its own display text in
+                        // execution_status (prefilled default, editable) — render it
+                        // as-is. Fall back to the status defaults only for legacy
+                        // rows saved before per-status text existed (NULL/blank).
+                        const STATUS_DEFAULTS = {
+                            not_executed: 'অবাস্তবায়িত',
+                            executed: 'বাস্তবায়িত',
+                            submitted: 'পরবর্তী মিটিং এ উপস্থাপনের জন্য আবেদন করা হল'
+                        };
                         const cleanExecText = ag.execution_status ? String(ag.execution_status).replace(/<[^>]*>/g, '').trim() : '';
                         let statusColHtml = '';
-                        if (isSubmitted) {
-                            statusColHtml = 'পরবর্তী মিটিং এ উপস্থাপন এর জন্য আবেদন করা হল';
-                        } else if (cleanExecText.length > 0) {
+                        if (cleanExecText.length > 0) {
                             statusColHtml = convertMarkdownTablesToHtml(ag.execution_status);
                         } else {
-                            const isExec = ag.is_executed === true || ag.is_executed === 'yes' || ag.is_executed === 'true' || ag.is_executed === 't' || ag.is_executed === 1;
-                            statusColHtml = isExec ? 'বাস্তবায়িত' : 'অবাস্তবায়িত';
+                            // Explicit column first (only it distinguishes edited
+                            // Not-Executed text from Custom); legacy flags fallback.
+                            const st = ag.resolution_status;
+                            const isSubmitted = st ? st === 'submitted' : (ag.is_submitted_for_next_meeting === true || ag.is_submitted_for_next_meeting === 'true' || ag.is_submitted_for_next_meeting === 't' || ag.is_submitted_for_next_meeting === 1);
+                            const isExec = st ? st === 'executed' : (ag.is_executed === true || ag.is_executed === 'yes' || ag.is_executed === 'true' || ag.is_executed === 't' || ag.is_executed === 1);
+                            statusColHtml = isSubmitted ? STATUS_DEFAULTS.submitted : (isExec ? STATUS_DEFAULTS.executed : (st === 'custom' ? '' : STATUS_DEFAULTS.not_executed));
                         }
 
                         tableRows += `

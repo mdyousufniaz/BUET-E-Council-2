@@ -101,6 +101,27 @@ const ensureNoticeSchema = `
 `;
 pool.query(ensureNoticeSchema).catch((err) => console.error('ensureNoticeSchema error:', err.message));
 
+const ensureResolutionStatus = `
+  ALTER TABLE agenda ADD COLUMN IF NOT EXISTS resolution_status VARCHAR(20);
+  UPDATE agenda SET resolution_status = 'submitted'
+  WHERE resolution_status IS NULL AND is_submitted_for_next_meeting IS TRUE;
+  UPDATE agenda SET resolution_status = 'executed'
+  WHERE resolution_status IS NULL
+    AND is_submitted_for_next_meeting IS NOT TRUE
+    AND is_executed IS TRUE;
+  UPDATE agenda SET resolution_status = 'custom'
+  WHERE resolution_status IS NULL
+    AND is_submitted_for_next_meeting IS NOT TRUE
+    AND is_executed IS NOT TRUE
+    AND execution_status IS NOT NULL
+    AND btrim(regexp_replace(execution_status, '<[^>]*>', '', 'g')) <> ''
+    AND btrim(regexp_replace(execution_status, '<[^>]*>', '', 'g')) NOT IN ('অবাস্তবায়িত', 'অবাস্তবায়িত');
+  UPDATE agenda SET resolution_status = 'not_executed'
+  WHERE resolution_status IS NULL;
+  ALTER TABLE agenda ALTER COLUMN resolution_status SET DEFAULT 'not_executed';
+`;
+pool.query(ensureResolutionStatus).catch((err) => console.error('ensureResolutionStatus error:', err.message));
+
 module.exports = {
     query: (text, params) => pool.query(text, params),
     pool

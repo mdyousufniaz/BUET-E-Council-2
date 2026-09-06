@@ -439,7 +439,7 @@ const getResolutions = async (req, res, next) => {
             }
         }
 
-        let query = 'SELECT a.id, a.meeting_id, a.agenda_serial, a.resolution, a.is_executed, a.execution_status, a.is_submitted_for_next_meeting FROM agenda a WHERE a.resolution IS NOT NULL';
+        let query = 'SELECT a.id, a.meeting_id, a.agenda_serial, a.resolution, a.is_executed, a.execution_status, a.is_submitted_for_next_meeting, a.resolution_status FROM agenda a WHERE a.resolution IS NOT NULL';
         let params = [];
 
         if (meeting_id) {
@@ -533,8 +533,17 @@ const updateResolution = async (req, res, next) => {
 
 // Single-select resolution status: exactly one of
 // 'not_executed' | 'executed' | 'submitted' | 'custom' may be active.
-// Stored as: not_executed=(false,NULL,false), executed=(true,NULL,false),
-// submitted=(false,NULL,true + archive copy), custom=(false,<html>,false).
+// Every status carries its own display text in `execution_status` (prefilled
+// with the default below, editable in UI, rendered as-is in the
+// resolution-status PDF). Flags stay the source of truth for which radio is
+// selected: submitted=(false,text,true + archive copy),
+// executed=(true,text,false), not_executed/custom=(false,text,false).
+const STATUS_DEFAULTS = {
+    not_executed: 'অবাস্তবায়িত',
+    executed: 'বাস্তবায়িত',
+    submitted: 'পরবর্তী মিটিং এ উপস্থাপনের জন্য আবেদন করা হল',
+    custom: ''
+};
 const hasCustomText = (val) => {
     if (!val) return false;
     const plain = String(val).replace(/<[^>]*>/g, '').trim();
@@ -574,9 +583,18 @@ const updateExecutionStatus = async (req, res, next) => {
         if (existingRes.rows.length === 0) return next(new CustomError('Resolution/Agenda not found', 404));
         const agenda = existingRes.rows[0];
 
-        if (derived === 'custom' && !hasCustomText(req.body.execution_status)) {
+        // Every status must carry non-blank display text. If the caller sends
+        // an explicit (but blank) execution_status, reject; if it sends none
+        // at all (legacy caller), fall back to the status default.
+        const sentText = req.body.execution_status;
+        const sentBlank = sentText !== undefined && !hasCustomText(sentText);
+        if (derived === 'custom' && !hasCustomText(sentText)) {
             return next(new CustomError('execution_status text is required for custom status', 400));
         }
+        if (derived !== 'custom' && sentBlank) {
+            return next(new CustomError('status text cannot be blank', 400));
+        }
+        const resolvedText = hasCustomText(sentText) ? sentText : STATUS_DEFAULTS[derived];
 
         const client = await db.pool.connect();
         try {
@@ -598,28 +616,30 @@ const updateExecutionStatus = async (req, res, next) => {
                     );
                 }
                 await client.query(
-                    'UPDATE agenda SET is_executed = false, execution_status = NULL, is_submitted_for_next_meeting = true WHERE id = $1',
-                    [agendamId]
+                    "UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = true, resolution_status = 'submitted' WHERE id = $2",
+                    [resolvedText, agendamId]
                 );
             } else {
-                // Leaving submitted state removes the corresponding archive copy.
+                // Leaving submitted state removes the corresponding archive
+                // copy (best-effort: if it was already removed from the
+                // archive list, the DELETE matches 0 rows and we just unmark).
                 if (agenda.is_submitted_for_next_meeting) {
                     await deleteArchiveCopies(client, agenda);
                 }
                 if (derived === 'executed') {
                     await client.query(
-                        'UPDATE agenda SET is_executed = true, execution_status = NULL, is_submitted_for_next_meeting = false WHERE id = $1',
-                        [agendamId]
+                        "UPDATE agenda SET is_executed = true, execution_status = $1, is_submitted_for_next_meeting = false, resolution_status = 'executed' WHERE id = $2",
+                        [resolvedText, agendamId]
                     );
                 } else if (derived === 'custom') {
                     await client.query(
-                        'UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = false WHERE id = $2',
-                        [req.body.execution_status, agendamId]
+                        "UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = false, resolution_status = 'custom' WHERE id = $2",
+                        [resolvedText, agendamId]
                     );
                 } else {
                     await client.query(
-                        'UPDATE agenda SET is_executed = false, execution_status = NULL, is_submitted_for_next_meeting = false WHERE id = $1',
-                        [agendamId]
+                        "UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = false, resolution_status = 'not_executed' WHERE id = $2",
+                        [resolvedText, agendamId]
                     );
                 }
             }
@@ -1051,10 +1071,10 @@ const copyToArchive = async (req, res, next) => {
                 ]
             );
 
-            // 2. Mark the original as submitted — exclusive: clear executed + custom
+            // 2. Mark the original as submitted — exclusive: store submitted default text
             await client.query(
-                'UPDATE agenda SET is_executed = false, execution_status = NULL, is_submitted_for_next_meeting = true WHERE id = $1',
-                [id]
+                "UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = true, resolution_status = 'submitted' WHERE id = $2",
+                [STATUS_DEFAULTS.submitted, id]
             );
 
             await client.query('COMMIT');
@@ -1097,10 +1117,10 @@ const removeFromArchive = async (req, res, next) => {
                 [agenda.meeting_id, agenda.is_suppli, id]
             );
 
-            // 2. Unmark the original
+            // 2. Unmark the original — undo submit, fall back to Not executed default text
             await client.query(
-                'UPDATE agenda SET is_submitted_for_next_meeting = false WHERE id = $1',
-                [id]
+                "UPDATE agenda SET is_executed = false, execution_status = $1, is_submitted_for_next_meeting = false, resolution_status = 'not_executed' WHERE id = $2",
+                [STATUS_DEFAULTS.not_executed, id]
             );
 
             await client.query('COMMIT');

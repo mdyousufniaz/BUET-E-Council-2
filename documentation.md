@@ -44,6 +44,7 @@ This document serves as the comprehensive technical specification and developer 
   - [5.4 Take Attendance — Search & Filter](#54-take-attendance--search--filter)
   - [5.5 Resolution PDF — Dynamic Column Layout](#55-resolution-pdf--dynamic-column-layout)
   - [5.6 Signed Persona — Resolution Signature Configuration](#56-signed-persona--resolution-signature-configuration)
+  - [5.7 Resolution Status — Single-Select UI](#57-resolution-status--single-select-ui)
 - [6. Development, Maintenance & Troubleshooting](#6-development-maintenance--troubleshooting)
   - [6.1 Running via Docker Compose](#61-running-via-docker-compose)
   - [6.2 Local Microservice Development Setup](#62-local-microservice-development-setup)
@@ -158,7 +159,7 @@ CREATE TYPE account_status AS ENUM ('active', 'inactive');
    - Handover fields: `agenda_handover_level`, `suppli_agenda_handover_level`, `resolution_handover_level`, `resolution_status_handover_level`
    - Lock fields: `agenda_locked_level`, `suppli_agenda_locked_level`, `resolution_locked_level`, `resolution_status_locked_level`, `meeting_locked_level`, `invitees_locked_level`, `presentees_locked_level`, `conclusion_locked_level`
    - Signature fields: `president_signature` (TEXT), `secretary_signature` (TEXT) — per-meeting signature overrides for resolution PDFs
-3. **`agenda`**: Agenda and resolution content. Automatically maintains generated `content_tsv` and `resolution_tsv` tsvector columns using PostgreSQL's `simple` text search dictionary.
+3. **`agenda`**: Agenda and resolution content. Automatically maintains generated `content_tsv` and `resolution_tsv` tsvector columns using PostgreSQL's `simple` text search dictionary. Resolution status is stored per agendum via `resolution_status` (`not_executed` | `executed` | `submitted` | `custom`, the single-select source of truth), `execution_status` (display text for the selected status, rendered as-is in the resolution-status PDF), and `is_submitted_for_next_meeting` (archive flag for Submit for Next Meeting).
 4. **`agenda_chunks` & `resolution_chunks`**: Stores text chunks and their 1024-dimensional float vector embeddings output by `BAAI/bge-m3`.
 5. **`invitees`**: Unified entity managing both meeting invitees and attendance presentee records (`is_present BOOLEAN DEFAULT false`). Automatically mirrors seniority serial from linked `members` (`member_id`) via database trigger `trg_sync_invitee_serial`. Note that the legacy `presentees` table has been removed.
 
@@ -235,7 +236,7 @@ The system tracks **8 distinct section locks** on each meeting record:
 | **Agenda Lock** | `agenda_locked_level` | Main agenda items & annexure uploads | $\text{CanEdit} \iff L_{user} \ge L_{agenda\_locked} \lor isAdmin$ |
 | **Suppli Agenda Lock** | `suppli_agenda_locked_level` | Supplementary agenda items (`is_suppli`) | $\text{CanEdit} \iff L_{user} \ge L_{suppli\_locked} \lor isAdmin$ |
 | **Resolution Lock** | `resolution_locked_level` | Resolution text authoring | $\text{CanEdit} \iff L_{user} \ge L_{resolution\_locked} \lor isAdmin$ |
-| **Resolution Status Lock** | `resolution_status_locked_level` | Resolution status single-select (`is_executed` / `execution_status` / `is_submitted_for_next_meeting` — exactly one of Not Executed, Executed, Submit for Next Meeting, Custom) | $\text{CanEdit} \iff L_{user} \ge L_{res\_status\_locked} \lor isAdmin$ |
+| **Resolution Status Lock** | `resolution_status_locked_level` | Resolution status single-select (`resolution_status` = Not Executed / Executed / Submit for Next Meeting / Custom, with display text in `execution_status` and archive flag in `is_submitted_for_next_meeting`) | $\text{CanEdit} \iff L_{user} \ge L_{res\_status\_locked} \lor isAdmin$ |
 | **Invitees Lock** | `invitees_locked_level` | Invitee list & member seniority ordering | $\text{CanEdit} \iff L_{user} \ge L_{invitees\_locked} \lor isAdmin$ |
 | **Presentees Lock** | `presentees_locked_level` | Attendance taking during active meeting | $\text{CanEdit} \iff L_{user} \ge L_{presentees\_locked} \lor isAdmin$ |
 | **Conclusion Lock** | `conclusion_locked_level` | Meeting conclusion & wrap-up summary | $\text{CanEdit} \iff L_{user} \ge L_{conclusion\_locked} \lor isAdmin$ |
@@ -607,7 +608,7 @@ export const DEPARTMENT_MERGE_RULES = [
 | `DELETE` | `/api/agendas/archived/:id` | Permanently delete archived item |
 | `GET` | `/api/agendas/:id/revisions` | View revision history for an agenda item |
 | `POST` | `/api/agendas/:id/annexures` | Upload annexure attachment to an agenda item |
-| `PUT` | `/api/agendas/resolutions/:resId/execution` | Update resolution status (single-select: `status` = `not_executed` \| `executed` \| `submitted` \| `custom` with `execution_status` text for custom; backend enforces exclusivity and creates/removes the archive copy) |
+| `PUT` | `/api/agendas/resolutions/:resId/execution` | Update resolution status (single-select: `status` = `not_executed` \| `executed` \| `submitted` \| `custom` plus `execution_status` display text for that status — prefilled defaults: Not Executed `অবাস্তবায়িত`, Executed `বাস্তবায়িত`, Submit `পরবর্তী মিটিং এ উপস্থাপনের জন্য আবেদন করা হল`, Custom blank; blank text rejected; backend enforces exclusivity and creates/removes the archive copy) |
 | `GET` | `/api/members` | List university council members |
 | `POST` | `/api/members` | Add a new member |
 | `PUT` | `/api/members/:id` | Update member information |
@@ -986,6 +987,29 @@ Same as Notice — only `admin`, `superadmin`, `moderator` can access Signed Per
 | `PUT` | `/api/notices/settings/signed-persona` | Admin/Superadmin/Moderator | Update global default signatures (blank values allowed) |
 | `PUT` | `/api/meetings/:id/signatures` | Non-Viewer | Update per-meeting signatures (blank values allowed) |
 
+
+### 5.7 Resolution Status — Single-Select UI
+
+Implementation: [`frontend/components/meetings/ResolutionView.tsx`](frontend/components/meetings/ResolutionView.tsx), [`meeting_service/controllers/agendaController.js`](meeting_service/controllers/agendaController.js) (`updateExecutionStatus`)
+
+Past meetings with a resolution show an Execution Status block with four radio buttons in a horizontal layout — exactly one selectable at a time: Not Executed, Executed, Submit for Next Meeting, Custom (default: Not Executed).
+
+#### Flexible per-status values
+
+Each status owns its display text (saved to `agenda.execution_status`, rendered as-is in the resolution-status PDF). Defaults live in a single map, so they can be fixed in one place:
+
+| Status | Default text |
+|---|---|
+| Not Executed | `অবাস্তবায়িত` |
+| Executed | `বাস্তবায়িত` |
+| Submit for Next Meeting | `পরবর্তী মিটিং এ উপস্থাপনের জন্য আবেদন করা হল` |
+| Custom | blank (`''`) |
+
+The selected status itself is stored in `agenda.resolution_status` (explicit source of truth — edited Not-Executed text is therefore never mistaken for Custom). Blank text is rejected by both frontend and backend (`400`).
+
+#### Simple text input (no rich text editor)
+
+The status value field is a plain text input: it loads prefilled with the status default (or the saved text when re-editing), with Edit / Save / Cancel buttons. Preset statuses (Not Executed, Executed, Submit) auto-save their default text on radio select and remain editable via Edit afterwards; Custom opens a blank input and requires manual Save (blank/unsaved falls back to the previous selection). Selecting Submit archives the agendum (`copy-to-archive`); switching away removes the archive copy unless it was already deleted from the archive list.
 
 ## 6. Development, Maintenance & Troubleshooting
 

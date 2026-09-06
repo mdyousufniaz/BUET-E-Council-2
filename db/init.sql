@@ -204,6 +204,10 @@ CREATE TABLE agenda (
     resolution_plain TEXT,
     is_executed BOOLEAN DEFAULT false,
     execution_status TEXT, -- Detailed status description
+    -- Explicit single-select resolution status: not_executed | executed |
+    -- submitted | custom. Source of truth for the selected radio (flags+text
+    -- alone cannot distinguish edited Not-Executed text from Custom).
+    resolution_status VARCHAR(20) DEFAULT 'not_executed',
     agenda_serial INTEGER, -- e.g., "Ag-1", "Res-5"
     meeting_id UUID REFERENCES meetings (id) ON DELETE CASCADE,
     legacy_agenda_id VARCHAR(20) UNIQUE,

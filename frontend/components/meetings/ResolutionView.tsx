@@ -114,42 +114,84 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
     });
   };
 
-  const getResolutionStatus = (agenda: any): 'not_executed' | 'executed' | 'submitted' | 'custom' => {
-    if (agenda.is_submitted_for_next_meeting) return 'submitted';
+  // Default display text per status (PDF renders the saved text as-is).
+  const STATUS_DEFAULTS = {
+    not_executed: 'অবাস্তবায়িত',
+    executed: 'বাস্তবায়িত',
+    submitted: 'পরবর্তী মিটিং এ উপস্থাপনের জন্য আবেদন করা হল',
+    custom: '',
+  } as const;
+  type ResolutionStatus = keyof typeof STATUS_DEFAULTS;
+  // Legacy spelling variants of the Not-executed default also count as default.
+  const NOT_EXECUTED_DEFAULTS = ['অবাস্তবায়িত', 'অবাস্তবায়িত'];
+
+  const isBlankHtml = (v: string) => !(v || '').replace(/<[^>]*>/g, '').trim();
+  // Simple-input values are plain text; strip tags from legacy rich-text rows.
+  const toPlainText = (v: string) => (v || '').replace(/<[^>]*>/g, '').trim();
+
+  // Explicit resolution_status column is the source of truth (it alone can
+  // distinguish edited Not-Executed text from Custom — flags+text cannot).
+  // Legacy fallback below covers rows from before the column existed.
+  // Default: Not executed (fresh rows have no flags and blank text).
+  const getResolutionStatus = (agenda: any): ResolutionStatus => {
+    const explicit = agenda.resolution_status;
+    if (explicit === 'submitted' || explicit === 'executed' || explicit === 'custom' || explicit === 'not_executed') return explicit;
+    if (agenda.is_submitted_for_next_meeting === true || agenda.is_submitted_for_next_meeting === 'true' || agenda.is_submitted_for_next_meeting === 't') return 'submitted';
+    if (agenda.is_executed === true || agenda.is_executed === 'yes' || agenda.is_executed === 't' || agenda.is_executed === 'true' || agenda.is_executed === 1) return 'executed';
     const plain = (agenda.execution_status || '').replace(/<[^>]*>/g, '').trim();
-    if (plain.length > 0) return 'custom';
-    if (agenda.is_executed === true || agenda.is_executed === 'yes' || agenda.is_executed === 't' || agenda.is_executed === 'true') return 'executed';
-    return 'not_executed';
+    if (!plain || NOT_EXECUTED_DEFAULTS.includes(plain)) return 'not_executed';
+    return 'custom';
   };
 
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<ResolutionStatus | null>(null);
 
-  // Single-select: exactly one status at a time. The backend enforces
-  // exclusivity (clearing the other fields + creating/removing the archive
-  // copy), so every transition goes through the unified execution endpoint.
-  const handleStatusChange = async (agenda: any, next: 'not_executed' | 'executed' | 'submitted' | 'custom', customText?: string) => {
+  // Opens the simple input for this agenda, prefilled with the status text.
+  const openStatusInput = (agenda: any, next: ResolutionStatus) => {
     const current = getResolutionStatus(agenda);
-    if (current === next && next !== 'custom') return;
+    if (executingId !== agenda.id) setExecutingId(agenda.id);
+    setPendingStatus(next);
+    // Prefill: keep saved text when re-selecting the saved status,
+    // otherwise the status default (blank for Custom).
+    setExecutionContent(next === current && agenda.execution_status ? toPlainText(agenda.execution_status) : STATUS_DEFAULTS[next]);
+  };
+
+  // Radio click: Custom opens a blank input for manual save; the other
+  // statuses auto-save their default text immediately (Edit stays available).
+  const handleStatusRadio = (agenda: any, next: ResolutionStatus) => {
+    if (next === 'custom') {
+      openStatusInput(agenda, 'custom');
+      return;
+    }
+    const current = getResolutionStatus(agenda);
+    if (next === current && executingId !== agenda.id) return; // no-op
+    saveStatus(agenda, next, STATUS_DEFAULTS[next]);
+  };
+
+  const cancelStatusEdit = () => {
+    setExecutingId(null);
+    setPendingStatus(null);
+  };
+
+  // Single-select save: exactly one status at a time. The backend enforces
+  // exclusivity + creates/removes the archive copy for Submit for Next
+  // Meeting, so every transition goes through the unified execution endpoint.
+  const saveStatus = async (agenda: any, next: ResolutionStatus, text: string) => {
+    const current = getResolutionStatus(agenda);
+    if (isBlankHtml(text)) {
+      toast.error(next === 'custom' ? "Custom status text is required" : "Status text cannot be blank");
+      // Custom with no/blank value falls back to the previous selection.
+      if (next === 'custom') cancelStatusEdit();
+      return;
+    }
     setStatusSavingId(agenda.id);
     setIsSavingExecution(true);
     setArchivingId(next === 'submitted' || current === 'submitted' ? agenda.id : null);
     try {
-      if (next === 'custom') {
-        if (!customText || !customText.replace(/<[^>]*>/g, '').trim()) {
-          toast.error("Custom status text is required");
-          return;
-        }
-        await api.put(`/agendas/resolutions/${agenda.id}/execution`, { status: 'custom', execution_status: customText });
-        toast.success("Custom status saved");
-      } else if (next === 'submitted') {
-        await api.put(`/agendas/resolutions/${agenda.id}/execution`, { status: 'submitted' });
-        toast.success("Submitted for next meeting");
-      } else {
-        await api.put(`/agendas/resolutions/${agenda.id}/execution`, { status: next });
-        toast.success("Execution status updated");
-      }
+      await api.put(`/agendas/resolutions/${agenda.id}/execution`, { status: next, execution_status: text });
+      toast.success(next === 'submitted' ? "Submitted for next meeting" : "Execution status updated");
       mutate();
-      if (next === 'custom') setExecutingId(null);
+      cancelStatusEdit();
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || "Failed to update");
     } finally {
@@ -157,6 +199,13 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
       setIsSavingExecution(false);
       setArchivingId(null);
     }
+  };
+
+  // Manual save from the input (Custom, or edited preset text).
+  const saveManualEdit = (agenda: any) => {
+    const current = getResolutionStatus(agenda);
+    const next: ResolutionStatus = (executingId === agenda.id && pendingStatus) ? pendingStatus : current;
+    saveStatus(agenda, next, executionContent);
   };
 
   const BANGLA_GROUP_LETTERS = ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ', 'ছ', 'জ', 'ঝ', 'ঞ', 'ট', 'ঠ', 'ড', 'ঢ', 'ণ', 'ত', 'থ', 'দ', 'ধ', 'ন', 'প', 'ফ', 'ব', 'ভ', 'ম', 'য', 'র', 'ল', 'শ', 'ষ', 'স', 'হ'];
@@ -395,11 +444,16 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
                     {(() => {
                       const currentStatus = getResolutionStatus(agenda);
+                      const isEditing = executingId === agenda.id;
+                      const activeStatus = isEditing && pendingStatus ? pendingStatus : currentStatus;
                       const busy = statusSavingId === agenda.id || archivingId === agenda.id;
+                      // Prefilled editor value: saved text for the saved status, else the status default (blank for Custom).
+                      const editorValue = isEditing ? executionContent : (agenda.execution_status || STATUS_DEFAULTS[currentStatus]);
+                      const editorBlank = isBlankHtml(editorValue);
                       return (
                       <div className="space-y-4">
                       {/* Single-select resolution status: only one active at a time */}
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-row flex-wrap gap-x-6 gap-y-2">
                         {([
                           { value: 'not_executed', label: 'Not Executed' },
                           { value: 'executed', label: 'Executed' },
@@ -412,58 +466,46 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
                               name={`execution-${agenda.id}`}
                               disabled={readOnly || busy}
                               className="w-4 h-4 border-input text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
-                              checked={currentStatus === opt.value}
-                              onChange={() => {
-                                if (opt.value === 'custom') {
-                                  setExecutingId(agenda.id);
-                                  setExecutionContent(agenda.execution_status || "");
-                                } else {
-                                  handleStatusChange(agenda, opt.value);
-                                }
-                              }}
+                              checked={activeStatus === opt.value}
+                              onChange={() => handleStatusRadio(agenda, opt.value)}
                             />
                             <span className="text-sm font-medium">{opt.label}</span>
                           </label>
                         ))}
                       </div>
 
-                      {/* Custom status input — visible when Custom is selected */}
-                      {(currentStatus === 'custom' || executingId === agenda.id) && (
-                        <div>
-                          {executingId === agenda.id && !readOnly ? (
-                            <div className="border border-primary/50 rounded-md overflow-hidden ring-4 ring-primary/10">
-                              <RichTextEditor
-                                content={executionContent}
-                                onChange={setExecutionContent}
-                                className="p-4 min-h-[100px]"
-                              />
-                              <div className="bg-muted p-2 flex justify-end gap-2 border-t border-border">
-                                <button onClick={() => {
-                                  setExecutingId(null);
-                                  if (currentStatus !== 'custom') setExecutionContent("");
-                                }} className="px-3 py-1 text-xs text-muted-foreground hover:bg-background rounded-md">Cancel</button>
-                                <button onClick={() => handleStatusChange(agenda, 'custom', executionContent)}
-                                  disabled={isSavingExecution || busy} className="px-3 py-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded-md disabled:opacity-50 transition-colors">
-                                  {isSavingExecution || busy ? "Saving..." : "Save"}
-                                </button>
-                              </div>
-                            </div>
-                          ) : agenda.execution_status ? (
-                            <div className="relative group">
-                              {!readOnly && (
-                              <button
-                                onClick={() => { setExecutingId(agenda.id); setExecutionContent(agenda.execution_status); }}
-                                className="absolute top-0 right-0 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-emerald-50 rounded-md hover:bg-emerald-100 flex items-center gap-2 text-xs font-medium z-10"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" /> Edit
-                              </button>
-                              )}
-                              <div
-                                className="prose prose-sm dark:prose-invert max-w-none text-foreground bg-emerald-200/30 border border-emerald-100 p-4 rounded-md shadow-sm"
-                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(agenda.execution_status) }}
-                              />
-                            </div>
-                          ) : null}
+                      {/* Status text — prefilled with the status default, editable via simple input; saved as-is to the PDF */}
+                      {readOnly || !isEditing ? (
+                        <div className="relative group">
+                          {!readOnly && (
+                            <button
+                              onClick={() => openStatusInput(agenda, currentStatus)}
+                              className="absolute top-2 right-2 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-emerald-50 rounded-md hover:bg-emerald-100 flex items-center gap-1.5 text-xs font-medium z-10"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" /> Edit
+                            </button>
+                          )}
+                          <div className="text-sm text-foreground bg-emerald-200/30 border border-emerald-100 px-3 py-2.5 rounded-md shadow-sm">
+                            {toPlainText(agenda.execution_status) || STATUS_DEFAULTS[currentStatus]}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={executionContent}
+                            onChange={(e) => setExecutionContent(e.target.value)}
+                            placeholder={activeStatus === 'custom' ? "Enter custom status..." : STATUS_DEFAULTS[activeStatus]}
+                            disabled={busy}
+                            className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 disabled:opacity-50"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={cancelStatusEdit} className="px-3 py-1.5 text-xs text-muted-foreground border border-border hover:bg-muted rounded-md transition-colors">Cancel</button>
+                            <button onClick={() => saveManualEdit(agenda)}
+                              disabled={isSavingExecution || busy || editorBlank} className="px-3 py-1.5 text-xs bg-emerald-600 text-white hover:bg-emerald-700 rounded-md disabled:opacity-50 transition-colors">
+                              {isSavingExecution || busy ? "Saving..." : "Save"}
+                            </button>
+                          </div>
                         </div>
                       )}
                       </div>
