@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Fragment, useEffect, useState, useCallback, type CSSProperties } from 'react';
+import React, { Fragment, useEffect, useState, useCallback, useRef, type CSSProperties } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -32,12 +32,15 @@ import {
   ZoomIn, ZoomOut, RotateCw, Eye, SplitSquareVertical, AlertCircle, Info,
   CheckSquare, ArrowLeftRight, Check, Maximize2, Minimize2, Sparkles, Sliders,
   Scissors, Copy, Clipboard, Paintbrush, ArrowDownAZ, Pilcrow, PaintBucket,
-  ChevronDown, Grid, Sparkle, Layout, Ruler, Sigma, Keyboard, HelpCircle, Combine, Split
+  ChevronDown, Grid, Sparkle, Layout, Ruler, Sigma, Keyboard, HelpCircle, Combine, Split,
+  RectangleHorizontal, RectangleVertical, Droplets, Square as BorderIcon,
+  AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import { isBijoyText, convertBijoyToUnicode, convertHtmlBijoyToUnicode } from '../lib/bijoyToUnicode';
 import { convertMarkdownTablesToHtml } from '../lib/sanitize';
+import { rowResizing } from '../lib/tableRowResizing';
 import { toast } from 'sonner';
 
 // Custom TipTap Extension for Font Size
@@ -376,12 +379,25 @@ export class CustomTableView extends TableView {
     const result = super.update(node);
     if (result && this.table) {
       const borderStyle = node.attrs['data-border'] || 'full';
+      const tableStyle = node.attrs['data-table-style'] || 'none';
+      const align = node.attrs['data-align'] || 'left';
       this.table.setAttribute('data-border', borderStyle);
-      this.table.className = `meeting-table border-${borderStyle}`;
+      this.table.setAttribute('data-table-style', tableStyle);
+      this.table.setAttribute('data-align', align);
+      this.table.className = `meeting-table border-${borderStyle} table-style-${tableStyle} table-align-${align}`;
     }
     return result;
   }
 }
+
+// Drag-to-resize table rows, the vertical counterpart to the table
+// extension's built-in column resizing (which only ships columns).
+export const TableRowResizing = Extension.create({
+  name: 'tableRowResizing',
+  addProseMirrorPlugins() {
+    return [rowResizing({ cellMinHeight: 20 })];
+  },
+});
 
 // Custom Table with Tab Keyboard Shortcut, Shift-Enter Row Navigation & Border options
 export const CustomTable = Table.extend({
@@ -406,6 +422,28 @@ export const CustomTable = Table.extend({
           return {
             'data-border': borderStyle,
             class: `meeting-table border-${borderStyle}`,
+          };
+        },
+      },
+      'data-table-style': {
+        default: 'none',
+        parseHTML: element => element.getAttribute('data-table-style') || 'none',
+        renderHTML: attributes => {
+          const tableStyle = attributes['data-table-style'] || 'none';
+          return {
+            'data-table-style': tableStyle,
+            class: `table-style-${tableStyle}`,
+          };
+        },
+      },
+      'data-align': {
+        default: 'left',
+        parseHTML: element => element.getAttribute('data-align') || 'left',
+        renderHTML: attributes => {
+          const align = attributes['data-align'] || 'left';
+          return {
+            'data-align': align,
+            class: `table-align-${align}`,
           };
         },
       },
@@ -1115,6 +1153,52 @@ const PRESET_HIGHLIGHT_COLORS = [
   { label: 'Orange Highlight', color: '#fed7aa' },
 ];
 
+export type PageSize = 'A4' | 'Letter' | 'Legal' | 'A3';
+export type PageOrientation = 'portrait' | 'landscape';
+export interface PageMargins { top: number; right: number; bottom: number; left: number; }
+export interface PageSettings {
+  size: PageSize;
+  orientation: PageOrientation;
+  margins: PageMargins;
+  marginPreset: 'normal' | 'narrow' | 'moderate' | 'wide' | 'custom';
+  pageColor: string;
+  border: { enabled: boolean; style: 'solid' | 'double' | 'dashed' | 'dotted'; width: number; color: string };
+  watermark: { enabled: boolean; text: string; color: string; opacity: number };
+}
+
+export const DEFAULT_PAGE_SETTINGS: PageSettings = {
+  size: 'A4',
+  orientation: 'portrait',
+  margins: { top: 25.4, right: 25.4, bottom: 25.4, left: 25.4 },
+  marginPreset: 'normal',
+  pageColor: '',
+  border: { enabled: false, style: 'solid', width: 1, color: '#800000' },
+  watermark: { enabled: false, text: 'CONFIDENTIAL', color: '#94a3b8', opacity: 0.25 },
+};
+
+const PAGE_SIZES_MM: Record<PageSize, [number, number]> = {
+  A4: [210, 297],
+  Letter: [215.9, 279.4],
+  Legal: [215.9, 355.6],
+  A3: [297, 420],
+};
+
+const MARGIN_PRESETS: Record<'normal' | 'narrow' | 'moderate' | 'wide', PageMargins> = {
+  normal: { top: 25.4, right: 25.4, bottom: 25.4, left: 25.4 },
+  narrow: { top: 12.7, right: 12.7, bottom: 12.7, left: 12.7 },
+  moderate: { top: 25.4, right: 19.05, bottom: 25.4, left: 19.05 },
+  wide: { top: 25.4, right: 50.8, bottom: 25.4, left: 50.8 },
+};
+
+const PRESET_PAGE_COLORS = [
+  { label: 'None', color: '' },
+  { label: 'Ivory', color: '#fffdf5' },
+  { label: 'Light Blue', color: '#eef4ff' },
+  { label: 'Light Gray', color: '#f4f4f5' },
+  { label: 'Light Rose', color: '#fff1f2' },
+  { label: 'Light Green', color: '#f0fdf4' },
+];
+
 const PRESET_SHADING_COLORS = [
   { label: 'No Shading', color: '' },
   { label: 'Light Blue Shading', color: '#e0f2fe' },
@@ -1239,21 +1323,88 @@ interface MenuBarProps {
   setShowParagraphMarks: (val: boolean) => void;
   showRuler: boolean;
   setShowRuler: (val: boolean) => void;
+  pageSettings: PageSettings;
+  setPageSettings: React.Dispatch<React.SetStateAction<PageSettings>>;
 }
 
-const MenuBar = ({ 
-  editor, 
-  viewMode, 
-  setViewMode, 
-  zoomLevel, 
-  setZoomLevel, 
-  onOpenFindReplace, 
-  isFullscreen, 
+// Popover that portals to <body> with fixed positioning so it can't be clipped by an
+// ancestor's overflow (the ribbon toolbar sets overflow-x-auto, which per the CSS spec
+// forces overflow-y to auto too, silently clipping any plain `absolute` dropdown).
+const LayoutPopover = ({
+  open,
+  anchorRef,
+  onClose,
+  children,
+  className = '',
+}: {
+  open: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  onClose: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) => {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      if (!anchorRef.current) return;
+      const rect = anchorRef.current.getBoundingClientRect();
+      setStyle({ position: 'fixed', top: rect.bottom + 4, left: rect.left, zIndex: 100005 });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, anchorRef]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as globalThis.Node;
+      if (popRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open, onClose, anchorRef]);
+
+  if (!open || !mounted) return null;
+  return createPortal(
+    <div
+      ref={popRef}
+      style={style}
+      className={`p-2.5 bg-popover border border-border rounded-xl shadow-xl flex flex-col gap-1.5 ${className}`}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+};
+
+const MenuBar = ({
+  editor,
+  viewMode,
+  setViewMode,
+  zoomLevel,
+  setZoomLevel,
+  onOpenFindReplace,
+  isFullscreen,
   setIsFullscreen,
   showParagraphMarks,
   setShowParagraphMarks,
   showRuler,
-  setShowRuler
+  setShowRuler,
+  pageSettings,
+  setPageSettings
 }: MenuBarProps) => {
   const [activeTab, setActiveTab] = useState<'home' | 'insert' | 'table' | 'layout' | 'tools' | 'view'>('home');
   const [isSymbolModalOpen, setIsSymbolModalOpen] = useState(false);
@@ -1281,6 +1432,43 @@ const MenuBar = ({
   const [showShadingPicker, setShowShadingPicker] = useState(false);
   const [formatPainterActive, setFormatPainterActive] = useState(false);
   const [storedFormat, setStoredFormat] = useState<any>(null);
+  const [showMarginsPicker, setShowMarginsPicker] = useState(false);
+  const [showSizePicker, setShowSizePicker] = useState(false);
+  const [showColumnsPicker, setShowColumnsPicker] = useState(false);
+  const [showBreaksPicker, setShowBreaksPicker] = useState(false);
+  const [showPageColorPicker, setShowPageColorPicker] = useState(false);
+  const [showBorderPicker, setShowBorderPicker] = useState(false);
+  const [showWatermarkPicker, setShowWatermarkPicker] = useState(false);
+  const [customMargins, setCustomMargins] = useState<PageMargins>(pageSettings.margins);
+  const marginsBtnRef = useRef<HTMLButtonElement>(null);
+  const sizeBtnRef = useRef<HTMLButtonElement>(null);
+  const columnsBtnRef = useRef<HTMLButtonElement>(null);
+  const breaksBtnRef = useRef<HTMLButtonElement>(null);
+  const watermarkBtnRef = useRef<HTMLButtonElement>(null);
+  const pageColorBtnRef = useRef<HTMLButtonElement>(null);
+  const borderBtnRef = useRef<HTMLButtonElement>(null);
+  const cellShadingBtnRef = useRef<HTMLButtonElement>(null);
+
+  const closeLayoutPickers = () => {
+    setShowMarginsPicker(false);
+    setShowSizePicker(false);
+    setShowColumnsPicker(false);
+    setShowBreaksPicker(false);
+    setShowPageColorPicker(false);
+    setShowBorderPicker(false);
+    setShowWatermarkPicker(false);
+  };
+
+  const applyMarginPreset = (preset: 'normal' | 'narrow' | 'moderate' | 'wide') => {
+    const margins = MARGIN_PRESETS[preset];
+    setCustomMargins(margins);
+    setPageSettings(prev => ({ ...prev, margins, marginPreset: preset }));
+  };
+
+  const applyCustomMargins = () => {
+    setPageSettings(prev => ({ ...prev, margins: customMargins, marginPreset: 'custom' }));
+    setShowMarginsPicker(false);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -1420,6 +1608,76 @@ const MenuBar = ({
     }
 
     return true;
+  };
+
+  const applyTableStyle = (tableStyle: string) => {
+    if (!editor) return false;
+    editor.chain().focus().updateAttributes('table', { 'data-table-style': tableStyle }).run();
+    const { selection } = editor.state;
+    let tablePos: number | null = null;
+    for (let d = selection.$from.depth; d > 0; d--) {
+      const node = selection.$from.node(d);
+      if (node.type.name === 'table') {
+        tablePos = selection.$from.before(d);
+        break;
+      }
+    }
+    if (tablePos !== null) {
+      const tr = editor.state.tr;
+      const tableNode = editor.state.doc.nodeAt(tablePos);
+      if (tableNode) {
+        tr.setNodeMarkup(tablePos, undefined, { ...tableNode.attrs, 'data-table-style': tableStyle });
+        editor.view.dispatch(tr);
+      }
+    }
+    return true;
+  };
+
+  const applyTableAlign = (align: 'left' | 'center' | 'right') => {
+    if (!editor) return false;
+    editor.chain().focus().updateAttributes('table', { 'data-align': align }).run();
+    const { selection } = editor.state;
+    let tablePos: number | null = null;
+    for (let d = selection.$from.depth; d > 0; d--) {
+      const node = selection.$from.node(d);
+      if (node.type.name === 'table') {
+        tablePos = selection.$from.before(d);
+        break;
+      }
+    }
+    if (tablePos !== null) {
+      const tr = editor.state.tr;
+      const tableNode = editor.state.doc.nodeAt(tablePos);
+      if (tableNode) {
+        tr.setNodeMarkup(tablePos, undefined, { ...tableNode.attrs, 'data-align': align });
+        editor.view.dispatch(tr);
+      }
+    }
+    return true;
+  };
+
+  // Table cells store free-form CSS in a single `style` attribute (row height,
+  // shading, vertical alignment). Setting it wholesale would wipe out whatever
+  // was there before, so every control merges its own property into the
+  // existing declaration list instead of clobbering it.
+  const mergeCellStyle = (patch: Record<string, string | null>) => {
+    if (!editor) return;
+    ensureTableFocus();
+    const current: string = editor.getAttributes('tableCell').style || editor.getAttributes('tableHeader').style || '';
+    const map = new Map<string, string>();
+    current.split(';').forEach(decl => {
+      const idx = decl.indexOf(':');
+      if (idx === -1) return;
+      const prop = decl.slice(0, idx).trim();
+      const value = decl.slice(idx + 1).trim();
+      if (prop && value) map.set(prop, value);
+    });
+    Object.entries(patch).forEach(([prop, value]) => {
+      if (value === null) map.delete(prop);
+      else map.set(prop, value);
+    });
+    const serialized = Array.from(map.entries()).map(([prop, value]) => `${prop}: ${value};`).join(' ');
+    editor.chain().focus().setCellAttribute('style', serialized || null).run();
   };
 
   const handleSplitTable = () => {
@@ -1901,6 +2159,16 @@ const MenuBar = ({
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isRibbonEnlarged ? 'rotate-180 text-primary' : ''}`} />
             <span className="hidden sm:inline">{isRibbonEnlarged ? "Shrink Ribbon" : "Enlarge Ribbon"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsShortcutsModalOpen(true)}
+            className="btn-dynamic px-2.5 py-1 rounded bg-card/80 hover:bg-card text-foreground flex items-center gap-1 text-[11px] font-bold cursor-pointer transition-all shadow-2xs"
+            title="Keyboard Shortcuts Guide (Ctrl+/)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden sm:inline">Shortcuts</span>
           </button>
 
           <button
@@ -2631,6 +2899,7 @@ const MenuBar = ({
         {/* ── TAB 3: PAGE LAYOUT TAB ── */}
         {activeTab === 'layout' && (
           <div className="flex items-stretch gap-2.5 w-full py-0.5 min-h-[82px]">
+            {/* VIEW MODE */}
             <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
               <div className="flex items-center gap-2 my-auto">
                 <button
@@ -2654,9 +2923,349 @@ const MenuBar = ({
                   <span>Fluid Canvas</span>
                 </button>
               </div>
+              <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">View</span>
+            </div>
+
+            {/* PAGE SETUP: Margins, Orientation, Size */}
+            <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+              <div className="flex items-center gap-1.5 my-auto">
+                {/* Margins */}
+                <div className="relative">
+                  <button
+                    ref={marginsBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showMarginsPicker; closeLayoutPickers(); setShowMarginsPicker(next); }}
+                    className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
+                    title="Page Margins"
+                  >
+                    <Ruler className="w-4 h-4 text-primary" />
+                    <span>Margins</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  <LayoutPopover open={showMarginsPicker} anchorRef={marginsBtnRef} onClose={() => setShowMarginsPicker(false)} className="w-56">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Margin Presets</span>
+                    {([
+                      { key: 'normal', label: 'Normal', desc: '2.54 cm all sides' },
+                      { key: 'narrow', label: 'Narrow', desc: '1.27 cm all sides' },
+                      { key: 'moderate', label: 'Moderate', desc: '2.54 / 1.91 cm' },
+                      { key: 'wide', label: 'Wide', desc: '2.54 / 5.08 cm' },
+                    ] as const).map(p => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => applyMarginPreset(p.key)}
+                        className={`px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer flex items-center justify-between ${
+                          pageSettings.marginPreset === p.key ? 'bg-primary/15 text-primary font-bold' : 'hover:bg-muted text-foreground'
+                        }`}
+                      >
+                        <span>{p.label}</span>
+                        <span className="text-[10px] text-muted-foreground">{p.desc}</span>
+                      </button>
+                    ))}
+                    <div className="border-t border-border pt-1.5 mt-1 flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Custom (mm)</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([['top', 'Top'], ['bottom', 'Bottom'], ['left', 'Left'], ['right', 'Right']] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            {label}
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={customMargins[key]}
+                              onChange={(e) => setCustomMargins(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+                              className="w-14 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={applyCustomMargins}
+                        className="px-2 py-1 rounded bg-primary text-primary-foreground text-xs font-bold cursor-pointer"
+                      >
+                        Apply Custom Margins
+                      </button>
+                    </div>
+                  </LayoutPopover>
+                </div>
+
+                {/* Orientation */}
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPageSettings(prev => ({ ...prev, orientation: 'portrait' }))}
+                    className={`p-1.5 rounded cursor-pointer border ${pageSettings.orientation === 'portrait' ? 'bg-primary/20 text-primary border-primary/30 font-bold' : 'text-muted-foreground border-transparent hover:bg-muted'}`}
+                    title="Portrait Orientation"
+                  >
+                    <RectangleVertical className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPageSettings(prev => ({ ...prev, orientation: 'landscape' }))}
+                    className={`p-1.5 rounded cursor-pointer border ${pageSettings.orientation === 'landscape' ? 'bg-primary/20 text-primary border-primary/30 font-bold' : 'text-muted-foreground border-transparent hover:bg-muted'}`}
+                    title="Landscape Orientation"
+                  >
+                    <RectangleHorizontal className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Size */}
+                <div className="relative">
+                  <button
+                    ref={sizeBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showSizePicker; closeLayoutPickers(); setShowSizePicker(next); }}
+                    className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
+                    title="Page Size"
+                  >
+                    <Maximize2 className="w-4 h-4 text-primary" />
+                    <span>{pageSettings.size}</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  <LayoutPopover open={showSizePicker} anchorRef={sizeBtnRef} onClose={() => setShowSizePicker(false)} className="w-44 gap-0.5">
+                    {(Object.keys(PAGE_SIZES_MM) as PageSize[]).map(size => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => { setPageSettings(prev => ({ ...prev, size })); setShowSizePicker(false); }}
+                        className={`px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer flex items-center justify-between ${
+                          pageSettings.size === size ? 'bg-primary/15 text-primary font-bold' : 'hover:bg-muted text-foreground'
+                        }`}
+                      >
+                        <span>{size}</span>
+                        <span className="text-[10px] text-muted-foreground">{PAGE_SIZES_MM[size][0]}×{PAGE_SIZES_MM[size][1]} mm</span>
+                      </button>
+                    ))}
+                  </LayoutPopover>
+                </div>
+              </div>
               <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Page Setup</span>
             </div>
 
+            {/* COLUMNS & BREAKS */}
+            <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+              <div className="flex items-center gap-1.5 my-auto">
+                <div className="relative">
+                  <button
+                    ref={columnsBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showColumnsPicker; closeLayoutPickers(); setShowColumnsPicker(next); }}
+                    className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
+                    title="Insert Multi-Column Layout"
+                  >
+                    <Columns className="w-4 h-4 text-primary" />
+                    <span>Columns</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  <LayoutPopover open={showColumnsPicker} anchorRef={columnsBtnRef} onClose={() => setShowColumnsPicker(false)} className="w-40 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => { editor.chain().focus().insertColumnGroup(2).run(); setShowColumnsPicker(false); }}
+                      className="px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer hover:bg-muted text-foreground"
+                    >
+                      Two Columns
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { editor.chain().focus().insertColumnGroup(3).run(); setShowColumnsPicker(false); }}
+                      className="px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer hover:bg-muted text-foreground"
+                    >
+                      Three Columns
+                    </button>
+                  </LayoutPopover>
+                </div>
+
+                <div className="relative">
+                  <button
+                    ref={breaksBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showBreaksPicker; closeLayoutPickers(); setShowBreaksPicker(next); }}
+                    className="px-3 py-1.5 rounded bg-muted/60 hover:bg-muted text-foreground flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-border"
+                    title="Insert Page or Column Break"
+                  >
+                    <SplitSquareVertical className="w-4 h-4 text-primary" />
+                    <span>Breaks</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                  <LayoutPopover open={showBreaksPicker} anchorRef={breaksBtnRef} onClose={() => setShowBreaksPicker(false)} className="w-44 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        editor.chain().focus().insertContent('<hr class="page-break" style="page-break-after: always; border-top: 2px dashed #94a3b8; margin: 24px 0;" />').run();
+                        toast.success("Inserted Page Break");
+                        setShowBreaksPicker(false);
+                      }}
+                      className="px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer hover:bg-muted text-foreground"
+                    >
+                      Page Break
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        editor.chain().focus().insertColumnBreak().run();
+                        toast.success("Inserted Column Break");
+                        setShowBreaksPicker(false);
+                      }}
+                      className="px-2 py-1.5 rounded text-left text-xs font-medium cursor-pointer hover:bg-muted text-foreground"
+                    >
+                      Column Break
+                    </button>
+                  </LayoutPopover>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Columns & Breaks</span>
+            </div>
+
+            {/* PAGE BACKGROUND: Watermark, Page Color, Page Borders */}
+            <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+              <div className="flex items-center gap-1.5 my-auto">
+                {/* Watermark */}
+                <div className="relative">
+                  <button
+                    ref={watermarkBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showWatermarkPicker; closeLayoutPickers(); setShowWatermarkPicker(next); }}
+                    className={`px-3 py-1.5 rounded flex items-center gap-1.5 text-xs font-semibold cursor-pointer border ${
+                      pageSettings.watermark.enabled ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted/60 hover:bg-muted text-foreground border-border'
+                    }`}
+                    title="Watermark"
+                  >
+                    <Droplets className="w-4 h-4 text-primary" />
+                    <span>Watermark</span>
+                  </button>
+                  <LayoutPopover open={showWatermarkPicker} anchorRef={watermarkBtnRef} onClose={() => setShowWatermarkPicker(false)} className="w-56 gap-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pageSettings.watermark.enabled}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, watermark: { ...prev.watermark, enabled: e.target.checked } }))}
+                      />
+                      Show Watermark
+                    </label>
+                    <input
+                      type="text"
+                      value={pageSettings.watermark.text}
+                      onChange={(e) => setPageSettings(prev => ({ ...prev, watermark: { ...prev.watermark, text: e.target.value } }))}
+                      placeholder="Watermark text"
+                      className="px-2 py-1 rounded border border-border bg-background text-foreground text-xs"
+                    />
+                    <label className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      Color
+                      <input
+                        type="color"
+                        value={pageSettings.watermark.color}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, watermark: { ...prev.watermark, color: e.target.value } }))}
+                        className="w-7 h-6 rounded border border-border cursor-pointer"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      Opacity
+                      <input
+                        type="range"
+                        min={0.05}
+                        max={0.6}
+                        step={0.05}
+                        value={pageSettings.watermark.opacity}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) } }))}
+                        className="flex-1 cursor-pointer"
+                      />
+                    </label>
+                  </LayoutPopover>
+                </div>
+
+                {/* Page Color */}
+                <div className="relative">
+                  <button
+                    ref={pageColorBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showPageColorPicker; closeLayoutPickers(); setShowPageColorPicker(next); }}
+                    className="p-1.5 rounded hover:bg-muted text-muted-foreground flex items-center gap-1 cursor-pointer"
+                    title="Page Color"
+                  >
+                    <Palette className="w-4 h-4 text-amber-600" />
+                  </button>
+                  <LayoutPopover open={showPageColorPicker} anchorRef={pageColorBtnRef} onClose={() => setShowPageColorPicker(false)} className="w-48 gap-2">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Page Color</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {PRESET_PAGE_COLORS.map(c => (
+                        <button
+                          key={c.label}
+                          type="button"
+                          onClick={() => { setPageSettings(prev => ({ ...prev, pageColor: c.color })); setShowPageColorPicker(false); }}
+                          className="p-2 rounded-lg border border-border flex items-center justify-center cursor-pointer text-[10px] font-bold truncate"
+                          style={{ backgroundColor: c.color || '#fff' }}
+                          title={c.label}
+                        >
+                          {c.color ? '' : 'None'}
+                        </button>
+                      ))}
+                    </div>
+                  </LayoutPopover>
+                </div>
+
+                {/* Page Borders */}
+                <div className="relative">
+                  <button
+                    ref={borderBtnRef}
+                    type="button"
+                    onClick={() => { const next = !showBorderPicker; closeLayoutPickers(); setShowBorderPicker(next); }}
+                    className={`px-3 py-1.5 rounded flex items-center gap-1.5 text-xs font-semibold cursor-pointer border ${
+                      pageSettings.border.enabled ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted/60 hover:bg-muted text-foreground border-border'
+                    }`}
+                    title="Page Borders"
+                  >
+                    <BorderIcon className="w-4 h-4 text-primary" />
+                    <span>Borders</span>
+                  </button>
+                  <LayoutPopover open={showBorderPicker} anchorRef={borderBtnRef} onClose={() => setShowBorderPicker(false)} className="w-52 gap-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pageSettings.border.enabled}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, border: { ...prev.border, enabled: e.target.checked } }))}
+                      />
+                      Show Page Border
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['solid', 'double', 'dashed', 'dotted'] as const).map(style => (
+                        <button
+                          key={style}
+                          type="button"
+                          onClick={() => setPageSettings(prev => ({ ...prev, border: { ...prev.border, style } }))}
+                          className={`px-2 py-1 rounded text-[10px] font-medium capitalize cursor-pointer border ${
+                            pageSettings.border.style === style ? 'bg-primary/15 text-primary border-primary/30' : 'hover:bg-muted text-foreground border-border'
+                          }`}
+                        >
+                          {style}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      Width (pt)
+                      <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={pageSettings.border.width}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, border: { ...prev.border, width: parseFloat(e.target.value) || 1 } }))}
+                        className="w-14 px-1 py-0.5 rounded border border-border bg-background text-foreground text-xs"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      Color
+                      <input
+                        type="color"
+                        value={pageSettings.border.color}
+                        onChange={(e) => setPageSettings(prev => ({ ...prev, border: { ...prev.border, color: e.target.value } }))}
+                        className="w-7 h-6 rounded border border-border cursor-pointer"
+                      />
+                    </label>
+                  </LayoutPopover>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Page Background</span>
+            </div>
           </div>
         )}
 
@@ -2701,8 +3310,7 @@ const MenuBar = ({
                     <button
                       type="button"
                       onClick={() => {
-                        ensureTableFocus();
-                        editor.chain().focus().setCellAttribute('style', 'height: 30px; vertical-align: middle;').run();
+                        mergeCellStyle({ height: '30px' });
                         toast.success("Row Height: Compact (30px)");
                       }}
                       className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer"
@@ -2713,8 +3321,7 @@ const MenuBar = ({
                     <button
                       type="button"
                       onClick={() => {
-                        ensureTableFocus();
-                        editor.chain().focus().setCellAttribute('style', 'height: 50px; vertical-align: middle;').run();
+                        mergeCellStyle({ height: '50px' });
                         toast.success("Row Height: Medium (50px)");
                       }}
                       className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer"
@@ -2725,8 +3332,7 @@ const MenuBar = ({
                     <button
                       type="button"
                       onClick={() => {
-                        ensureTableFocus();
-                        editor.chain().focus().setCellAttribute('style', 'height: 80px; vertical-align: middle;').run();
+                        mergeCellStyle({ height: '80px' });
                         toast.success("Row Height: Tall (80px)");
                       }}
                       className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer"
@@ -2737,8 +3343,7 @@ const MenuBar = ({
                     <button
                       type="button"
                       onClick={() => {
-                        ensureTableFocus();
-                        editor.chain().focus().setCellAttribute('style', null).run();
+                        mergeCellStyle({ height: null });
                         toast.info("Reset Row Height to Auto");
                       }}
                       className="px-1.5 py-1 rounded bg-muted/60 text-muted-foreground text-xs cursor-pointer"
@@ -2748,6 +3353,76 @@ const MenuBar = ({
                     </button>
                   </div>
                   <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Row Height</span>
+                </div>
+
+                {/* CELL SHADING */}
+                <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+                  <div className="relative my-auto">
+                    <button
+                      ref={cellShadingBtnRef}
+                      type="button"
+                      onClick={() => { const next = openDropdown === 'cellShading' ? null : 'cellShading'; setOpenDropdown(next); }}
+                      className="px-2.5 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-border"
+                      title="Cell Shading (Background Color)"
+                    >
+                      <PaintBucket className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Shading</span>
+                      <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                    <LayoutPopover open={openDropdown === 'cellShading'} anchorRef={cellShadingBtnRef} onClose={() => setOpenDropdown(null)} className="w-48">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground">Cell Shading</span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {PRESET_SHADING_COLORS.map(c => (
+                          <button
+                            key={c.label}
+                            type="button"
+                            onClick={() => {
+                              mergeCellStyle({ 'background-color': c.color || null });
+                              toast.success(c.color ? `Applied ${c.label}` : "Removed cell shading");
+                              setOpenDropdown(null);
+                            }}
+                            className="p-2 rounded-lg border border-border flex items-center justify-center cursor-pointer text-[10px] font-bold truncate"
+                            style={{ backgroundColor: c.color || '#fff' }}
+                            title={c.label}
+                          >
+                            {c.color ? '' : 'None'}
+                          </button>
+                        ))}
+                      </div>
+                    </LayoutPopover>
+                  </div>
+                  <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Shading</span>
+                </div>
+
+                {/* VERTICAL ALIGNMENT */}
+                <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+                  <div className="flex items-center gap-0.5 my-auto">
+                    <button
+                      type="button"
+                      onClick={() => { mergeCellStyle({ 'vertical-align': 'top' }); toast.success("Cell text aligned to top"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Align Cell Text to Top"
+                    >
+                      <AlignVerticalJustifyStart className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { mergeCellStyle({ 'vertical-align': 'middle' }); toast.success("Cell text aligned to middle"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Align Cell Text to Middle"
+                    >
+                      <AlignVerticalJustifyCenter className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { mergeCellStyle({ 'vertical-align': 'bottom' }); toast.success("Cell text aligned to bottom"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Align Cell Text to Bottom"
+                    >
+                      <AlignVerticalJustifyEnd className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Vertical Align</span>
                 </div>
 
                 {/* MERGE & SPLIT CELLS & TABLES */}
@@ -3022,6 +3697,66 @@ const MenuBar = ({
                     )}
                   </div>
                   <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Borders</span>
+                </div>
+
+                {/* TABLE STYLE GALLERY */}
+                <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+                  <div className="flex items-center gap-1.5 my-auto">
+                    {([
+                      { id: 'none', label: 'Plain', swatch: '#ffffff', header: undefined },
+                      { id: 'grid-blue', label: 'Blue Grid', swatch: '#dbeafe', header: '#1e3a8a' },
+                      { id: 'bands-gray', label: 'Gray Bands', swatch: '#e5e7eb', header: '#374151' },
+                      { id: 'crimson-header', label: 'Crimson', swatch: '#fdf2f2', header: '#800000' },
+                    ] as const).map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { applyTableStyle(s.id); toast.success(`Applied ${s.label} table style`); }}
+                        className="flex flex-col items-center gap-0.5 cursor-pointer group"
+                        title={s.label}
+                      >
+                        <span
+                          className="w-8 h-6 rounded border border-border overflow-hidden flex flex-col group-hover:ring-2 group-hover:ring-primary/40"
+                          style={{ backgroundColor: s.swatch }}
+                        >
+                          <span className="h-2 w-full" style={{ backgroundColor: s.header || '#cbd5e1' }} />
+                        </span>
+                        <span className="text-[8px] text-muted-foreground font-semibold">{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Table Styles</span>
+                </div>
+
+                {/* TABLE ALIGNMENT ON PAGE */}
+                <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+                  <div className="flex items-center gap-0.5 my-auto">
+                    <button
+                      type="button"
+                      onClick={() => { applyTableAlign('left'); toast.success("Table aligned left"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Align Table Left"
+                    >
+                      <AlignLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { applyTableAlign('center'); toast.success("Table centered"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Center Table on Page"
+                    >
+                      <AlignCenter className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { applyTableAlign('right'); toast.success("Table aligned right"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Align Table Right"
+                    >
+                      <AlignRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Table Align</span>
                 </div>
 
                 {/* DRAW TABLE */}
@@ -3925,14 +4660,15 @@ const FindReplaceDrawer = ({
 };
 
 // MS WORD TOP RULER COMPONENT
-const WordRuler = ({ viewMode }: { viewMode: 'fluid' | 'pageView' }) => {
-  const tickCount = viewMode === 'fluid' ? 25 : 17;
-  const totalWidth = viewMode === 'pageView' ? "max-w-[210mm]" : "w-full";
-  const paddingClass = viewMode === 'pageView' ? "px-[20mm]" : "px-6 md:px-12";
+const WordRuler = ({ viewMode, pageWidthMm, marginLeftMm, marginRightMm }: { viewMode: 'fluid' | 'pageView'; pageWidthMm: number; marginLeftMm: number; marginRightMm: number }) => {
+  const tickCount = viewMode === 'fluid' ? 25 : Math.round(pageWidthMm / 12.5);
+  const totalWidthStyle = viewMode === 'pageView' ? { maxWidth: `${pageWidthMm}mm` } : undefined;
+  const paddingClass = viewMode === 'pageView' ? "" : "px-6 md:px-12";
+  const paddingStyle = viewMode === 'pageView' ? { paddingLeft: `${marginLeftMm}mm`, paddingRight: `${marginRightMm}mm` } : undefined;
 
   return (
     <div className="word-ruler h-7 w-full flex items-center border-b text-[9px] font-bold text-muted-foreground select-none relative overflow-hidden transition-all bg-muted/40">
-      <div className={`w-full ${totalWidth} mx-auto flex items-center justify-between ${paddingClass} relative h-full`}>
+      <div className={`w-full ${viewMode === 'pageView' ? 'mx-auto' : ''} flex items-center justify-between ${paddingClass} relative h-full`} style={{ ...totalWidthStyle, ...paddingStyle }}>
         <div className="w-full flex justify-between items-center">
           {Array.from({ length: tickCount }).map((_, i) => (
             <div key={i} className="flex flex-col items-center relative">
@@ -3963,6 +4699,11 @@ export default function RichTextEditor({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showParagraphMarks, setShowParagraphMarks] = useState(false);
   const [showRuler, setShowRuler] = useState(true);
+  const [pageSettings, setPageSettings] = useState<PageSettings>(DEFAULT_PAGE_SETTINGS);
+
+  const [rawPageW, rawPageH] = PAGE_SIZES_MM[pageSettings.size];
+  const pageWidthMm = pageSettings.orientation === 'landscape' ? rawPageH : rawPageW;
+  const pageHeightMm = pageSettings.orientation === 'landscape' ? rawPageW : rawPageH;
 
   useEffect(() => {
     const handleEscKey = (e: KeyboardEvent) => {
@@ -4003,6 +4744,7 @@ export default function RichTextEditor({
         },
       }),
       CustomTable.configure({ resizable: true, View: CustomTableView }),
+      TableRowResizing,
       TableRow,
       CustomTableHeader,
       CustomTableCell,
@@ -4096,28 +4838,73 @@ export default function RichTextEditor({
             setShowParagraphMarks={setShowParagraphMarks}
             showRuler={showRuler}
             setShowRuler={setShowRuler}
+            pageSettings={pageSettings}
+            setPageSettings={setPageSettings}
           />
           <FindReplaceDrawer
             isOpen={isFindReplaceOpen}
             onClose={() => setIsFindReplaceOpen(false)}
             editor={editor}
           />
-          {showRuler && <WordRuler viewMode={viewMode} />}
+          {showRuler && (
+            <WordRuler
+              viewMode={viewMode}
+              pageWidthMm={pageWidthMm}
+              marginLeftMm={pageSettings.margins.left}
+              marginRightMm={pageSettings.margins.right}
+            />
+          )}
         </>
       )}
 
       {/* EDITOR CANVAS AREA */}
-      <div 
+      <div
         className={`flex-1 overflow-y-auto ${viewMode === 'pageView' ? 'bg-muted/70 dark:bg-zinc-900 p-6 flex justify-center' : 'p-6 bg-background'} ${!editable ? 'pointer-events-none' : ''}`}
         style={{ transform: zoomLevel !== 100 ? `scale(${zoomLevel / 100})` : undefined, transformOrigin: 'top center' }}
       >
-        <div className={
-          viewMode === 'pageView'
-            ? "w-fit min-w-[210mm] max-w-none min-h-[297mm] h-auto bg-card p-[20mm] shadow-xl rounded-sm relative my-2 flex flex-col transition-all overflow-x-auto"
-            : "w-full min-h-full h-auto bg-card p-6 rounded-xl flex flex-col transition-all overflow-x-auto"
-        }>
+        <div
+          className={
+            viewMode === 'pageView'
+              ? "h-auto bg-card shadow-xl rounded-sm relative my-2 flex flex-col transition-all overflow-x-auto shrink-0"
+              : "w-full min-h-full h-auto bg-card p-6 rounded-xl flex flex-col transition-all overflow-x-auto"
+          }
+          style={viewMode === 'pageView' ? {
+            width: `${pageWidthMm}mm`,
+            minHeight: `${pageHeightMm}mm`,
+            paddingTop: `${pageSettings.margins.top}mm`,
+            paddingRight: `${pageSettings.margins.right}mm`,
+            paddingBottom: `${pageSettings.margins.bottom}mm`,
+            paddingLeft: `${pageSettings.margins.left}mm`,
+            backgroundColor: pageSettings.pageColor || undefined,
+            border: pageSettings.border.enabled
+              ? `${pageSettings.border.width}pt ${pageSettings.border.style} ${pageSettings.border.color}`
+              : undefined,
+          } : undefined}
+        >
+          {viewMode === 'pageView' && pageSettings.watermark.enabled && (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none"
+              style={{ zIndex: 0 }}
+            >
+              <span
+                style={{
+                  fontSize: '80px',
+                  fontWeight: 800,
+                  color: pageSettings.watermark.color,
+                  opacity: pageSettings.watermark.opacity,
+                  transform: 'rotate(-38deg)',
+                  whiteSpace: 'nowrap',
+                  textTransform: 'uppercase',
+                  letterSpacing: '4px',
+                }}
+              >
+                {pageSettings.watermark.text}
+              </span>
+            </div>
+          )}
 
-          <EditorContent editor={editor} className="min-h-full cursor-text flex-1 flex flex-col" />
+          <EditorContent editor={editor} className="min-h-full cursor-text flex-1 flex flex-col relative z-[1]" />
         </div>
       </div>
 

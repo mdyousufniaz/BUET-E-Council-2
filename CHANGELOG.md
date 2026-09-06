@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-06 — Word-Style Page Layout Tab, Table Design Tools & Editor Fixes
+
+### New Features
+
+**Page Layout Ribbon Tab (RichTextEditor.tsx, globals.css)**
+- **Page Setup**: Margins (Normal/Narrow/Moderate/Wide presets + custom mm inputs), Orientation (Portrait/Landscape), Size (A4/Letter/Legal/A3) — the "Word A4 Page" view now reflects these settings live (dimensions, padding, ruler).
+- **Columns & Breaks**: two/three-column layout insert, Page Break, Column Break, consolidated into dropdowns.
+- **Page Background**: Watermark (custom text/color/opacity, diagonal overlay), Page Color, Page Borders (style/width/color) applied to the printable page surface.
+
+**Table Design Tools (RichTextEditor.tsx, globals.css)**
+- **Cell Shading**: background color picker for selected table cells.
+- **Vertical Alignment**: Top/Middle/Bottom text alignment within table cells.
+- **Table Style Gallery**: four built-in presets (Plain, Blue Grid, Gray Bands, Crimson Header) applying header/banded-row coloring via a new `data-table-style` table attribute.
+- **Table Alignment**: Left/Center/Right positioning of a (resized) table on the page via a new `data-align` table attribute.
+
+**Always-Visible Shortcuts Button**
+- Added a persistent "Shortcuts" button next to Find/Full Screen in the ribbon header (previously the keyboard-shortcuts guide was only reachable via Ctrl+/ or a button buried in the Home tab's Editing group, which could scroll out of view).
+
+### Bug Fixes
+
+**Ribbon dropdown clipping (globals.css, RichTextEditor.tsx)**
+- The ribbon toolbar's `overflow-x-auto` was — per the CSS overflow-x/overflow-y coupling rule — silently forcing `overflow-y: auto` too, clipping any dropdown/popover (Shading, Highlight, Table Borders, and all of the new Page Layout popovers) that needed more vertical space than the ribbon's own height. Fixed by introducing a portal-based `LayoutPopover` component that renders outside the clipped ancestor via `document.body` with `position: fixed`.
+
+**Table cell style clobbering (RichTextEditor.tsx)**
+- Row Height, Cell Shading, and Vertical Alignment all wrote to the same cell `style` attribute wholesale, so applying one silently erased the others. Introduced a `mergeCellStyle` helper that parses, patches, and re-serializes the existing declaration list so each control only touches its own CSS property.
+
+---
+
 ## 2026-09-03 — Dynamic List Ribbon Controls, Navigation & Multi-Theme System
 
 ### New Features

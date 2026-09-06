@@ -482,6 +482,17 @@ div[data-type="column-item"]>* {
 }
 
 /* ── Tiptap RichTextEditor & Prose Table Styles ── */
+/* TipTap wraps every table in a generated <div class="tableWrapper">
+   specifically so it can scroll independently of the page around it.
+   Resized/wide tables set an inline pixel `width` on the <table> itself
+   (see prosemirror-tables' updateColumnsOnResize), which happily exceeds
+   the editor's width; without this the wrapper had no overflow behavior
+   of its own, so the table just spilled out past the page/box edge. */
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 .ProseMirror table,
 .prose table,
 .meeting-table {
@@ -500,6 +511,22 @@ div[data-type="column-item"]>* {
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+}
+
+/* Table alignment on the page (Word: Layout > Alignment) - only visible once a
+   table has been resized narrower than the editor width, since tables default
+   to width:100%. */
+.ProseMirror table[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+.ProseMirror table[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+.ProseMirror table[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 /* ── Theme-Matched Table Header Styling ── */
@@ -528,6 +555,55 @@ table thead tr {
 .dark .ProseMirror table td,
 .dark .ProseMirror table th {
   border-color: #475569;
+}
+
+/* Table Style Gallery (Word: Table Design tab built-in styles). Needs !important
+   to win over the theme-matched header default above, which also uses !important. */
+.ProseMirror table[data-table-style="grid-blue"] th {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+  border-bottom-color: #1e3a8a !important;
+}
+.dark .ProseMirror table[data-table-style="grid-blue"] th {
+  background: rgba(37, 99, 235, 0.25) !important;
+  color: #bfdbfe !important;
+}
+.ProseMirror table[data-table-style="grid-blue"] tr:nth-child(even) td {
+  background-color: #eff6ff;
+}
+.dark .ProseMirror table[data-table-style="grid-blue"] tr:nth-child(even) td {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+.ProseMirror table[data-table-style="bands-gray"] th {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+  border-bottom-color: #9ca3af !important;
+}
+.dark .ProseMirror table[data-table-style="bands-gray"] th {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+.ProseMirror table[data-table-style="bands-gray"] tr:nth-child(even) td {
+  background-color: #f3f4f6;
+}
+.dark .ProseMirror table[data-table-style="bands-gray"] tr:nth-child(even) td {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.ProseMirror table[data-table-style="crimson-header"] th {
+  background: #800000 !important;
+  color: #ffffff !important;
+  border-bottom-color: #800000 !important;
+}
+.dark .ProseMirror table[data-table-style="crimson-header"] th {
+  background: #800000 !important;
+  color: #ffffff !important;
+}
+.ProseMirror table[data-table-style="crimson-header"] tr:nth-child(even) td {
+  background-color: #fdf2f2;
+}
+.dark .ProseMirror table[data-table-style="crimson-header"] tr:nth-child(even) td {
+  background-color: rgba(128, 0, 0, 0.12);
 }
 
 .prose table td,
@@ -846,6 +922,25 @@ table[data-border="none"] th {
 .ProseMirror.resize-cursor {
   cursor: ew-resize;
   cursor: col-resize;
+}
+
+/* ── Row resize handle (drag a row's bottom border to resize it) ── */
+.ProseMirror table .row-resize-handle,
+.prose table .row-resize-handle {
+  position: absolute;
+  left: 0;
+  right: -2px;
+  bottom: -2px;
+  height: 4px;
+  z-index: 20;
+  background-color: var(--primary);
+  box-shadow: 0 0 8px rgba(128, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.ProseMirror.row-resize-cursor {
+  cursor: ns-resize;
+  cursor: row-resize;
 }
 
 /* ── MS Word Ribbon & Dynamic UI Design Tokens ── */
