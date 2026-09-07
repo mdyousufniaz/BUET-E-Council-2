@@ -117,6 +117,7 @@ CREATE TABLE members (
     email VARCHAR(255) UNIQUE,
     member_type member_type_enum NOT NULL DEFAULT 'academic',
     legacy_member_id NUMERIC UNIQUE,
+    external_id NUMERIC UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

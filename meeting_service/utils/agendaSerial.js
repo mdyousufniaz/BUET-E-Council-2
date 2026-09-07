@@ -39,8 +39,12 @@ function stripProposalPrefix(content) {
     if (!content) return '';
     const clean = content.replace(/<[^>]*>/g, '').trim();
     if (/^\s*বিবিধ\s*[:.\-]?\s*/i.test(clean)) return content;
-    let stripped = content.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
-    stripped = stripped.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*[:.\-]\s*(?:<\/strong>)?\s*/i, '$1');
+    let stripped = content.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+    // Bare leading serial, e.g. "<p>৫ :</p>" or "<p>12 - </p>". Anchored to the
+    // very start so a number range further in ("... session 2026-2027") is never
+    // touched, and a "-" separator only counts when it is NOT followed by more
+    // digits, so a leading year range ("2026-2027 ...") is left intact too.
+    stripped = stripped.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*(?:[:.]|-(?!\s*[০-৯\d]))\s*(?:<\/strong>)?\s*/i, '$1');
     return stripped;
 }
 

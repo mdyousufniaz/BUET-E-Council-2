@@ -37,6 +37,16 @@ const ensureLockingColumns = `
 `;
 pool.query(ensureLockingColumns).catch(() => {});
 
+// Stable per-person id from the external registrar API (regoffice users.php),
+// used by the "Fetch external members" sync so two people who share a Bangla
+// name stay distinct rows. NUMERIC + a unique index that still permits many
+// NULLs (rows created manually / before this sync).
+const ensureMemberExternalId = `
+  ALTER TABLE members ADD COLUMN IF NOT EXISTS external_id NUMERIC;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_members_external_id ON members (external_id);
+`;
+pool.query(ensureMemberExternalId).catch((err) => console.error('ensureMemberExternalId error:', err.message));
+
 const ensureCategorySchema = `
   CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

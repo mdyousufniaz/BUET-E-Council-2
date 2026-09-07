@@ -212,10 +212,25 @@ const fetchExternalMembers = async (req, res, next) => {
 
             let syncCount = 0;
             const syncedMemberIds = [];
+            const seenExternalIds = new Set();
 
             for (const [index, u] of usersData.entries()) {
                 const name = u['Bangla Name:'];
                 if (!name || !name.trim()) continue;
+
+                // The external API is the ground truth. Each person is identified
+                // by the API's own stable `id:` (kept in members.external_id),
+                // NOT by name — two different people can legitimately share a
+                // Bangla name and must remain separate rows.
+                const rawExternalId = u['id:'] ?? u['id'] ?? u['ID:'];
+                const externalId = (rawExternalId != null && String(rawExternalId).trim() !== ''
+                    && Number.isFinite(Number(String(rawExternalId).trim())))
+                    ? Number(String(rawExternalId).trim())
+                    : null;
+                if (externalId != null) {
+                    if (seenExternalIds.has(externalId)) continue; // duplicate row in API payload
+                    seenExternalIds.add(externalId);
+                }
 
                 // Skip inactive / retired members if Service Status is present and not 'Current'
                 const serviceStatus = u['Service Status:'] || u['service_status:'] || u['Service Status'];
@@ -233,7 +248,8 @@ const fetchExternalMembers = async (req, res, next) => {
 
                 let email = null;
                 if (rawEmail) {
-                    email = rawEmail.split(/<|\s/)[0].trim();
+                    // API sometimes returns "a@x.bd, b@y.bd" or "Name <a@x.bd>"
+                    email = rawEmail.split(/[\s,<]/)[0].trim();
                     if (!email) email = null;
                 }
 
@@ -276,7 +292,24 @@ const fetchExternalMembers = async (req, res, next) => {
                     }
                 }
 
-                const memberRes = await client.query('SELECT id FROM members WHERE name = $1', [name]);
+                let memberRes = { rows: [] };
+                if (externalId != null) {
+                    memberRes = await client.query('SELECT id FROM members WHERE external_id = $1', [externalId]);
+                    if (memberRes.rows.length === 0) {
+                        // First sync after external ids were introduced: adopt one
+                        // pre-existing name-matched row that has no external id yet,
+                        // so invitee links to it survive. It stops being NULL after
+                        // this, so a second same-name API record won't re-adopt it.
+                        const adopt = await client.query(
+                            'SELECT id FROM members WHERE name = $1 AND external_id IS NULL ORDER BY created_at ASC LIMIT 1',
+                            [name]
+                        );
+                        if (adopt.rows.length > 0) memberRes = adopt;
+                    }
+                } else {
+                    // API record without a usable id: fall back to name match.
+                    memberRes = await client.query('SELECT id FROM members WHERE name = $1', [name]);
+                }
 
                 let memberId;
                 if (memberRes.rows.length > 0) {
@@ -290,10 +323,11 @@ const fetchExternalMembers = async (req, res, next) => {
                     }
 
                     await client.query(
-                        `UPDATE members 
-                         SET designation = $1, department_id = $2, office_id = $3, email = $4, serial = $5
-                         WHERE id = $6`,
-                        [designation, department_id, office_id, email, index + 1, memberId]
+                        `UPDATE members
+                         SET name = $1, designation = $2, department_id = $3, office_id = $4, email = $5, serial = $6,
+                             external_id = COALESCE($7, external_id)
+                         WHERE id = $8`,
+                        [name, designation, department_id, office_id, email, index + 1, externalId, memberId]
                     );
                 } else {
                     if (email) {
@@ -304,9 +338,9 @@ const fetchExternalMembers = async (req, res, next) => {
                     }
 
                     const insertRes = await client.query(
-                        `INSERT INTO members (name, designation, department_id, office_id, email, serial)
-                         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-                        [name, designation, department_id, office_id, email, index + 1]
+                        `INSERT INTO members (name, designation, department_id, office_id, email, serial, external_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+                        [name, designation, department_id, office_id, email, index + 1, externalId]
                     );
                     memberId = insertRes.rows[0].id;
                 }

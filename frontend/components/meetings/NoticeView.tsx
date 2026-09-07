@@ -394,7 +394,7 @@ export default function NoticeView({ meeting, mutate }: { meeting: any, mutate: 
             </div>
             <RichTextEditor
               content={form.body}
-              onChange={(val) => setForm({...form, body: val})}
+              onChange={(val) => setForm(prev => ({ ...prev, body: val }))}
               className="min-h-[250px]"
             />
           </div>

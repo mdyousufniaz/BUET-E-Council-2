@@ -828,6 +828,10 @@ const bulkFetchInvitees = async (req, res, next) => {
         try {
             await client.query('BEGIN');
 
+            // "Already an invitee?" is decided by the member link (invitees.member_id
+            // -> members.id), not by name — two different people can share a Bangla
+            // name and must both be addable. The email / name fallback only covers
+            // legacy invitee rows that predate member linking (member_id IS NULL).
             const insertQuery = `
                 INSERT INTO invitees (name, email, designation, department_id, office_id, meeting_id, member_id, serial)
                 SELECT m.name, m.email, m.designation, m.department_id, m.office_id, $1, m.id, m.serial
@@ -835,7 +839,14 @@ const bulkFetchInvitees = async (req, res, next) => {
                 WHERE m.member_type = $2
                   AND NOT EXISTS (
                       SELECT 1 FROM invitees i
-                      WHERE i.meeting_id = $1 AND (i.email = m.email OR (i.name = m.name AND m.email IS NULL))
+                      WHERE i.meeting_id = $1
+                        AND (
+                             i.member_id = m.id
+                          OR (i.member_id IS NULL AND (
+                                (m.email IS NOT NULL AND i.email = m.email)
+                             OR (m.email IS NULL AND i.name = m.name)
+                          ))
+                        )
                   )
             `;
             const result = await client.query(insertQuery, [id, meetingType]);

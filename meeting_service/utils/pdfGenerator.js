@@ -181,9 +181,13 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         return tag.replace(/(\s*\/?>)$/, ` style="${styleStr}"$1`);
     };
 
-    // Paragraphs
+    // Paragraphs — default to left alignment to match what the editor shows
+    // (TipTap's default is left; it only writes an inline `text-align` when the
+    // author picks right / center / justify). `mergeStyle` keeps any authored
+    // alignment, so an explicitly right-aligned paragraph stays right-aligned in
+    // the PDF instead of being silently justified.
     str = str.replace(/<p(\s[^>]*)?>/gi, (match) => {
-        const base = { 'line-height': '1.6', 'margin-top': '0', 'margin-bottom': '10px', 'text-align': 'justify', 'font-size': '14px' };
+        const base = { 'line-height': '1.6', 'margin-top': '0', 'margin-bottom': '10px', 'text-align': 'left', 'font-size': '14px' };
         if (isIndented) base['margin-left'] = `${indentPx}px`;
         return injectStyle(match, base);
     });
@@ -192,7 +196,7 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
     const headingSizes = { h1: '22px', h2: '18px', h3: '16px', h4: '14px', h5: '13px', h6: '12px' };
     for (const [tag, size] of Object.entries(headingSizes)) {
         str = str.replace(new RegExp(`<${tag}(\\s[^>]*)?>`, 'gi'), (match) =>
-            injectStyle(match, { 'font-size': size, 'font-weight': 'bold', 'line-height': '1.4', 'margin-top': '12px', 'margin-bottom': '8px' })
+            injectStyle(match, { 'font-size': size, 'font-weight': 'bold', 'line-height': '1.4', 'margin-top': '12px', 'margin-bottom': '8px', 'text-align': 'left' })
         );
     }
 
@@ -227,7 +231,7 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
 
     // List items
     str = str.replace(/<li(\s[^>]*)?>/gi, (match) =>
-        injectStyle(match, { 'font-size': '14px', 'line-height': '1.6', 'margin-bottom': '4px' })
+        injectStyle(match, { 'font-size': '14px', 'line-height': '1.6', 'margin-bottom': '4px', 'text-align': 'left' })
     );
 
     // Blockquote
@@ -240,10 +244,52 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         injectStyle(match, { 'font-family': 'monospace', 'font-size': '12px', 'background': '#f4f4f4', 'padding': '8px', 'border': '1px solid #ddd', 'white-space': 'pre-wrap' })
     );
 
-    // Tables
-    str = str.replace(/<table(\s[^>]*)?>/gi, (match) => {
-        if (match.includes('border-collapse')) return match;
-        return injectStyle(match, { 'border-collapse': 'collapse', 'width': '100%', 'margin': '12px 0' });
+    // Tables — reproduce the width the author gave the table in the editor
+    // instead of stretching every table to the full page width.
+    //   - cells carry `colwidth` (from the editor's column-resize handles):
+    //     emit a <colgroup> + fixed layout at the summed pixel width, so a
+    //     table the author narrowed stays narrow, and text wraps between words
+    //     rather than being force-broken mid-word.
+    //   - no colwidth: let the table shrink to fit its content (auto layout),
+    //     capped at the page width; `data-align` then positions it.
+    // markdown-generated tables (from convertMarkdownTablesToHtml) already carry
+    // their own inline sizing incl. `border-collapse`, so they are left alone.
+    str = str.replace(/<table(\s[^>]*)?>([\s\S]*?)<\/table>/gi, (fullMatch, rawAttrs, inner) => {
+        const attrs = rawAttrs || '';
+        if (/border-collapse/i.test(attrs)) return fullMatch;
+
+        const align = (attrs.match(/data-align="(left|center|right)"/i) || [])[1] || 'left';
+        const marginByAlign = { left: '12px 0', center: '12px auto', right: '12px 0 12px auto' }[align];
+
+        const firstRow = inner.match(/<tr[\s\S]*?<\/tr>/i);
+        const widths = [];
+        if (firstRow) {
+            const cellRe = /<t[dh]\b[^>]*\bcolwidth="([^"]+)"[^>]*>/gi;
+            let cm;
+            while ((cm = cellRe.exec(firstRow[0]))) {
+                cm[1].split(',').forEach((w) => {
+                    const n = parseInt(w, 10);
+                    if (Number.isFinite(n) && n > 0) widths.push(n);
+                });
+            }
+        }
+
+        let colgroup = '';
+        let sizing;
+        if (widths.length) {
+            const total = widths.reduce((a, b) => a + b, 0);
+            colgroup = `<colgroup>${widths.map((w) => `<col style="width:${w}px;" />`).join('')}</colgroup>`;
+            sizing = { 'table-layout': 'fixed', 'width': `${total}px`, 'max-width': '100%' };
+        } else {
+            sizing = { 'table-layout': 'auto', 'width': 'auto', 'max-width': '100%' };
+        }
+
+        const openTag = injectStyle(`<table${attrs}>`, {
+            'border-collapse': 'collapse',
+            'margin': marginByAlign,
+            ...sizing,
+        });
+        return openTag + colgroup + inner + '</table>';
     });
 
     // Subscript & Superscript
@@ -262,7 +308,7 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
     // Table headers with text direction
     str = str.replace(/<th(\s[^>]*)?>/gi, (match) => {
         const hasDir = /data-text-direction="vertical-rl"/i.test(match);
-        const additions = { 'padding': '6px', 'background-color': '#f2f4f7', 'font-weight': 'bold', 'text-align': 'left', 'font-size': '14px' };
+        const additions = { 'padding': '6px', 'background-color': '#f2f4f7', 'font-weight': 'bold', 'text-align': 'left', 'font-size': '14px', 'overflow-wrap': 'break-word', 'word-break': 'normal', 'vertical-align': 'top' };
         if (hasDir) {
             additions['writing-mode'] = 'vertical-rl';
             additions['transform'] = 'rotate(180deg)';
@@ -275,7 +321,7 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
     // Table cells with text direction
     str = str.replace(/<td(\s[^>]*)?>/gi, (match) => {
         const hasDir = /data-text-direction="vertical-rl"/i.test(match);
-        const additions = { 'padding': '6px', 'text-align': 'left', 'font-size': '14px', 'vertical-align': 'top' };
+        const additions = { 'padding': '6px', 'text-align': 'left', 'font-size': '14px', 'vertical-align': 'top', 'overflow-wrap': 'break-word', 'word-break': 'normal' };
         if (hasDir) {
             additions['writing-mode'] = 'vertical-rl';
             additions['transform'] = 'rotate(180deg)';
@@ -838,10 +884,10 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
             return `
             <div class="agenda-block" style="margin-bottom: 30px; page-break-before: auto;">
                 <div class="agenda-title" style="font-weight: bold; margin-bottom: 5px; font-size: 14px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;"><b>${isBibidha ? 'বিবিধ :' : 'প্রস্তাব নং ' + (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + toBanglaDigits(ag.agenda_serial)}</b></div>
-                <div class="agenda-content" style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; margin-bottom: 12px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;">${styleRichTextHtml(displayContent, true)}</div>
+                <div class="agenda-content" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;">${styleRichTextHtml(displayContent, true)}</div>
                 ${isResolution ? `
                 <div class="agenda-title" style="margin-top:15px; font-weight: bold; margin-bottom: 5px; font-size: 14px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;"><b>সিদ্ধান্ত:</b></div>
-                <div class="agenda-resolution" style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;"><b>${styleRichTextHtml(stripResolutionPrefix(ag.resolution || ''), true)}</b></div>
+                <div class="agenda-resolution" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px; font-family: 'PrimaryFont', 'Kalpurush', sans-serif;"><b>${styleRichTextHtml(stripResolutionPrefix(ag.resolution || ''), true)}</b></div>
                 ` : ''}
             </div>
             `;
@@ -863,7 +909,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                 .text-center { text-align: center; }
                 .header-title { font-size: 19px; margin-bottom: 10px; }
                 .sub-title { font-size: 16px; text-decoration: underline; margin-bottom: 20px; }
-                .description { font-size: 14px; text-align: justify; margin-bottom: 30px; }
+                .description { font-size: 14px; text-align: left; margin-bottom: 30px; }
                 .presentees-header { font-size: 14px; text-decoration: underline; margin-bottom: 15px; }
                 .columns-container {
                     ${presentees.length > 15 ? 'column-count: 2; column-gap: 40px; font-size: 9px;' : 'column-count: 1; font-size: 12px;'}
@@ -905,7 +951,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     page-break-before: auto;
                 }
                 .agenda-title { font-weight: bold; margin-bottom: 5px; font-size: 14px;}
-                .agenda-content, .agenda-resolution { margin-left: 30px; text-align: justify; font-size: 14px;}
+                .agenda-content, .agenda-resolution { margin-left: 30px; text-align: left; font-size: 14px;}
                 .agenda-resolution { font-weight: bold; }
 
                 table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
@@ -957,7 +1003,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
             `)}
 
             ${cacheVariant === 'resolution-status' ? '' : (isResolution ? `
-                ${meeting.description ? `<div class="description" style="font-size: 14px; text-align: justify; line-height: 1.6; margin-bottom: 25px;">${meeting.description}</div>` : ''}
+                ${meeting.description ? `<div class="description" style="font-size: 14px; text-align: left; line-height: 1.6; margin-bottom: 25px;">${meeting.description}</div>` : ''}
 
                 <div class="presentees-header" style="font-size: 14px; font-weight: bold; text-decoration: underline; margin-bottom: 15px;">উপস্থিত সদস্যবৃন্দ</div>
                 <div class="columns-container">
@@ -1087,8 +1133,10 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                         if (isBibidha) {
                             contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                         } else if (contentHtml) {
-                            contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
-                            contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*[:.\-]\s*(?:<\/strong>)?\s*/i, '$1');
+                            contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                            // Anchored + "-" not a terminator before more digits, so a leading
+                            // year range ("2026-2027 ...") survives (matches stripProposalPrefix).
+                            contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*(?:[:.]|-(?!\s*[০-৯\d]))\s*(?:<\/strong>)?\s*/i, '$1');
                         }
                         if (annexureTags) {
                             const tagString = ` <b>(${annexureTags})</b>`;
@@ -1210,8 +1258,11 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     if (isBibidha) {
                         contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                     } else if (contentHtml) {
-                        contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
-                        contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*[:.\-]\s*(?:<\/strong>)?\s*/i, '$1');
+                        contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                        // Anchored to the start, and a "-" only terminates the serial when
+                        // it is NOT followed by more digits, so a leading year range like
+                        // "2026-2027 ..." is left intact (matches stripProposalPrefix).
+                        contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*[০-৯\d]+\s*(?:[:.]|-(?!\s*[০-৯\d]))\s*(?:<\/strong>)?\s*/i, '$1');
                     }
                     if (annexureTags) {
                         const tagString = ` <b>(${annexureTags})</b>`;
@@ -1236,17 +1287,17 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     ${catHeader ? `<div class="category-header" style="font-weight: bold; font-size: 15px; margin-top: 25px; margin-bottom: 15px;"><b>${catHeader}</b></div>` : ''}
                     <div class="agenda-block" style="margin-bottom: 30px;">
                         ${inlineNum ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
-                        ${bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: justify; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : ''}
+                        ${bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : ''}
                         ${isResolution ? `
                         <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px;"><b>সিদ্ধান্ত:</b></div>
-                        <div class="agenda-resolution" style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
+                        <div class="agenda-resolution" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
                         ` : ''}
                     </div>
                     `;
                 }).join('');
             })()}
             ${isResolution && cacheVariant !== 'resolution-status' && meeting.conclusion ? `
-            <div class="conclusion" style="margin-top: 30px; font-size: 14px; text-align: justify; line-height: 1.6; page-break-inside: avoid;">
+            <div class="conclusion" style="margin-top: 30px; font-size: 14px; text-align: left; line-height: 1.6; page-break-inside: avoid;">
                 ${styleRichTextHtml(convertMarkdownTablesToHtml(meeting.conclusion))}
             </div>
             ` : ''}

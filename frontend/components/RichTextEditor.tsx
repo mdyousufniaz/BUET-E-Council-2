@@ -20,8 +20,8 @@ import Link from '@tiptap/extension-link';
 import OrderedList from '@tiptap/extension-ordered-list';
 import BulletList from '@tiptap/extension-bullet-list';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
-import { goToNextCell, addRowAfter, TableMap } from '@tiptap/pm/tables';
-import { TextSelection } from '@tiptap/pm/state';
+import { goToNextCell, addRowAfter, TableMap, CellSelection } from '@tiptap/pm/tables';
+import { TextSelection, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Node, Extension, wrappingInputRule, mergeAttributes } from '@tiptap/core';
 import { 
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, 
@@ -43,6 +43,7 @@ import CustomSelect from './CustomSelect';
 import { isBijoyText, convertBijoyToUnicode, convertHtmlBijoyToUnicode } from '../lib/bijoyToUnicode';
 import { convertMarkdownTablesToHtml } from '../lib/sanitize';
 import { rowResizing } from '../lib/tableRowResizing';
+import { tableListSignature, resequenceTableCellLists, resequenceAllTables } from '../lib/tableCellListNumbering';
 import { toast } from 'sonner';
 
 // Custom TipTap Extension for Font Size
@@ -825,6 +826,156 @@ const handleTableShiftEnterNavigation = (view: any): boolean => {
     }
   }
 
+  return true;
+};
+
+// ---------------------------------------------------------------------------
+// Table cell list numbering
+// ---------------------------------------------------------------------------
+// Numbered lists inside table cells are modelled as one <ol start="N"> per cell
+// (a single list item each, most of the time) so the numbers can appear to run
+// continuously down a column across cell boundaries. Two things have to keep
+// that illusion intact:
+//   1. When a row is inserted or deleted the per-cell `start` values must be
+//      re-sequenced, otherwise a delete leaves "1, 2, 4, 5".
+//   2. Applying a numbered/bulleted list to a multi-cell selection has to wrap
+//      *every* selected cell (TipTap's toggleList only touches the anchor).
+//
+// Re-sequencing rule: walk each column top→bottom. A maximal run of vertically
+// adjacent cells whose first child is an <ol> is numbered from 1 (incrementing
+// by each cell's list-item count). A cell that carries real text but no ordered
+// list ends the run; a completely blank cell (e.g. a freshly inserted row) is
+// transparent and does not break the run — so an inserted row is numbered only
+// once a list is actually turned on in it.
+//
+// The pure numbering helpers (tableListSignature / resequenceTableCellLists /
+// resequenceAllTables) live in ../lib/tableCellListNumbering so they can be
+// unit tested without a DOM.
+
+const RESEQ_META = new PluginKey('tableCellListResequence');
+
+// Extension: whenever a table's rows or lists change, re-sequence every table's
+// cell list numbering.
+const TableCellListResequence = Extension.create({
+  name: 'tableCellListResequence',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: RESEQ_META,
+        appendTransaction: (transactions: readonly any[], oldState: any, newState: any) => {
+          if (!transactions.some(t => t.docChanged)) return null;
+          if (transactions.some(t => t.getMeta(RESEQ_META))) return null;
+          // React to row insert/delete and to a list being toggled on/off (or
+          // gaining/losing items) inside any table.
+          if (tableListSignature(oldState.doc) === tableListSignature(newState.doc)) return null;
+
+          const tr = newState.tr;
+          if (resequenceAllTables(tr, newState.doc)) {
+            tr.setMeta(RESEQ_META, true);
+            tr.setMeta('addToHistory', false);
+            return tr;
+          }
+          return null;
+        },
+      }),
+    ];
+  },
+});
+
+// Build the list node that should replace a table cell's content when a list
+// style is applied to a multi-cell selection. Existing paragraphs become list
+// items; an existing list is re-wrapped; an empty cell yields a single empty
+// item.
+const buildCellListNode = (
+  schema: any,
+  cellNode: any,
+  kind: 'ordered' | 'bullet',
+  listStyle: string,
+  startVal: number,
+): any => {
+  const items: any[] = [];
+  cellNode.forEach((child: any) => {
+    if (child.type.name === 'orderedList' || child.type.name === 'bulletList') {
+      child.forEach((li: any) => {
+        if (li.type.name === 'listItem') items.push(li);
+      });
+    } else if (child.type.name === 'paragraph') {
+      items.push(schema.nodes.listItem.create(null, child));
+    } else {
+      items.push(schema.nodes.listItem.create(null, schema.nodes.paragraph.create()));
+    }
+  });
+  if (items.length === 0) {
+    items.push(schema.nodes.listItem.create(null, schema.nodes.paragraph.create()));
+  }
+
+  if (kind === 'bullet') {
+    return schema.nodes.bulletList.create(
+      { style: listStyle || 'list-style-type: disc;' },
+      items,
+    );
+  }
+  return schema.nodes.orderedList.create(
+    { style: listStyle || 'list-style-type: decimal;', start: startVal },
+    items,
+  );
+};
+
+// Apply a bullet / numbered list to every cell of a multi-cell (CellSelection)
+// table selection. Numbering runs one number per row, incrementing down the
+// selected rows, then the whole table is re-sequenced so the new run merges
+// cleanly with anything already numbered above it. Returns false (and does
+// nothing) when the selection is not a table cell selection, so the caller can
+// fall back to normal list toggling.
+const applyListToSelectedCells = (
+  view: any,
+  kind: 'ordered' | 'bullet',
+  listStyle: string,
+): boolean => {
+  const { state } = view;
+  const sel = state.selection;
+  if (!(sel instanceof CellSelection)) return false;
+
+  const table = sel.$anchorCell.node(-1);
+  const tableStart = sel.$anchorCell.start(-1);
+  if (!table || table.type.name !== 'table') return false;
+
+  let map: any;
+  try {
+    map = TableMap.get(table);
+  } catch {
+    return false;
+  }
+
+  const cells: { pos: number; node: any; row: number }[] = [];
+  let minRow = Infinity;
+  sel.forEachCell((node: any, pos: number) => {
+    const rect = map.findCell(pos - tableStart);
+    minRow = Math.min(minRow, rect.top);
+    cells.push({ pos, node, row: rect.top });
+  });
+  if (cells.length === 0) return false;
+
+  const tr = state.tr;
+  // Replace back-to-front so earlier positions stay valid.
+  cells
+    .sort((a, b) => b.pos - a.pos)
+    .forEach(({ pos, node, row }) => {
+      const rowNumber = row - minRow + 1;
+      const listNode = buildCellListNode(state.schema, node, kind, listStyle, rowNumber);
+      tr.replaceWith(pos + 1, pos + node.nodeSize - 1, listNode);
+    });
+
+  if (!tr.docChanged) return false;
+
+  // Normalise this table's numbering in the same transaction (a bullet applied
+  // mid-column also needs the cells below it to restart), and mark it so the
+  // resequence plugin doesn't redo the work.
+  resequenceTableCellLists(tr, tableStart - 1);
+  tr.setMeta(RESEQ_META, true);
+
+  view.dispatch(tr);
+  view.focus();
   return true;
 };
 
@@ -1920,6 +2071,8 @@ const MenuBar = ({
 
   const setBulletStyle = (styleType: 'disc' | 'circle' | 'square') => {
     if (!editor) return;
+    // Multi-cell table selection: wrap every selected cell, not just the anchor.
+    if (applyListToSelectedCells(editor.view, 'bullet', `list-style-type: ${styleType};`)) return;
     if (editor.isActive('bulletList')) {
       const currentAttrs = editor.getAttributes('bulletList');
       const currentStyle = currentAttrs?.style || '';
@@ -1936,6 +2089,9 @@ const MenuBar = ({
 
   const setOrderedStyle = (styleType: 'decimal' | 'bengali' | 'upper-roman' | 'lower-alpha') => {
     if (!editor) return;
+    // Multi-cell table selection: number every selected cell (one number per row,
+    // incrementing down the selection), not just the anchor cell.
+    if (applyListToSelectedCells(editor.view, 'ordered', `list-style-type: ${styleType};`)) return;
     if (editor.isActive('orderedList')) {
       const currentAttrs = editor.getAttributes('orderedList');
       const currentStyle = currentAttrs?.style || '';
@@ -2756,22 +2912,49 @@ const MenuBar = ({
                     </button>
                   </div>
 
-                  <div className="w-20">
-                    <CustomSelect
-                      value={editor.getAttributes('paragraph').lineHeight || ''}
-                      onChange={(val) => {
-                        if (!val) editor.chain().focus().unsetLineHeight().run();
-                        else editor.chain().focus().setLineHeight(val).run();
-                      }}
-                      options={[
-                        { value: "", label: "Spacing" },
-                        { value: "1.0", label: "1.0 Single" },
-                        { value: "1.15", label: "1.15 Normal" },
-                        { value: "1.5", label: "1.5 Medium" },
-                        { value: "2.0", label: "2.0 Double" }
-                      ]}
-                    />
-                  </div>
+                  {(() => {
+                    const curLH = editor.getAttributes('paragraph').lineHeight || '';
+                    const presets = ["1.0", "1.15", "1.5", "2.0"];
+                    const isCustomLH = !!curLH && !presets.includes(curLH);
+                    return (
+                      <div className="flex items-center gap-0.5">
+                        <div className="w-20">
+                          <CustomSelect
+                            value={curLH}
+                            onChange={(val) => {
+                              if (val === "__custom__") return;
+                              if (!val) editor.chain().focus().unsetLineHeight().run();
+                              else editor.chain().focus().setLineHeight(val).run();
+                            }}
+                            options={[
+                              { value: "", label: "Spacing" },
+                              { value: "1.0", label: "1.0 Single" },
+                              { value: "1.15", label: "1.15 Normal" },
+                              { value: "1.5", label: "1.5 Medium" },
+                              { value: "2.0", label: "2.0 Double" },
+                              ...(isCustomLH ? [{ value: curLH, label: `${curLH} Custom` }] : []),
+                            ]}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={curLH}
+                          onChange={(e) => {
+                            const val = e.target.value.trim();
+                            if (!val) {
+                              editor.chain().focus().unsetLineHeight().run();
+                            } else if (/^\d*\.?\d*$/.test(val)) {
+                              editor.chain().focus().setLineHeight(val).run();
+                            }
+                          }}
+                          title="Custom line spacing (any value, e.g. 1.3)"
+                          placeholder="1.3"
+                          className="w-12 px-1 py-1 text-xs text-center border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    );
+                  })()}
 
                   {/* Shading / Background Color */}
                   <div className="relative">
@@ -4857,6 +5040,7 @@ export default function RichTextEditor({
       }),
       CustomTable.configure({ resizable: true, View: CustomTableView }),
       TableRowResizing,
+      TableCellListResequence,
       TableRow,
       CustomTableHeader,
       CustomTableCell,
@@ -4929,8 +5113,14 @@ export default function RichTextEditor({
   });
 
   useEffect(() => {
-    if (editor && !editor.isDestroyed && content !== editor.getHTML()) {
-      const processed = convertMarkdownTablesToHtml(content || '');
+    if (!editor || editor.isDestroyed) return;
+    // Compare the *processed* incoming content against the editor's current HTML.
+    // Comparing the raw `content` instead meant a value that only differs by
+    // markdown-table normalisation (e.g. a prefilled notice template) never
+    // matched getHTML(), so this effect re-ran setContent on every render and
+    // could swallow keystrokes / reset the caret.
+    const processed = convertMarkdownTablesToHtml(content || '');
+    if (processed !== editor.getHTML()) {
       editor.commands.setContent(processed, { emitUpdate: false });
     }
   }, [content, editor]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
@@ -102,6 +102,16 @@ export default function PdfPreviewPage() {
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  // "pdf" shows the real generated PDF in an <iframe> so the preview is exactly
+  // what downloads/prints; "edit" shows the inline-editing grid. Bumping
+  // previewNonce forces the PDF to re-render (used after an inline edit saves).
+  const [previewMode, setPreviewMode] = useState<"pdf" | "edit">("pdf");
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
+  const pdfPreviewUrlRef = useRef<string | null>(null);
+
   // ---- Page layout controls --------------------------------------------
   const [pageSize, setPageSize] = useState("A4");
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
@@ -125,6 +135,43 @@ export default function PdfPreviewPage() {
     if (lineHeight !== "") qs.set("lineHeight", String(lineHeight));
     return qs.toString();
   }, [pageSize, orientation, margins, scalePct, lineHeight]);
+
+  // Render the actual PDF for the "pdf" preview mode. Debounced so dragging the
+  // layout sliders doesn't fire a request per keystroke.
+  useEffect(() => {
+    if (previewMode !== "pdf" || !id) return;
+    let cancelled = false;
+    setPdfPreviewLoading(true);
+    setPdfPreviewError(null);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get(`/meetings/${id}/pdf/${docType}?${layoutQuery}`, {
+          responseType: "blob",
+        });
+        if (cancelled) return;
+        const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+        if (pdfPreviewUrlRef.current) URL.revokeObjectURL(pdfPreviewUrlRef.current);
+        pdfPreviewUrlRef.current = url;
+        setPdfPreviewUrl(url);
+      } catch (e: any) {
+        if (!cancelled) setPdfPreviewError(e?.response?.data?.message || "Failed to render preview");
+      } finally {
+        if (!cancelled) setPdfPreviewLoading(false);
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [id, docType, layoutQuery, previewMode, previewNonce]);
+
+  // Revoke the last blob URL when leaving the page.
+  useEffect(
+    () => () => {
+      if (pdfPreviewUrlRef.current) URL.revokeObjectURL(pdfPreviewUrlRef.current);
+    },
+    []
+  );
 
   // ---- Agenda data ---------------------------------------------------
   const allAgendas = useMemo(() => {
@@ -253,6 +300,7 @@ export default function PdfPreviewPage() {
       toast.success("Saved");
       setEditing(null);
       setDraft("");
+      setPreviewNonce((n) => n + 1); // refresh the PDF preview with the new content
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save");
     } finally {
@@ -292,6 +340,21 @@ export default function PdfPreviewPage() {
   // (nested deeper than a direct grid cell) keep their own borders. All text
   // prints black regardless of the on-screen theme.
   const printCss = `
+    /* Keep the on-screen preview closer to the generated PDF: match its 14px
+       body text, and stop rich-text tables authored in the editor from being
+       stretched to the full page width by Tailwind's prose reset (the PDF now
+       shrinks them to fit their content -- see styleRichTextHtml in
+       pdfGenerator.js). */
+    #pdf-print-root { font-size: 14px; }
+    #pdf-print-root .prose :where(table):not(.preview-grid) {
+      width: auto;
+      max-width: 100%;
+      table-layout: auto;
+    }
+    #pdf-print-root .prose :where(table):not(.preview-grid) :where(td, th) {
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
     @media print {
       @page { size: ${pageSize} ${orientation}; margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm; }
       body * { visibility: hidden !important; }
@@ -451,6 +514,26 @@ export default function PdfPreviewPage() {
             <h1 className="text-sm font-semibold truncate">{meetingHeading} — PDF Preview</h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg mr-1">
+              <button
+                onClick={() => setPreviewMode("pdf")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  previewMode === "pdf" ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-card"
+                }`}
+                title="Exact PDF — what will download / print"
+              >
+                PDF
+              </button>
+              <button
+                onClick={() => setPreviewMode("edit")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  previewMode === "edit" ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-card"
+                }`}
+                title="Edit agenda / resolution / description text inline"
+              >
+                Edit
+              </button>
+            </div>
             <button
               onClick={() => window.print()}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-input rounded-md hover:bg-muted"
@@ -572,7 +655,35 @@ export default function PdfPreviewPage() {
         </div>
       </div>
 
-      {/* Scrollable preview area */}
+      {/* Preview area. "pdf" mode renders the real generated PDF (exactly what
+          downloads / prints); "edit" mode is the inline-editing grid. */}
+      {previewMode === "pdf" ? (
+        <div className="flex-1 min-h-0 relative bg-muted/40">
+          {pdfPreviewUrl && (
+            <iframe
+              title="PDF preview"
+              src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&view=FitH`}
+              className="absolute inset-0 h-full w-full border-0 bg-white"
+            />
+          )}
+          {pdfPreviewLoading && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/60 text-sm text-muted-foreground backdrop-blur-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Rendering PDF…
+            </div>
+          )}
+          {pdfPreviewError && !pdfPreviewLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-destructive">
+              {pdfPreviewError}
+              <button
+                onClick={() => setPreviewNonce((n) => n + 1)}
+                className="rounded-md border border-input px-3 py-1 text-xs text-foreground hover:bg-muted"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="flex-1 overflow-auto p-6">
         <div
           id="pdf-print-root"
@@ -686,6 +797,7 @@ export default function PdfPreviewPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
