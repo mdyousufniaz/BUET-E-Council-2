@@ -583,6 +583,9 @@ export const DEPARTMENT_MERGE_RULES = [
 | `POST` | `/api/meetings/:id/send-notice` | Send meeting notice email to selected invitees (draft/ongoing only) |
 | `POST` | `/api/meetings/:id/send-agenda-email` | Send agenda email with PDF attached to selected invitees (ongoing only) |
 | `POST` | `/api/meetings/:id/send-resolution-email` | Send resolution email with PDF attached to selected invitees (completed only) |
+| `GET` | `/api/meetings/:id/email-drafts` | Fetch saved email drafts (`{ notice, agenda, resolution }`, one slot per type) |
+| `PUT` | `/api/meetings/:id/email-drafts/:mode` | Save/overwrite the draft for `notice`/`agenda`/`resolution` (invitee subset + from/subject/body/attach flag/base64 attachments) |
+| `DELETE` | `/api/meetings/:id/email-drafts/:mode` | Discard the saved draft for a type |
 | `POST` | `/api/meetings/:id/materials/upload` | Upload signed meeting materials attachment |
 | `GET` | `/api/meetings/:id/invitees` | List meeting invitees (includes `notice_mail_sent`, `agenda_mail_sent`, `resolution_mail_sent` flags) |
 | `GET` | `/api/meetings/:id/invitees/emails` | List invitees with email addresses for email sending modal (lightweight projection) |

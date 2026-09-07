@@ -2219,6 +2219,80 @@ const sendResolutionEmail = async (req, res, next) => {
     }
 };
 
+// Email drafts: one saved draft per (meeting, mode). A draft stores the
+// invitee subset plus everything not derivable from invitee ids
+// (from/subject/body/attach flag/extra attachments as base64 JSON).
+const DRAFT_MODES = ['notice', 'agenda', 'resolution'];
+const MAX_DRAFT_ATTACH_BYTES = 10 * 1024 * 1024;
+
+const getEmailDrafts = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const meetingRes = await db.query('SELECT id FROM meetings WHERE id = $1', [id]);
+        if (meetingRes.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        const result = await db.query('SELECT * FROM email_drafts WHERE meeting_id = $1', [id]);
+        const drafts = { notice: null, agenda: null, resolution: null };
+        for (const row of result.rows) {
+            if (DRAFT_MODES.includes(row.mode)) drafts[row.mode] = row;
+        }
+        res.status(200).json({ success: true, data: drafts });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const upsertEmailDraft = async (req, res, next) => {
+    try {
+        const { id, mode } = req.params;
+        if (!DRAFT_MODES.includes(mode)) return next(new CustomError('Invalid draft mode', 400));
+        const meetingRes = await db.query('SELECT id FROM meetings WHERE id = $1', [id]);
+        if (meetingRes.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+
+        const { invitee_ids, from, subject, body, attach_pdf, attachments } = req.body || {};
+        // Keep only ids that still belong to this meeting (drops stale/foreign ids).
+        const sentIds = Array.isArray(invitee_ids) ? invitee_ids.filter(x => typeof x === 'string') : [];
+        let validIds = sentIds;
+        if (sentIds.length > 0) {
+            const invRes = await db.query('SELECT id FROM invitees WHERE meeting_id = $1 AND id = ANY($2::uuid[])', [id, sentIds]);
+            validIds = invRes.rows.map(r => r.id);
+        }
+        const files = (Array.isArray(attachments) ? attachments : [])
+            .filter(a => a && typeof a.filename === 'string' && typeof a.content === 'string')
+            .map(a => ({
+                filename: a.filename.slice(0, 255),
+                content: a.content,
+                contentType: a.contentType || 'application/octet-stream'
+            }));
+        const totalBytes = files.reduce((n, f) => n + Math.ceil((f.content.length * 3) / 4), 0);
+        if (totalBytes > MAX_DRAFT_ATTACH_BYTES) return next(new CustomError('Draft attachments exceed 10 MB', 400));
+
+        const result = await db.query(
+            `INSERT INTO email_drafts (meeting_id, mode, invitee_ids, from_email, subject, body, attach_pdf, attachments, created_by, updated_at)
+             VALUES ($1, $2, $3::uuid[], $4, $5, $6, $7, $8::jsonb, $9, NOW())
+             ON CONFLICT (meeting_id, mode)
+             DO UPDATE SET invitee_ids = EXCLUDED.invitee_ids, from_email = EXCLUDED.from_email,
+                 subject = EXCLUDED.subject, body = EXCLUDED.body, attach_pdf = EXCLUDED.attach_pdf,
+                 attachments = EXCLUDED.attachments, created_by = EXCLUDED.created_by, updated_at = NOW()
+             RETURNING *`,
+            [id, mode, validIds, from || null, subject ?? null, body ?? null, attach_pdf !== false, JSON.stringify(files), req.user?.id || null]
+        );
+        res.status(200).json({ success: true, message: 'Draft saved', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const deleteEmailDraft = async (req, res, next) => {
+    try {
+        const { id, mode } = req.params;
+        if (!DRAFT_MODES.includes(mode)) return next(new CustomError('Invalid draft mode', 400));
+        await db.query('DELETE FROM email_drafts WHERE meeting_id = $1 AND mode = $2', [id, mode]);
+        res.status(200).json({ success: true, message: 'Draft discarded' });
+    } catch (error) {
+        next(error);
+    }
+};
+
 const verifyHandoverPassword = async (req, password) => {
     if (!password) {
         throw new CustomError('Password is required to confirm handover.', 400);
@@ -3098,6 +3172,9 @@ module.exports = {
     sendNoticeEmail,
     sendAgendaEmailBulk,
     sendResolutionEmail,
+    getEmailDrafts,
+    upsertEmailDraft,
+    deleteEmailDraft,
     updateMeetingSignatures,
     uploadMeetingSignatureImage
 };
