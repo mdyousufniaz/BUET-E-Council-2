@@ -231,6 +231,79 @@ const generateNoticePdfFromPayload = async (req, res, next) => {
     }
 };
 
+const NOTICE_TYPES = ['invitation', 'agenda', 'resolution'];
+
+// GET /notices/meeting/:meetingId  -> all saved notice documents for the meeting
+// (keyed by notice_type), so the "Email Document" editor can restore what was
+// last saved.
+const getMeetingNotices = async (req, res, next) => {
+    try {
+        const { meetingId } = req.params;
+        const result = await db.query(
+            'SELECT * FROM notices WHERE meeting_id = $1 ORDER BY updated_at DESC',
+            [meetingId]
+        );
+        const byType = {};
+        for (const row of result.rows) {
+            if (!byType[row.notice_type]) byType[row.notice_type] = row;
+        }
+        res.status(200).json({ success: true, data: byType });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// PUT /notices/meeting/:meetingId  -> upsert the saved notice document for one
+// notice_type. Explicit save from the editor's Save button.
+const saveMeetingNotice = async (req, res, next) => {
+    try {
+        const { meetingId } = req.params;
+        const {
+            notice_number = '',
+            notice_date,
+            notice_type,
+            body = '',
+            signature_text = '',
+            signature_image = ''
+        } = req.body;
+
+        if (!NOTICE_TYPES.includes(notice_type)) {
+            return next(new CustomError('A valid notice_type (invitation | agenda | resolution) is required', 400));
+        }
+
+        const meetingCheck = await db.query('SELECT id FROM meetings WHERE id = $1', [meetingId]);
+        if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+
+        const result = await db.query(
+            `INSERT INTO notices
+                 (meeting_id, notice_number, notice_date, notice_type, body, signature_text, signature_image, created_by, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+             ON CONFLICT (meeting_id, notice_type) DO UPDATE SET
+                 notice_number  = EXCLUDED.notice_number,
+                 notice_date    = EXCLUDED.notice_date,
+                 body           = EXCLUDED.body,
+                 signature_text = EXCLUDED.signature_text,
+                 signature_image = EXCLUDED.signature_image,
+                 updated_at     = NOW()
+             RETURNING *`,
+            [
+                meetingId,
+                notice_number,
+                notice_date || new Date().toISOString(),
+                notice_type,
+                body,
+                signature_text,
+                signature_image,
+                req.user?.id || null
+            ]
+        );
+
+        res.status(200).json({ success: true, message: 'Notice document saved', data: result.rows[0] });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     getSignatures,
     updateSignatures,
@@ -238,5 +311,7 @@ module.exports = {
     getSignedPersona,
     updateSignedPersona,
     uploadSignedPersonaSignature,
-    generateNoticePdfFromPayload
+    generateNoticePdfFromPayload,
+    getMeetingNotices,
+    saveMeetingNotice
 };

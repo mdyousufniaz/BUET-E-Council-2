@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import api, { fetcher } from "../../lib/api";
 import RichTextEditor from "../RichTextEditor";
 import CustomSelect from "../CustomSelect";
 import { toast } from "sonner";
 import { useAuth } from "../../hooks/useAuth";
-import { Download, Eye, Loader2, Settings, Wand2 } from "lucide-react";
+import { Download, Eye, Loader2, Save, Settings, Wand2 } from "lucide-react";
 import { toBanglaDigits } from "../../lib/banglaNumerals";
 import { sanitizeHtml } from "../../lib/sanitize";
 
@@ -114,6 +114,14 @@ export default function NoticeView({ meeting, mutate }: { meeting: any, mutate: 
     { shouldRetryOnError: false, revalidateOnFocus: false }
   );
 
+  // Saved notice documents for this meeting, keyed by notice_type.
+  const { data: savedRes, mutate: mutateSaved } = useSWR(
+    meeting.id ? `/notices/meeting/${meeting.id}` : null,
+    fetcher,
+    { shouldRetryOnError: false, revalidateOnFocus: false }
+  );
+  const savedNotices = savedRes?.data || {};
+
   const signatures = sigRes?.data || {};
   const invitees = inviteesRes?.data || [];
 
@@ -158,7 +166,48 @@ export default function NoticeView({ meeting, mutate }: { meeting: any, mutate: 
     }
   }, [signatures]);
 
+  // Load the saved notice document for the current notice_type (once per type).
+  // Each notice_type is its own saved document; switching type shows that one,
+  // or a fresh blank if nothing has been saved for it yet.
+  const loadedTypeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!savedRes) return;
+    if (loadedTypeRef.current === form.notice_type) return;
+    loadedTypeRef.current = form.notice_type;
+    const saved = savedNotices[form.notice_type];
+    setForm(prev => saved ? {
+      ...prev,
+      notice_number: saved.notice_number || "",
+      notice_date: saved.notice_date ? new Date(saved.notice_date).toISOString().split('T')[0] : prev.notice_date,
+      body: saved.body || "",
+      signature_text: saved.signature_text || prev.signature_text,
+      signature_image: saved.signature_image || prev.signature_image,
+    } : { ...prev, notice_number: "", body: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedRes, form.notice_type]);
+
   const noticeTypeOptions = getNoticeTypeOptions(meeting.type || 'academic', isRegular);
+
+  const [savingDoc, setSavingDoc] = useState(false);
+  const handleSaveDocument = async () => {
+    setSavingDoc(true);
+    try {
+      await api.put(`/notices/meeting/${meeting.id}`, {
+        notice_number: form.notice_number,
+        notice_date: new Date(form.notice_date).toISOString(),
+        notice_type: form.notice_type,
+        body: form.body,
+        signature_text: form.signature_text,
+        signature_image: form.signature_image,
+      });
+      await mutateSaved();
+      toast.success("Notice document saved");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save notice document");
+    } finally {
+      setSavingDoc(false);
+    }
+  };
 
   const handlePrefill = () => {
     const body = generatePrefillBody(
@@ -384,13 +433,24 @@ export default function NoticeView({ meeting, mutate }: { meeting: any, mutate: 
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Body</label>
-              <button
-                onClick={handlePrefill}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary border border-primary/20 rounded-md hover:from-primary/20 hover:to-primary/10 transition-all"
-              >
-                <Wand2 className="w-3.5 h-3.5" />
-                Auto-Prefill Template
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrefill}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gradient-to-r from-primary/10 to-primary/5 text-primary border border-primary/20 rounded-md hover:from-primary/20 hover:to-primary/10 transition-all"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  Auto-Prefill Template
+                </button>
+                <button
+                  onClick={handleSaveDocument}
+                  disabled={savingDoc}
+                  title="Save this notice document so your edits are kept"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-all"
+                >
+                  {savingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save
+                </button>
+              </div>
             </div>
             <RichTextEditor
               content={form.body}

@@ -27,4 +27,8 @@ router.post('/settings/signed-persona/upload', noticeAdmins, upload.single('file
 
 router.post('/generate-pdf', noticeAdmins, noticeController.generateNoticePdfFromPayload);
 
+// Saved notice documents (the "Email Document" editor's Save button)
+router.get('/meeting/:meetingId', noticeAdmins, noticeController.getMeetingNotices);
+router.put('/meeting/:meetingId', noticeAdmins, noticeController.saveMeetingNotice);
+
 module.exports = router;

@@ -111,6 +111,14 @@ const ensureNoticeSchema = `
 `;
 pool.query(ensureNoticeSchema).catch((err) => console.error('ensureNoticeSchema error:', err.message));
 
+// The "Email Document" editor persists one saved notice document per
+// (meeting, notice_type) so an edited body survives reloads / tab switches.
+const ensureNoticeDocPersistence = `
+  ALTER TABLE notices ADD COLUMN IF NOT EXISTS signature_image TEXT DEFAULT '';
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_notices_meeting_type ON notices (meeting_id, notice_type);
+`;
+pool.query(ensureNoticeDocPersistence).catch((err) => console.error('ensureNoticeDocPersistence error:', err.message));
+
 const ensureEmailDrafts = `
   CREATE TABLE IF NOT EXISTS email_drafts (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
