@@ -16,6 +16,9 @@ interface SendAgendaModalProps {
   currentUserEmail?: string;
   mode?: EmailMode;
   onSent?: () => void;
+  initialDraft?: any;
+  draftKey?: number;
+  onDraftChange?: () => void;
 }
 
 type Tab = "invitees" | "email";
@@ -33,6 +36,12 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+
+const base64ToFile = async (filename: string, base64: string, contentType: string): Promise<File> => {
+  const res = await fetch(`data:${contentType || "application/octet-stream"};base64,${base64}`);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: contentType || "application/octet-stream" });
+};
 
 // Generate notice email content
 const getNoticeContent = (meeting: any) => {
@@ -117,7 +126,7 @@ const getResolutionContent = (meeting: any) => {
   };
 };
 
-export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserEmail, mode = "custom", onSent }: SendAgendaModalProps) {
+export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserEmail, mode = "custom", onSent, initialDraft, draftKey, onDraftChange }: SendAgendaModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("invitees");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -125,6 +134,7 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [attachAgendaPdf, setAttachAgendaPdf] = useState(true);
   const [extraAttachments, setExtraAttachments] = useState<File[]>([]);
 
@@ -187,11 +197,37 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
     return { vcGroup: vc, deptGroups: sortedDepts, othersGroup: others };
   }, [filtered]);
 
-  // Reset local state whenever the modal opens/closes, and seed defaults based on mode
+  // Reset local state whenever the modal opens/closes. On open, a saved draft
+  // (Open Draft) wins and is imported as-is; otherwise seed template defaults.
   useEffect(() => {
-    if (isOpen) {
-      setFromEmail(currentUserEmail || "admin@buet.ac.bd");
-
+    if (!isOpen) {
+      setActiveTab("invitees");
+      setSelectedIds([]);
+      setSearchQuery("");
+      setBody("");
+      setAttachAgendaPdf(true);
+      setExtraAttachments([]);
+      return;
+    }
+    let cancelled = false;
+    const seed = async () => {
+      setFromEmail(initialDraft?.from_email || currentUserEmail || "admin@buet.ac.bd");
+      if (initialDraft) {
+        setSelectedIds(Array.isArray(initialDraft.invitee_ids) ? initialDraft.invitee_ids : []);
+        setSubject(initialDraft.subject || "");
+        setBody(initialDraft.body || "");
+        setAttachAgendaPdf(initialDraft.attach_pdf !== false);
+        const savedFiles = Array.isArray(initialDraft.attachments) ? initialDraft.attachments : [];
+        try {
+          const restored = await Promise.all(
+            savedFiles.map((a: any) => base64ToFile(a.filename, a.content, a.contentType))
+          );
+          if (!cancelled) setExtraAttachments(restored);
+        } catch {
+          if (!cancelled) setExtraAttachments([]);
+        }
+        return;
+      }
       if (isNoticeMode) {
         const content = getNoticeContent(meeting);
         setSubject(content.subject);
@@ -213,15 +249,10 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
         setBody("");
         setAttachAgendaPdf(true);
       }
-    } else {
-      setActiveTab("invitees");
-      setSelectedIds([]);
-      setSearchQuery("");
-      setBody("");
-      setAttachAgendaPdf(true);
-      setExtraAttachments([]);
-    }
-  }, [isOpen, meeting, isNoticeMode, isAgendaMode, isResolutionMode, currentUserEmail]);
+    };
+    seed();
+    return () => { cancelled = true; };
+  }, [isOpen, draftKey, meeting, isNoticeMode, isAgendaMode, isResolutionMode, currentUserEmail]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -311,6 +342,34 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
     setExtraAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleSaveDraft = async () => {
+    if (isCustomMode) return;
+    setIsSavingDraft(true);
+    try {
+      const attachments = await Promise.all(
+        extraAttachments.map(async (file) => ({
+          filename: file.name,
+          content: await fileToBase64(file),
+          contentType: file.type || "application/octet-stream",
+        }))
+      );
+      await api.put(`/meetings/${meeting.id}/email-drafts/${mode}`, {
+        invitee_ids: selectedIds,
+        from: fromEmail,
+        subject,
+        body,
+        attach_pdf: attachAgendaPdf,
+        attachments,
+      });
+      toast.success("Draft saved");
+      onDraftChange?.();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || err.response?.data?.message || "Failed to save draft");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
   const handleSend = async () => {
     setIsSending(true);
     try {
@@ -374,6 +433,15 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
       }
 
       onSent?.();
+      // A fully successful send consumes the saved draft for this mode.
+      if (!isCustomMode && failed.length === 0 && sent.length > 0) {
+        try {
+          await api.delete(`/meetings/${meeting.id}/email-drafts/${mode}`);
+          onDraftChange?.();
+        } catch {
+          // Draft cleanup is best-effort; the email already went out.
+        }
+      }
       onClose();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to send email");
@@ -397,6 +465,11 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
           <div>
             <h2 className="text-xl font-bold flex items-center gap-2">
               {modalIcon} {modalTitle}
+              {initialDraft && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  Draft
+                </span>
+              )}
             </h2>
             <p className="text-sm text-muted-foreground mt-0.5">{meeting?.title || meeting?.name}</p>
           </div>
@@ -613,6 +686,15 @@ export default function SendAgendaModal({ isOpen, onClose, meeting, currentUserE
             >
               Cancel
             </button>
+            {!isCustomMode && (
+              <button
+                onClick={handleSaveDraft}
+                disabled={isSavingDraft || isSending}
+                className="px-4 py-2 text-sm border border-input bg-background rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingDraft ? "Saving..." : initialDraft ? "Update Draft" : "Save Draft"}
+              </button>
+            )}
             <button
               onClick={handleSend}
               disabled={selectedIds.length === 0 || isSending}
