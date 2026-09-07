@@ -987,6 +987,24 @@ CREATE TABLE IF NOT EXISTS notices (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Email drafts: one saved draft per (meeting, email type: notice/agenda/resolution).
+-- Stores the invitee subset plus from/subject/body/attach flag/attachments.
+CREATE TABLE IF NOT EXISTS email_drafts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    meeting_id UUID NOT NULL REFERENCES meetings (id) ON DELETE CASCADE,
+    mode VARCHAR(20) NOT NULL CHECK (mode IN ('notice', 'agenda', 'resolution')),
+    invitee_ids UUID[] NOT NULL DEFAULT '{}',
+    from_email TEXT,
+    subject TEXT,
+    body TEXT,
+    attach_pdf BOOLEAN DEFAULT true,
+    attachments JSONB NOT NULL DEFAULT '[]',
+    created_by UUID REFERENCES users (id) ON DELETE SET NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (meeting_id, mode)
+);
+CREATE INDEX IF NOT EXISTS idx_email_drafts_meeting_id ON email_drafts (meeting_id);
+
 -- Signature strings for notice generation (academic and syndicate)
 INSERT INTO system_settings (key, value) VALUES
 ('academic_signature_str', '(অধ্যাপক ড. এন.এম. গোলাম জাকারিয়া)

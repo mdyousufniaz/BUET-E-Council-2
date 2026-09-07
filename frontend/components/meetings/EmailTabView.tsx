@@ -10,6 +10,8 @@ import {
   FileText,
   CheckCircle2,
   Lock,
+  Plus,
+  FolderOpen,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { canEditEmail } from "../../lib/meetingAccess";
@@ -34,6 +36,8 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
   const [activeTab, setActiveTab] = useState<"email" | "document">("email");
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailModalMode, setEmailModalMode] = useState<EmailMode>("custom");
+  const [activeDraft, setActiveDraft] = useState<any>(null);
+  const [draftKey, setDraftKey] = useState(0);
   const currentUserEmail = user?.email || "admin@buet.ac.bd";
 
   const { data: inviteesRes, isLoading } = useSWR(
@@ -51,18 +55,33 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
   const allAgendaSent = inviteesWithEmail.length > 0 && inviteesWithEmail.every((i: any) => i.agenda_mail_sent);
   const allResolutionSent = inviteesWithEmail.length > 0 && inviteesWithEmail.every((i: any) => i.resolution_mail_sent);
 
-  const openNoticeModal = () => {
+  const { data: draftsRes, mutate: mutateDrafts } = useSWR(
+    canSendEmail ? `/meetings/${meeting.id}/email-drafts` : null,
+    fetcher,
+    { fallbackData: { data: { notice: null, agenda: null, resolution: null } } }
+  );
+  const drafts = draftsRes?.data || { notice: null, agenda: null, resolution: null };
+
+  // New: fresh window with prefilled body (as before). Open Draft: import the
+  // saved draft exactly as it was (disabled when nothing saved).
+  const openNoticeModal = (fromDraft = false) => {
     setEmailModalMode("notice");
+    setActiveDraft(fromDraft ? drafts.notice : null);
+    setDraftKey((k) => k + 1);
     setIsEmailModalOpen(true);
   };
 
-  const openAgendaModal = () => {
+  const openAgendaModal = (fromDraft = false) => {
     setEmailModalMode("agenda");
+    setActiveDraft(fromDraft ? drafts.agenda : null);
+    setDraftKey((k) => k + 1);
     setIsEmailModalOpen(true);
   };
 
-  const openResolutionModal = () => {
+  const openResolutionModal = (fromDraft = false) => {
     setEmailModalMode("resolution");
+    setActiveDraft(fromDraft ? drafts.resolution : null);
+    setDraftKey((k) => k + 1);
     setIsEmailModalOpen(true);
   };
 
@@ -166,14 +185,26 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={openNoticeModal}
-                    disabled={noticeDisabled}
-                    className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
-                  >
-                    <Bell className="w-4 h-4" />
-                    Send Notice
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openNoticeModal(false)}
+                      disabled={noticeDisabled}
+                      title="New notice email"
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <Plus className="w-4 h-4" />
+                      New
+                    </button>
+                    <button
+                      onClick={() => openNoticeModal(true)}
+                      disabled={noticeDisabled || !drafts.notice}
+                      title={drafts.notice ? "Open saved draft" : "No draft saved"}
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 border border-input bg-background hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Open Draft
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -208,14 +239,26 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={openAgendaModal}
-                    disabled={agendaDisabled}
-                    className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-secondary text-secondary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Send Agenda
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openAgendaModal(false)}
+                      disabled={agendaDisabled}
+                      title="New agenda email"
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-secondary text-secondary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <Plus className="w-4 h-4" />
+                      New
+                    </button>
+                    <button
+                      onClick={() => openAgendaModal(true)}
+                      disabled={agendaDisabled || !drafts.agenda}
+                      title={drafts.agenda ? "Open saved draft" : "No draft saved"}
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 border border-input bg-background hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Open Draft
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -250,14 +293,26 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={openResolutionModal}
-                    disabled={resolutionDisabled}
-                    className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-secondary text-secondary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity shrink-0"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Send Resolution
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => openResolutionModal(false)}
+                      disabled={resolutionDisabled}
+                      title="New resolution email"
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 bg-secondary text-secondary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <Plus className="w-4 h-4" />
+                      New
+                    </button>
+                    <button
+                      onClick={() => openResolutionModal(true)}
+                      disabled={resolutionDisabled || !drafts.resolution}
+                      title={drafts.resolution ? "Open saved draft" : "No draft saved"}
+                      className="px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 border border-input bg-background hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      Open Draft
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -282,7 +337,10 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
         meeting={meeting}
         currentUserEmail={currentUserEmail}
         mode={emailModalMode}
+        initialDraft={activeDraft}
+        draftKey={draftKey}
         onSent={() => mutate()}
+        onDraftChange={() => mutateDrafts()}
       />
     </div>
   );

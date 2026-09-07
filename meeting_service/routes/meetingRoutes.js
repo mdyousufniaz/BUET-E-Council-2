@@ -87,6 +87,16 @@ router.post('/:id/send-agenda-email', requireEmailSender, meetingController.send
 // Send resolution email with PDF attached to selected invitees (completed meetings only)
 router.post('/:id/send-resolution-email', requireCompletedMeetingEmailSender, meetingController.sendResolutionEmail);
 
+// Email drafts: one saved draft per (meeting, mode). Resolution drafts use the
+// same completed-meeting gate as sending; notice/agenda use the email gate.
+const requireDraftAccess = (req, res, next) => {
+    if (req.params.mode === 'resolution') return requireCompletedMeetingEmailSender(req, res, next);
+    return requireEmailSender(req, res, next);
+};
+router.get('/:id/email-drafts', requireEmailSender, meetingController.getEmailDrafts);
+router.put('/:id/email-drafts/:mode', requireDraftAccess, meetingController.upsertEmailDraft);
+router.delete('/:id/email-drafts/:mode', requireDraftAccess, meetingController.deleteEmailDraft);
+
 // Endpoint for uploading material PDFs
 router.post('/:id/materials/upload', requireMeetingOperator, upload.single('file'), meetingController.uploadMaterial);
 router.delete('/:id/materials/:type', requireMeetingOperator, meetingController.deleteMaterial);
