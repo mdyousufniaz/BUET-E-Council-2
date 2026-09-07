@@ -5113,14 +5113,8 @@ export default function RichTextEditor({
   });
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed) return;
-    // Compare the *processed* incoming content against the editor's current HTML.
-    // Comparing the raw `content` instead meant a value that only differs by
-    // markdown-table normalisation (e.g. a prefilled notice template) never
-    // matched getHTML(), so this effect re-ran setContent on every render and
-    // could swallow keystrokes / reset the caret.
-    const processed = convertMarkdownTablesToHtml(content || '');
-    if (processed !== editor.getHTML()) {
+    if (editor && !editor.isDestroyed && content !== editor.getHTML()) {
+      const processed = convertMarkdownTablesToHtml(content || '');
       editor.commands.setContent(processed, { emitUpdate: false });
     }
   }, [content, editor]);

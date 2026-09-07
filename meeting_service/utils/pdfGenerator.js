@@ -1694,26 +1694,35 @@ const generateAttendanceDocxSheet = async (meetingId, groupFilter = null) => {
 
 const BANGLA_DAYS = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
 
+// Read Y-M-D straight from the string for a plain date ("2026-09-09") or a
+// midnight-UTC timestamp ("2026-09-09T00:00:00.000Z") — how meeting/notice dates
+// are stored — so the container's timezone can't shift the day. Only values with
+// a real (non-midnight) time-of-day fall back to Date parsing.
+const noticeDateParts = (value) => {
+    if (value == null) value = new Date();
+    const s = typeof value === 'string' ? value : new Date(value).toISOString();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (m && (m[4] === undefined || (m[4] === '00' && m[5] === '00'))) {
+        const year = +m[1], month = +m[2] - 1, day = +m[3];
+        return { day, month, year, weekday: new Date(Date.UTC(year, month, day)).getUTCDay() };
+    }
+    const d = new Date(s);
+    return { day: d.getDate(), month: d.getMonth(), year: d.getFullYear(), weekday: d.getDay() };
+};
+
 const formatNoticeDate = (dateStr) => {
-    const d = new Date(dateStr);
-    const day = d.getDate();
-    const month = d.getMonth();
-    const year = d.getFullYear();
+    const { day, month, year } = noticeDateParts(dateStr);
     const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
     return `${toBanglaDigits(day)} ${months[month]} ${toBanglaDigits(year)}`;
 };
 
 const formatNoticeDateShort = (dateStr) => {
-    const d = new Date(dateStr);
-    const day = d.getDate();
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
-    return `${toBanglaDigits(day)}-${toBanglaDigits(String(month).padStart(2, '0'))}-${toBanglaDigits(year)}`;
+    const { day, month, year } = noticeDateParts(dateStr);
+    return `${toBanglaDigits(day)}-${toBanglaDigits(String(month + 1).padStart(2, '0'))}-${toBanglaDigits(year)}`;
 };
 
 const getNoticeDayName = (dateStr) => {
-    const d = new Date(dateStr);
-    return BANGLA_DAYS[d.getDay()];
+    return BANGLA_DAYS[noticeDateParts(dateStr).weekday];
 };
 
 const generateNoticePdf = async (notice, presentees) => {
@@ -1732,6 +1741,11 @@ const generateNoticePdf = async (notice, presentees) => {
     const dateStr = formatNoticeDate(meetingDate);
     const dateShort = formatNoticeDateShort(meetingDate);
     const dayName = getNoticeDayName(meetingDate);
+
+    // The notice's own issue date (header "তারিখ:") — the value the user picked
+    // in the form; falls back to today. Distinct from the meeting date used in
+    // the body text.
+    const noticeIssueDateStr = formatNoticeDate(notice.notice_date || new Date());
 
     const meetingUrl = `${process.env.PRODUCTION_DOMAIN || 'http://localhost:9001'}/meetings/${notice.meeting_id}`;
 
@@ -1870,7 +1884,7 @@ const generateNoticePdf = async (notice, presentees) => {
 
         <div class="notice-meta">
             <span>নম্বর: ${notice.notice_number || ''}</span>
-            <span>তারিখ: ${dateStr}</span>
+            <span>তারিখ: ${noticeIssueDateStr}</span>
         </div>
 
         ${addressHtml}
