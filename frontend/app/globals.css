@@ -212,6 +212,357 @@
   --radius: 0.5rem;
 }
 
+.forest {
+  /* ── Forest Green Theme ── */
+  --background: #f7faf7;
+  --foreground: #0f1f13;
+  --card: #ffffff;
+  --card-foreground: #0f1f13;
+  --popover: #ffffff;
+  --popover-foreground: #0f1f13;
+
+  --primary: #15803d;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ecfdf3;
+  --secondary-foreground: #14532d;
+
+  --muted: #f1f5f2;
+  --muted-foreground: #4b5f4e;
+
+  --accent: #dcfce7;
+  --accent-foreground: #14532d;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #d8e6db;
+  --input: #d8e6db;
+  --ring: #15803d;
+
+  --sidebar-background: #f0f7f1;
+  --sidebar-foreground: #1c3a24;
+  --sidebar-primary: #15803d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2f0e4;
+  --sidebar-accent-foreground: #0f1f13;
+  --sidebar-border: #d3e3d6;
+
+  --radius: 0.5rem;
+}
+
+.purple {
+  /* ── Royal Purple Theme ── */
+  --background: #faf8fd;
+  --foreground: #1e1533;
+  --card: #ffffff;
+  --card-foreground: #1e1533;
+  --popover: #ffffff;
+  --popover-foreground: #1e1533;
+
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f3ecfe;
+  --secondary-foreground: #4c1d95;
+
+  --muted: #f3f0f7;
+  --muted-foreground: #5b5568;
+
+  --accent: #ede9fe;
+  --accent-foreground: #4c1d95;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #e3daf3;
+  --input: #e3daf3;
+  --ring: #7c3aed;
+
+  --sidebar-background: #f5f1fb;
+  --sidebar-foreground: #2e1f4d;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ece3fa;
+  --sidebar-accent-foreground: #1e1533;
+  --sidebar-border: #ddd0f0;
+
+  --radius: 0.5rem;
+}
+
+.amber {
+  /* ── Sunset Amber Theme ── */
+  --background: #fffaf3;
+  --foreground: #2a1a08;
+  --card: #ffffff;
+  --card-foreground: #2a1a08;
+  --popover: #ffffff;
+  --popover-foreground: #2a1a08;
+
+  --primary: #d97706;
+  --primary-foreground: #ffffff;
+
+  --secondary: #fef3e2;
+  --secondary-foreground: #92400e;
+
+  --muted: #f7f1e8;
+  --muted-foreground: #6b5a44;
+
+  --accent: #fde8cc;
+  --accent-foreground: #92400e;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #f0ddc0;
+  --input: #f0ddc0;
+  --ring: #d97706;
+
+  --sidebar-background: #fdf5e9;
+  --sidebar-foreground: #3d2a10;
+  --sidebar-primary: #d97706;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f9e6c8;
+  --sidebar-accent-foreground: #2a1a08;
+  --sidebar-border: #f0ddbb;
+
+  --radius: 0.5rem;
+}
+
+.slate {
+  /* ── Slate Professional ── calm blue-grey, tinted surfaces ── */
+  --background: #eceef2;
+  --foreground: #1b2432;
+  --card: #f7f8fb;
+  --card-foreground: #1b2432;
+  --popover: #f7f8fb;
+  --popover-foreground: #1b2432;
+
+  --primary: #3d5a80;
+  --primary-foreground: #f4f7fb;
+
+  --secondary: #dfe4ec;
+  --secondary-foreground: #2b3a52;
+
+  --muted: #e4e7ee;
+  --muted-foreground: #5c6675;
+
+  --accent: #d9e2f0;
+  --accent-foreground: #223049;
+
+  --destructive: #b4232a;
+  --destructive-foreground: #fef2f2;
+
+  --border: #d3d9e3;
+  --input: #cdd4e0;
+  --ring: #3d5a80;
+
+  --sidebar-background: #e3e7ef;
+  --sidebar-foreground: #2f3a4c;
+  --sidebar-primary: #3d5a80;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d5dded;
+  --sidebar-accent-foreground: #1b2432;
+  --sidebar-border: #c7cedd;
+
+  --radius: 0.5rem;
+}
+
+.sage {
+  /* ── Sage Calm ── muted green, soothing for long sessions ── */
+  --background: #eef2ea;
+  --foreground: #1f2a20;
+  --card: #f7faf4;
+  --card-foreground: #1f2a20;
+  --popover: #f7faf4;
+  --popover-foreground: #1f2a20;
+
+  --primary: #4c6b52;
+  --primary-foreground: #f3f8f2;
+
+  --secondary: #e0e8dc;
+  --secondary-foreground: #33452f;
+
+  --muted: #e5ebe1;
+  --muted-foreground: #5d6a58;
+
+  --accent: #dbe7d4;
+  --accent-foreground: #2b3a28;
+
+  --destructive: #b23b2e;
+  --destructive-foreground: #fef3f1;
+
+  --border: #d5ded0;
+  --input: #ced9c9;
+  --ring: #4c6b52;
+
+  --sidebar-background: #e4ebdf;
+  --sidebar-foreground: #34412f;
+  --sidebar-primary: #4c6b52;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d7e3d0;
+  --sidebar-accent-foreground: #1f2a20;
+  --sidebar-border: #c9d5c3;
+
+  --radius: 0.5rem;
+}
+
+.sepia {
+  /* ── Warm Sepia ── parchment tone, easy official-document feel ── */
+  --background: #f3ebdd;
+  --foreground: #2f2618;
+  --card: #fbf5e9;
+  --card-foreground: #2f2618;
+  --popover: #fbf5e9;
+  --popover-foreground: #2f2618;
+
+  --primary: #7a5a3a;
+  --primary-foreground: #fbf5ea;
+
+  --secondary: #ecdfc8;
+  --secondary-foreground: #5a4327;
+
+  --muted: #ebe1cd;
+  --muted-foreground: #6c5c45;
+
+  --accent: #e6d7ba;
+  --accent-foreground: #4a3922;
+
+  --destructive: #a83432;
+  --destructive-foreground: #fdf1ef;
+
+  --border: #ddccae;
+  --input: #d6c4a4;
+  --ring: #7a5a3a;
+
+  --sidebar-background: #ece0c9;
+  --sidebar-foreground: #4a3b28;
+  --sidebar-primary: #7a5a3a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2d3b4;
+  --sidebar-accent-foreground: #2f2618;
+  --sidebar-border: #d3c1a1;
+
+  --radius: 0.5rem;
+}
+
+.teal {
+  /* ── Teal Horizon ── teal primary paired with a warm coral accent ── */
+  --background: #f0fbf9;
+  --foreground: #10312e;
+  --card: #ffffff;
+  --card-foreground: #10312e;
+  --popover: #ffffff;
+  --popover-foreground: #10312e;
+
+  --primary: #0d9488;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ffe9e2;
+  --secondary-foreground: #9a3412;
+
+  --muted: #e6f4f1;
+  --muted-foreground: #4b6560;
+
+  --accent: #fddfd3;
+  --accent-foreground: #9a3412;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #cfe8e3;
+  --input: #c3e0da;
+  --ring: #0d9488;
+
+  --sidebar-background: #e4f4f0;
+  --sidebar-foreground: #1d3d39;
+  --sidebar-primary: #0d9488;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffe1d6;
+  --sidebar-accent-foreground: #10312e;
+  --sidebar-border: #c7e2dc;
+
+  --radius: 0.5rem;
+}
+
+.indigo {
+  /* ── Indigo Scholar ── indigo primary with a gold / amber accent ── */
+  --background: #f5f4fe;
+  --foreground: #1e1b3a;
+  --card: #ffffff;
+  --card-foreground: #1e1b3a;
+  --popover: #ffffff;
+  --popover-foreground: #1e1b3a;
+
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+
+  --secondary: #fdf0d5;
+  --secondary-foreground: #92400e;
+
+  --muted: #eeecfb;
+  --muted-foreground: #57538a;
+
+  --accent: #fde9c8;
+  --accent-foreground: #854d0e;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #ded9f7;
+  --input: #d2ccf2;
+  --ring: #4f46e5;
+
+  --sidebar-background: #ecebfb;
+  --sidebar-foreground: #2c2860;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fceaca;
+  --sidebar-accent-foreground: #1e1b3a;
+  --sidebar-border: #d8d2f3;
+
+  --radius: 0.5rem;
+}
+
+.emerald {
+  /* ── Emerald Meadow ── emerald primary with a bright sky-blue accent ── */
+  --background: #eefbf3;
+  --foreground: #0d2c1c;
+  --card: #ffffff;
+  --card-foreground: #0d2c1c;
+  --popover: #ffffff;
+  --popover-foreground: #0d2c1c;
+
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+
+  --secondary: #d9f0fb;
+  --secondary-foreground: #075985;
+
+  --muted: #e2f4ea;
+  --muted-foreground: #46685a;
+
+  --accent: #cdeafa;
+  --accent-foreground: #075985;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+
+  --border: #c9ecd8;
+  --input: #bce4cf;
+  --ring: #059669;
+
+  --sidebar-background: #e1f4ea;
+  --sidebar-foreground: #17452f;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d2ebfa;
+  --sidebar-accent-foreground: #0d2c1c;
+  --sidebar-border: #c1e6d1;
+
+  --radius: 0.5rem;
+}
+
 .dark {
   --background: #151010;
   --foreground: #ede4e0;
@@ -262,8 +613,8 @@ body {
 
 /* ── Selection ── */
 ::selection {
-  background-color: #80000022;
-  color: #4a0000;
+  background-color: color-mix(in srgb, var(--primary) 13%, transparent);
+  color: var(--foreground);
 }
 
 /* ── Focus rings ── */
@@ -284,12 +635,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #80000040;
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #80000070;
+  background: color-mix(in srgb, var(--primary) 44%, transparent);
 }
 
 /* ── Smooth transitions on interactive elements ── */
@@ -341,7 +692,7 @@ div[data-type="column-group"][data-cols="3"] {
 blockquote,
 .callout-box {
   border-left: 4px solid var(--primary) !important;
-  background: linear-gradient(90deg, rgba(128, 0, 0, 0.08) 0%, rgba(128, 0, 0, 0.02) 100%) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 0%, color-mix(in srgb, var(--primary) 2%, transparent) 100%) !important;
   padding: 14px 18px !important;
   margin: 14px 0 !important;
   border-radius: 0 10px 10px 0 !important;
@@ -349,13 +700,13 @@ blockquote,
   max-width: none !important;
   box-sizing: border-box !important;
   overflow-x: auto !important;
-  box-shadow: inset 1px 0 0 rgba(128, 0, 0, 0.15);
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--primary) 15%, transparent);
   transition: all 0.2s ease-in-out !important;
 }
 
 blockquote:hover,
 .callout-box:hover {
-  background: linear-gradient(90deg, rgba(128, 0, 0, 0.12) 0%, rgba(128, 0, 0, 0.04) 100%) !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 12%, transparent) 0%, color-mix(in srgb, var(--primary) 4%, transparent) 100%) !important;
   box-shadow: inset 2px 0 0 var(--primary), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
 }
 
@@ -368,7 +719,7 @@ blockquote:hover,
 div[data-type="column-item"] {
   min-height: 85px !important;
   padding: 14px !important;
-  border: 1.5px dashed rgba(128, 0, 0, 0.3) !important;
+  border: 1.5px dashed color-mix(in srgb, var(--primary) 30%, transparent) !important;
   border-radius: 10px !important;
   box-sizing: border-box !important;
   background: rgba(255, 255, 255, 0.3) !important;
@@ -384,15 +735,15 @@ div[data-type="column-item"] {
 div[data-type="column-item"]:hover {
   border-color: var(--primary) !important;
   border-style: solid !important;
-  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.06) !important;
-  background: rgba(128, 0, 0, 0.02) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 6%, transparent) !important;
+  background: color-mix(in srgb, var(--primary) 2%, transparent) !important;
 }
 
 div[data-type="column-item"]:focus-within {
   border-color: var(--primary) !important;
   border-style: solid !important;
-  background-color: rgba(128, 0, 0, 0.04) !important;
-  box-shadow: 0 0 0 3px rgba(128, 0, 0, 0.18), 0 4px 14px rgba(128, 0, 0, 0.08) !important;
+  background-color: color-mix(in srgb, var(--primary) 4%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent), 0 4px 14px color-mix(in srgb, var(--primary) 8%, transparent) !important;
 }
 
 /* Prevent prose max-width from constraining column cells */
@@ -482,6 +833,17 @@ div[data-type="column-item"]>* {
 }
 
 /* ── Tiptap RichTextEditor & Prose Table Styles ── */
+/* TipTap wraps every table in a generated <div class="tableWrapper">
+   specifically so it can scroll independently of the page around it.
+   Resized/wide tables set an inline pixel `width` on the <table> itself
+   (see prosemirror-tables' updateColumnsOnResize), which happily exceeds
+   the editor's width; without this the wrapper had no overflow behavior
+   of its own, so the table just spilled out past the page/box edge. */
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
 .ProseMirror table,
 .prose table,
 .meeting-table {
@@ -500,6 +862,22 @@ div[data-type="column-item"]>* {
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+}
+
+/* Table alignment on the page (Word: Layout > Alignment) - only visible once a
+   table has been resized narrower than the editor width, since tables default
+   to width:100%. */
+.ProseMirror table[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+.ProseMirror table[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+.ProseMirror table[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 /* ── Theme-Matched Table Header Styling ── */
@@ -528,6 +906,55 @@ table thead tr {
 .dark .ProseMirror table td,
 .dark .ProseMirror table th {
   border-color: #475569;
+}
+
+/* Table Style Gallery (Word: Table Design tab built-in styles). Needs !important
+   to win over the theme-matched header default above, which also uses !important. */
+.ProseMirror table[data-table-style="grid-blue"] th {
+  background: #dbeafe !important;
+  color: #1e3a8a !important;
+  border-bottom-color: #1e3a8a !important;
+}
+.dark .ProseMirror table[data-table-style="grid-blue"] th {
+  background: rgba(37, 99, 235, 0.25) !important;
+  color: #bfdbfe !important;
+}
+.ProseMirror table[data-table-style="grid-blue"] tr:nth-child(even) td {
+  background-color: #eff6ff;
+}
+.dark .ProseMirror table[data-table-style="grid-blue"] tr:nth-child(even) td {
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+.ProseMirror table[data-table-style="bands-gray"] th {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+  border-bottom-color: #9ca3af !important;
+}
+.dark .ProseMirror table[data-table-style="bands-gray"] th {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+.ProseMirror table[data-table-style="bands-gray"] tr:nth-child(even) td {
+  background-color: #f3f4f6;
+}
+.dark .ProseMirror table[data-table-style="bands-gray"] tr:nth-child(even) td {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.ProseMirror table[data-table-style="crimson-header"] th {
+  background: #800000 !important;
+  color: #ffffff !important;
+  border-bottom-color: #800000 !important;
+}
+.dark .ProseMirror table[data-table-style="crimson-header"] th {
+  background: #800000 !important;
+  color: #ffffff !important;
+}
+.ProseMirror table[data-table-style="crimson-header"] tr:nth-child(even) td {
+  background-color: #fdf2f2;
+}
+.dark .ProseMirror table[data-table-style="crimson-header"] tr:nth-child(even) td {
+  background-color: rgba(128, 0, 0, 0.12);
 }
 
 .prose table td,
@@ -808,7 +1235,7 @@ table[data-border="none"] th {
 
 .ProseMirror table td:hover,
 .ProseMirror table th:hover {
-  background-color: rgba(128, 0, 0, 0.04) !important;
+  background-color: color-mix(in srgb, var(--primary) 4%, transparent) !important;
 }
 
 .dark .ProseMirror table td:hover,
@@ -825,7 +1252,7 @@ table[data-border="none"] th {
   right: 0;
   top: 0;
   bottom: 0;
-  background: rgba(128, 0, 0, 0.18);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
   box-shadow: inset 0 0 0 1.5px var(--primary);
   pointer-events: none;
 }
@@ -839,7 +1266,7 @@ table[data-border="none"] th {
   width: 4px;
   z-index: 20;
   background-color: var(--primary);
-  box-shadow: 0 0 8px rgba(128, 0, 0, 0.6);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 60%, transparent);
   pointer-events: none;
 }
 
@@ -848,11 +1275,30 @@ table[data-border="none"] th {
   cursor: col-resize;
 }
 
+/* ── Row resize handle (drag a row's bottom border to resize it) ── */
+.ProseMirror table .row-resize-handle,
+.prose table .row-resize-handle {
+  position: absolute;
+  left: 0;
+  right: -2px;
+  bottom: -2px;
+  height: 4px;
+  z-index: 20;
+  background-color: var(--primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 60%, transparent);
+  pointer-events: none;
+}
+
+.ProseMirror.row-resize-cursor {
+  cursor: ns-resize;
+  cursor: row-resize;
+}
+
 /* ── MS Word Ribbon & Dynamic UI Design Tokens ── */
 .word-ribbon-bg {
-  background: linear-gradient(180deg, #f3f7fd 0%, #e1ebf9 45%, #cbdef8 50%, #dbe8fa 100%);
-  border-bottom: 1px solid #b8d2f5;
-  box-shadow: 0 4px 12px rgba(26, 54, 93, 0.04);
+  background: linear-gradient(180deg, var(--card) 0%, color-mix(in srgb, var(--primary) 5%, var(--card)) 45%, color-mix(in srgb, var(--primary) 9%, var(--card)) 50%, color-mix(in srgb, var(--primary) 6%, var(--card)) 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .dark .word-ribbon-bg {
@@ -862,17 +1308,17 @@ table[data-border="none"] th {
 }
 
 .word-group-box {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(128, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 8%, transparent);
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   transition: all 0.2s ease-in-out;
 }
 
 .word-group-box:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(128, 0, 0, 0.2);
-  box-shadow: 0 2px 6px rgba(128, 0, 0, 0.06);
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
 .dark .word-group-box {
@@ -888,12 +1334,12 @@ table[data-border="none"] th {
 }
 
 .word-ribbon-tab-active {
-  background: linear-gradient(180deg, #ffffff 0%, #f4f8fe 100%) !important;
-  color: #800000 !important;
+  background: linear-gradient(180deg, var(--card) 0%, color-mix(in srgb, var(--primary) 4%, var(--card)) 100%) !important;
+  color: var(--primary) !important;
   font-weight: 700 !important;
-  border-color: #9cbde8 !important;
-  border-bottom-color: #ffffff !important;
-  box-shadow: 0 -3px 8px rgba(128, 0, 0, 0.12), inset 0 2px 0 var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border)) !important;
+  border-bottom-color: var(--card) !important;
+  box-shadow: 0 -3px 8px color-mix(in srgb, var(--primary) 12%, transparent), inset 0 2px 0 var(--primary);
   border-top-left-radius: 6px !important;
   border-top-right-radius: 6px !important;
 }
@@ -916,23 +1362,23 @@ table[data-border="none"] th {
 
 .btn-dynamic:hover {
   transform: translateY(-1.5px);
-  box-shadow: 0 4px 10px rgba(128, 0, 0, 0.15);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .btn-dynamic:active {
   transform: translateY(0) scale(0.98);
-  box-shadow: 0 1px 3px rgba(128, 0, 0, 0.2);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .btn-maroon-gradient {
-  background: linear-gradient(135deg, #800000 0%, #991b1b 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(128, 0, 0, 0.25);
+  background: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 75%, black) 100%) !important;
+  color: var(--primary-foreground) !important;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
 .btn-maroon-gradient:hover {
-  background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%) !important;
-  box-shadow: 0 4px 12px rgba(128, 0, 0, 0.35);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 75%, black) 0%, color-mix(in srgb, var(--primary) 55%, black) 100%) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 /* Word 2007 Quick Styles Gallery Cards */
@@ -942,7 +1388,7 @@ table[data-border="none"] th {
 
 .word-style-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(128, 0, 0, 0.15);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 15%, transparent);
   border-color: var(--primary) !important;
 }
 
@@ -961,8 +1407,8 @@ table[data-border="none"] th {
 
 /* Horizontal & Vertical Ruler Markers */
 .word-ruler {
-  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, var(--card) 0%, var(--muted) 100%);
+  border-bottom: 1px solid var(--border);
 }
 
 .dark .word-ruler {

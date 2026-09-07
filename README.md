@@ -57,6 +57,7 @@
 - **Agenda & Resolution Authoring**: Rich-text editing (TipTap) for agenda bodies, supplementary agendas (`is_suppli`), and resolutions.
 - **Execution Tracking**: Track execution status and execution history for individual resolution items.
 - **Version Control & Revisions**: Complete audit trail of all content edits with full revision comparison.
+- **Archived Agenda Snapshots**: Archive agenda items off the live list and browse, restore, or delete the snapshots from a dedicated workspace view.
 
 ### 🔒 Hierarchical Level-Based Handover & Locking
 - **Level-Based RBAC**: Dynamic integer level roles enabling hierarchical editor chains (e.g., Level 1 Initiator → Level 2 Reviewer → Level 3 Finalizer).
@@ -74,6 +75,14 @@
 - **Puppeteer PDF Engine**: High-performance headless browser PDF generation with connection pooling.
 - **Embedded Bangla Fonts**: Built-in Base64 embedding of `SonarBangla.ttf` and `Kalpurush.ttf` ensuring consistent, pixel-perfect Bangla rendering without external font dependency.
 - **Export Formats**: PDF downloads for Agenda Documents, Official Resolutions, and Resolution Execution Status reports.
+- **Interactive PDF Preview**: A live preview page with page size / orientation / margin / scale / line-height controls (validated and clamped server-side, cached per-layout) plus in-place cell editing of agenda, resolution, description, and conclusion text.
+- **Markdown Tables**: Pipe-style Markdown tables in agenda/resolution bodies are converted to bordered HTML tables in the rendered document, tolerant of entity-encoded pipes and autocorrected dash separators.
+
+---
+
+### 🎨 Theming
+- **13 application themes** applied as a class on `<html>` via `next-themes` — 6 core (Maroon default, Ocean Blue, Monochrome, Forest, Purple, Amber), 3 soothing (Slate, Sage, Sepia), 3 colourful two-hue (Teal Horizon, Indigo Scholar, Emerald Meadow), and Midnight Dark.
+- All chrome (ribbon, scrollbars, tables, callouts) is driven by CSS custom properties, so a theme switch recolours the whole app instantly.
 
 ---
 
@@ -345,6 +354,7 @@ Export official formatted council documents with custom page headers, footers, p
 - **Agenda Book**: Complete agenda booklet for meeting participants.
 - **Resolution Document**: Official council decisions and approved resolutions.
 - **Resolution Status Report**: Execution status report tracking implementation progress across university departments.
+- **PDF Preview**: Open any of the above from the **Materials** tab in an interactive preview (`/workspace/meetings/[id]/pdf-preview`) to adjust page size, orientation, margins, scale, and line-height before downloading or printing, and to edit agenda/resolution/description/conclusion text in place.
 
 ---
 
@@ -418,6 +428,8 @@ BUET E-Council features an advanced **3-Tier Hybrid Search Engine** designed to 
 | `/workspace/templates` | Agenda & Resolution template library | Admin / Editor |
 | `/workspace/audit-log` | System-wide audit log viewer | Admin / Upper Editors |
 | `/meetings/[id]` | Interactive meeting management tab container | Admin / Editor / Viewer |
+| `/workspace/meetings/[id]?view=…` | Meeting workspace views: `info`, `permissions`, `invitees`, `agenda`, `suppli-agenda`, `archived-agenda`, `resolution`, `conclusion`, `materials`, `email`, `signed-persona`, `history` | Admin / Editor / Viewer |
+| `/workspace/meetings/[id]/pdf-preview` | Full-bleed interactive PDF preview with layout controls & inline editing | Admin / Editor |
 | `/search` | Dedicated 3-Tier Hybrid Search portal | All authenticated users |
 | `/viewer` | Read-only viewer portal for academic/syndicate members | Viewer / All users |
 | `/profile` | User profile, password change, and active session manager | All authenticated users |

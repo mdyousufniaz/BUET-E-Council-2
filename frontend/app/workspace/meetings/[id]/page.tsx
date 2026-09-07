@@ -15,6 +15,7 @@ import MaterialsView from "../../../../components/meetings/MaterialsView";
 import HistoryView from "../../../../components/meetings/HistoryView";
 import EmailTabView from "../../../../components/meetings/EmailTabView";
 import SignedPersonaView from "../../../../components/meetings/SignedPersonaView";
+import ArchivedAgendaView from "../../../../components/meetings/ArchivedAgendaView";
 
 import { useAuth } from "../../../../hooks/useAuth";
 
@@ -59,6 +60,8 @@ export default function MeetingWorkspace() {
     case 'agenda':
     case 'suppli-agenda':
       return <AgendaView key={view} meeting={meeting} type={view} />;
+    case 'archived-agenda':
+      return <ArchivedAgendaView meeting={meeting} />;
     case 'resolution':
       return <ResolutionView meeting={meeting} />;
     case 'materials':

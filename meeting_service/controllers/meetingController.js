@@ -1429,6 +1429,21 @@ const generatePdf = async (req, res, next) => {
         const { group } = req.query; // optional group filter for attendance
         let pdfBuffer;
 
+        // Optional page-layout overrides from the PDF Preview page. Absent params
+        // leave generation on its historical A4 / 20mm defaults. All values are
+        // validated & clamped inside pdfGenerator.normalizePdfLayout().
+        const q = req.query;
+        const hasLayout = ['pageSize', 'orientation', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'scale', 'lineHeight', 'agendaNumberStyle']
+            .some((k) => q[k] !== undefined && q[k] !== '');
+        const layout = hasLayout ? {
+            pageSize: q.pageSize,
+            orientation: q.orientation,
+            margin: { top: q.marginTop, right: q.marginRight, bottom: q.marginBottom, left: q.marginLeft },
+            scale: q.scale,
+            lineHeight: q.lineHeight,
+            agendaNumberStyle: q.agendaNumberStyle
+        } : undefined;
+
         const meetingCheck = await db.query('SELECT id, status, type FROM meetings WHERE id = $1', [id]);
         if (meetingCheck.rows.length === 0) return next(new CustomError('Meeting not found', 404));
         const meeting = meetingCheck.rows[0];
@@ -1444,15 +1459,15 @@ const generatePdf = async (req, res, next) => {
         }
 
         if (type === 'agenda') {
-            pdfBuffer = await generateMeetingPdf(id, false);
+            pdfBuffer = await generateMeetingPdf(id, false, undefined, layout);
         } else if (type === 'suppli-agenda' || type === 'suppli_agenda') {
-            pdfBuffer = await generateMeetingPdf(id, false, 'suppli-agenda');
+            pdfBuffer = await generateMeetingPdf(id, false, 'suppli-agenda', layout);
         } else if (type === 'resolution') {
-            pdfBuffer = await generateMeetingPdf(id, true);
+            pdfBuffer = await generateMeetingPdf(id, true, undefined, layout);
         } else if (type === 'attendance') {
             pdfBuffer = await generateAttendanceSheet(id, group || null);
         } else if (type === 'resolution-status') {
-            pdfBuffer = await generateMeetingPdf(id, true, 'resolution-status');
+            pdfBuffer = await generateMeetingPdf(id, true, 'resolution-status', layout);
         } else {
             return next(new CustomError('Invalid pdf type requested', 400));
         }

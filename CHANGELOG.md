@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-09-06 — PDF Preview, Colourful Themes, Archived Agenda & Markdown Table Fix
+
+### New Features
+
+**Interactive PDF Preview page (`frontend/app/workspace/meetings/[id]/pdf-preview/page.tsx`, `pdfGenerator.js`, `meetingController.js`)**
+- New full-bleed route under the meeting workspace (linked from the Materials tab) that renders the agenda / supplementary agenda / resolution / resolution-status document with a live paper preview.
+- **Per-request page-layout overrides**: page size (A3/A4/A5/Letter/Legal/Tabloid), orientation, individual margins (mm), whole-document scale (0.7–1.6×), optional global line-height, and an `inline` vs `heading` agenda-number style. All values are validated and clamped server-side in `normalizePdfLayout()`.
+- Custom layouts get their own PDF cache slot and fingerprint dimension, so they never overwrite the canonical default-layout PDF used by email attachments and status sync. Only the default-layout PDF is mirrored to the meeting filesystem.
+- Inline cell editing of agenda content / resolution / description / conclusion directly from the preview, gated by the same `meetingAccess` permission helpers as the main workspace.
+
+**Colourful themes (`globals.css`, `ThemeProvider.tsx`, `ThemeToggle.tsx`)**
+- Added 3 vibrant two-hue themes aimed at an educational-office setting: **Teal Horizon** (teal `#0d9488` + coral), **Indigo Scholar** (indigo `#4f46e5` + gold), **Emerald Meadow** (emerald `#059669` + sky blue). Theme count is now 13.
+- Theme picker list is capped at `60vh` with `overflow-y-auto` so every theme (including the last, Midnight Dark) stays reachable; the scrollbar is themed via the existing global `::-webkit-scrollbar` rules.
+
+**Archived Agenda view (`frontend/components/meetings/ArchivedAgendaView.tsx`)**
+- New `archived-agenda` workspace view + sidebar nav entry (Archive icon) for browsing, restoring, and deleting archived agenda snapshots without opening the modal.
+
+**Editor `Ctrl`/`Cmd`+`S` save hook (`RichTextEditor.tsx`)**
+- `RichTextEditor` accepts an `onSave` callback, fired on `Ctrl`/`Cmd`+`S` from anywhere in the editing panel (content area, toolbar, or a nearby field) via a window-level listener, without re-instantiating the editor.
+
+### Bug Fixes
+
+**Markdown tables not converting in PDFs (`pdfGenerator.js` → `convertMarkdownTablesToHtml`)**
+- A header pre-processing loop exploded every multi-column header row into separate one-cell lines, leaking the first cell out as a stray paragraph and dropping the rest of the header — so a normal `| Name | Role |` table rendered as broken. Removed the loop.
+- Detection hardened: entity-encoded pipes (`&#124;`, `&vert;`), non-breaking / exotic spaces, autocorrected en/em-dash separator rows, and single-dash separators (`| - | - |`) now parse. Prose containing a stray `|` still stays prose.
+- Generated tables now carry self-contained cell borders + `word-wrap` (the agenda stylesheet's `th, td { border: none }` was leaving them gridless).
+
+---
+
+## 2026-09-06 — Word-Style Page Layout Tab, Table Design Tools & Editor Fixes
+
+### New Features
+
+**Page Layout Ribbon Tab (RichTextEditor.tsx, globals.css)**
+- **Page Setup**: Margins (Normal/Narrow/Moderate/Wide presets + custom mm inputs), Orientation (Portrait/Landscape), Size (A4/Letter/Legal/A3) — the "Word A4 Page" view now reflects these settings live (dimensions, padding, ruler).
+- **Columns & Breaks**: two/three-column layout insert, Page Break, Column Break, consolidated into dropdowns.
+- **Page Background**: Watermark (custom text/color/opacity, diagonal overlay), Page Color, Page Borders (style/width/color) applied to the printable page surface.
+
+**Table Design Tools (RichTextEditor.tsx, globals.css)**
+- **Cell Shading**: background color picker for selected table cells.
+- **Vertical Alignment**: Top/Middle/Bottom text alignment within table cells.
+- **Table Style Gallery**: four built-in presets (Plain, Blue Grid, Gray Bands, Crimson Header) applying header/banded-row coloring via a new `data-table-style` table attribute.
+- **Table Alignment**: Left/Center/Right positioning of a (resized) table on the page via a new `data-align` table attribute.
+
+**Always-Visible Shortcuts Button**
+- Added a persistent "Shortcuts" button next to Find/Full Screen in the ribbon header (previously the keyboard-shortcuts guide was only reachable via Ctrl+/ or a button buried in the Home tab's Editing group, which could scroll out of view).
+
+### Bug Fixes
+
+**Ribbon dropdown clipping (globals.css, RichTextEditor.tsx)**
+- The ribbon toolbar's `overflow-x-auto` was — per the CSS overflow-x/overflow-y coupling rule — silently forcing `overflow-y: auto` too, clipping any dropdown/popover (Shading, Highlight, Table Borders, and all of the new Page Layout popovers) that needed more vertical space than the ribbon's own height. Fixed by introducing a portal-based `LayoutPopover` component that renders outside the clipped ancestor via `document.body` with `position: fixed`.
+
+**Table cell style clobbering (RichTextEditor.tsx)**
+- Row Height, Cell Shading, and Vertical Alignment all wrote to the same cell `style` attribute wholesale, so applying one silently erased the others. Introduced a `mergeCellStyle` helper that parses, patches, and re-serializes the existing declaration list so each control only touches its own CSS property.
+
+---
+
 ## 2026-09-03 — Dynamic List Ribbon Controls, Navigation & Multi-Theme System
 
 ### New Features

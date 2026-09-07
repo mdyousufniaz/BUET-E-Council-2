@@ -45,6 +45,9 @@ This document serves as the comprehensive technical specification and developer 
   - [5.5 Resolution PDF — Dynamic Column Layout](#55-resolution-pdf--dynamic-column-layout)
   - [5.6 Signed Persona — Resolution Signature Configuration](#56-signed-persona--resolution-signature-configuration)
   - [5.7 Resolution Status — Single-Select UI](#57-resolution-status--single-select-ui)
+  - [5.8 Rich Text Editor — Word-Style Ribbon & Multi-Theme System](#58-rich-text-editor--word-style-ribbon--multi-theme-system)
+  - [5.9 PDF Preview — Interactive Layout & Inline Editing](#59-pdf-preview--interactive-layout--inline-editing)
+  - [5.10 Archived Agenda — Snapshot View](#510-archived-agenda--snapshot-view)
 - [6. Development, Maintenance & Troubleshooting](#6-development-maintenance--troubleshooting)
   - [6.1 Running via Docker Compose](#61-running-via-docker-compose)
   - [6.2 Local Microservice Development Setup](#62-local-microservice-development-setup)
@@ -462,9 +465,33 @@ Implementation: [`meeting_service/utils/pdfGenerator.js`](file:///media/samyo-pr
 
 | Function | Purpose | Output |
 |---|---|---|
-| `generateMeetingPdf(id, isResolution, sectionFilter)` | Generate attendance/agenda/resolution PDF | PDF buffer |
+| `generateMeetingPdf(id, isResolution, sectionFilter, layout?)` | Generate attendance/agenda/resolution PDF; optional `layout` from the PDF Preview page | PDF buffer |
 | `generateNoticePdf(notice, presentees)` | Generate notice PDF (academic/syndicate) | PDF buffer |
 | `generateNoticePdfFromPayload(payload)` | Generate PDF from form data (no DB lookup) | PDF buffer |
+
+#### Markdown Table Conversion (`convertMarkdownTablesToHtml`)
+
+Agenda / resolution / conclusion bodies may contain pipe-style Markdown tables (typed directly or pasted). `convertMarkdownTablesToHtml` rewrites them to real `<table>` HTML before `styleRichTextHtml` runs; anything already containing a `<table>` tag, or with no `|`, is passed through untouched.
+
+- A block is a table when a row is immediately followed by a **separator row** — every pipe-delimited cell is only dashes with an optional leading/trailing colon (`---`, `:--`, `--:`, `:-:`, or a lone `-`).
+- Robustness: entity-encoded pipes (`&#124;`, `&#x7c;`, `&vert;`), non-breaking / thin / em spaces, and autocorrected Unicode dash separators (`—`, `–`, `―`, `−`) are normalised first. Prose that merely contains a stray `|` is **not** promoted to a table.
+- Generated tables carry inline cell borders and `word-wrap` so they render as a grid in both the PDF stylesheet (`th, td { border: none }`) and the DOCX path.
+- Historical bug (fixed 2026-09-06): a header pre-processing step split multi-column header rows into one-cell lines, leaking the first cell as a stray `<p>` and dropping the rest of the header.
+
+#### Per-Request Page-Layout Overrides
+
+`normalizePdfLayout(raw)` validates and clamps an optional layout object (parsed from the `GET /api/meetings/:id/pdf/:type` query string by `meetingController.generatePdf`) into a safe shape. When nothing is supplied, generation stays on the historical A4 / 20 mm / 1× defaults, so email attachments and status sync are unaffected.
+
+| Field | Query param(s) | Range / values | Default |
+|---|---|---|---|
+| `pageSize` | `pageSize` | A3, A4, A5, Letter, Legal, Tabloid | A4 |
+| `orientation` | `orientation` | portrait, landscape | portrait |
+| `margin` | `marginTop`, `marginRight`, `marginBottom`, `marginLeft` | 0–60 mm each | 20 mm |
+| `scale` | `scale` | 0.7–1.6 | 1 |
+| `lineHeight` | `lineHeight` | 1–3, or empty for the template default | null |
+| `agendaNumberStyle` | `agendaNumberStyle` | `heading` (bold "প্রস্তাব নং <n>" line) or `inline` (bold `<prefix><n>:` run opening the body) | heading |
+
+A non-default layout is hashed into its own PDF cache key (`<type>--l<sha1>`) and added as a `layout` dimension of the content fingerprint, so it never clobbers the canonical default-layout PDF; custom-layout variants are cache-only and are **not** mirrored to the meeting filesystem.
 
 #### Notice PDF Features
 
@@ -578,7 +605,7 @@ export const DEPARTMENT_MERGE_RULES = [
 | `POST` | `/api/meetings/:id/lock-:section` | Lock section (`agenda`, `suppli-agenda`, `resolution`, `resolution-status`, `meeting`, `invitees`, `presentees`, `conclusion`) |
 | `POST` | `/api/meetings/:id/unlock-:section` | Unlock section (`agenda`, `suppli-agenda`, `resolution`, `resolution-status`, `meeting`, `invitees`, `presentees`, `conclusion`) |
 | `POST` | `/api/meetings/:id/complete` | Finalize and complete meeting |
-| `GET` | `/api/meetings/:id/pdf/:type` | Download rendered PDF (`agenda`, `resolution`, or `resolution-status`) |
+| `GET` | `/api/meetings/:id/pdf/:type` | Download rendered PDF (`agenda`, `suppli-agenda`, `resolution`, `resolution-status`, `attendance`). Optional page-layout query params (`pageSize`, `orientation`, `marginTop/Right/Bottom/Left`, `scale`, `lineHeight`, `agendaNumberStyle`) from the PDF Preview page — see §3.4 |
 | `POST` | `/api/meetings/:id/send-email` | Send agenda booklet via email |
 | `POST` | `/api/meetings/:id/send-notice` | Send meeting notice email to selected invitees (draft/ongoing only) |
 | `POST` | `/api/meetings/:id/send-agenda-email` | Send agenda email with PDF attached to selected invitees (ongoing only) |
@@ -1013,6 +1040,87 @@ The selected status itself is stored in `agenda.resolution_status` (explicit sou
 #### Simple text input (no rich text editor)
 
 The status value field is a plain text input: it loads prefilled with the status default (or the saved text when re-editing), with Edit / Save / Cancel buttons. Preset statuses (Not Executed, Executed, Submit) auto-save their default text on radio select and remain editable via Edit afterwards; Custom opens a blank input and requires manual Save (blank/unsaved falls back to the previous selection). Selecting Submit archives the agendum (`copy-to-archive`); switching away removes the archive copy unless it was already deleted from the archive list.
+
+### 5.8 Rich Text Editor — Word-Style Ribbon & Multi-Theme System
+
+Implementation: [`frontend/components/RichTextEditor.tsx`](frontend/components/RichTextEditor.tsx) (TipTap 3 / ProseMirror), [`frontend/app/globals.css`](frontend/app/globals.css), [`frontend/components/ThemeProvider.tsx`](frontend/components/ThemeProvider.tsx), [`frontend/components/ThemeToggle.tsx`](frontend/components/ThemeToggle.tsx).
+
+The agenda/resolution editor is a Microsoft Word–style ribbon UI built on TipTap, used everywhere rich text is authored (agenda bodies, supplementary agendas, resolutions). The ribbon has six tabs: **Home** (font/paragraph/styles), **Insert** (tables, links, equations, symbols, callouts), **Page Layout**, **Table Tools** (contextual — only shown with the cursor inside a table), **Bijoy & Tools** (Bijoy→Unicode conversion, Bangla virtual keyboard), and **View**.
+
+#### Page Layout Tab
+
+- **Page Setup**: Margins (Normal/Narrow/Moderate/Wide presets or custom mm), Orientation (Portrait/Landscape), Size (A4/Letter/Legal/A3) — these drive the "Word A4 Page" view's actual rendered dimensions (`width`/`min-height`/`padding` computed from `PageSettings` state), not just cosmetic labels.
+- **Columns & Breaks**: 2/3-column text layout, Page Break, Column Break.
+- **Page Background**: Watermark (text/color/opacity, diagonal overlay), Page Color, Page Borders (style/width/color).
+
+Ribbon dropdowns (Page Layout's included) render through a `LayoutPopover` helper that portals to `document.body` with `position: fixed`. This is required, not cosmetic: the ribbon toolbar sets `overflow-x-auto`, and per the CSS spec, setting only one of `overflow-x`/`overflow-y` forces the other to compute as `auto` too — so a plain `position: absolute` dropdown gets silently clipped by the ribbon's own height. Any new ribbon dropdown must use `LayoutPopover` (or an equivalent portal) rather than `absolute` positioning.
+
+#### Table Tools Tab
+
+Columns/Rows insert & delete, Row Height presets, Cell Shading, Vertical Alignment (Top/Middle/Bottom), Merge/Split Cells, Split/Merge Tables, Rotate Text 90°, per-cell bullet/number list styling, a 6-option Border style picker (`data-border` attribute), a 4-preset Table Style gallery (`data-table-style` — Plain/Blue Grid/Gray Bands/Crimson Header) and Table Alignment on the page (`data-align`). Row/column dragging is handled by TipTap's built-in column resizing plus a custom `rowResizing` ProseMirror plugin ([`frontend/lib/tableRowResizing.ts`](frontend/lib/tableRowResizing.ts)) that mirrors it for rows.
+
+Row Height, Cell Shading, and Vertical Alignment all persist into the same table-cell `style` attribute. They go through a `mergeCellStyle` helper that parses the existing `style` string into a property map, patches only the property being changed, and re-serializes it — setting one no longer silently erases the other two.
+
+#### Custom Node Extensions (attribute-preservation pattern)
+
+Several TipTap StarterKit default nodes don't declare a `style`/`class` attribute, so setting one via `updateAttributes(...)` or `insertContent('<tag style="...">')` is a silent no-op — the attribute never reaches the rendered DOM (and reading it back via `editor.getAttributes(...)` returns `undefined`). Wherever this editor needs an inline style or class on a StarterKit node, that node is disabled in `StarterKit.configure({...: false})` and replaced with a `.extend()`'d version that adds the attribute explicitly (mirroring `@tiptap/extension-ordered-list`'s pattern):
+
+| Node | Custom extension | Why |
+|---|---|---|
+| `orderedList` | `CustomOrderedList` | `start` + `style` (numbering style, Bangla digit input rule) |
+| `bulletList` | `CustomBulletList` | `style` (Disc/Circle/Square marker) |
+| `horizontalRule` | `CustomHorizontalRule` | `class` + `style` (the "Page Break" `<hr>` needs its `page-break` class and dashed-line style to survive) |
+| `table` | `CustomTable` | `data-border`, `data-table-style`, `data-align` |
+
+When adding a new node-level style/attribute to this editor, check this table first — it is the recurring root cause of "I set it but nothing happened" bugs here.
+
+#### Multi-Theme System
+
+Thirteen themes, each a `:root`-scoped CSS class in `globals.css` defining the same set of `--primary`/`--background`/`--card`/`--border`/etc. custom properties. `ThemeProvider.tsx` wraps `next-themes` with `attribute="class"` so the selected theme id is applied as a class on `<html>`; `ThemeToggle.tsx` is the picker UI (its list is capped at `60vh` with `overflow-y-auto` so every entry stays reachable).
+
+| Group | Theme ids |
+|---|---|
+| Core | `maroon` (default), `blue`, `monochrome`, `forest`, `purple`, `amber` |
+| Soothing (muted single-hue) | `slate`, `sage`, `sepia` |
+| Colourful (vibrant two-hue) | `teal` (teal + coral), `indigo` (indigo + gold), `emerald` (emerald + sky) |
+| Dark | `dark` |
+
+Adding a theme is three edits: the token block in `globals.css`, the `themes={[...]}` array in `ThemeProvider.tsx`, and the `THEMES` entry in `ThemeToggle.tsx`. All ribbon/editor chrome (active tab highlight, group-box borders, scrollbar thumb, callout boxes, table hover/selection) must reference `var(--primary)` (via `color-mix(in srgb, var(--primary) X%, transparent)` for translucent variants) rather than a literal color — a batch of these were previously hardcoded to `#800000`/`rgba(128,0,0,...)` and stayed maroon regardless of the active theme until fixed. The "Crimson Header" table style and a few named brand-color presets (e.g. "BUET Crimson Red" text color) are intentionally exempt, since those are meant to render a fixed brand color regardless of app theme.
+
+#### Keyboard Shortcuts
+
+Full list lives in `KEYBOARD_SHORTCUTS_DATA` in `RichTextEditor.tsx` and is rendered in-app via the "Shortcuts" button (or `Ctrl+/`). Beyond standard formatting shortcuts:
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl + Alt + T` | Open Insert Table dialog |
+| `Tab` / `Shift + Tab` (in a table) | Move to next/previous cell |
+| `Shift + Enter` (in a table) | Move to the same column in the next row |
+| `Ctrl + Enter` | Insert a Page Break at the cursor |
+| `Ctrl + Alt + P` | Toggle Word A4 Page view / Fluid Canvas |
+| `Ctrl + Shift + F` | Toggle editor full-screen mode |
+| `Ctrl` / `Cmd + S` | Trigger the host view's save handler (via the `onSave` prop), from anywhere in the editing panel |
+
+---
+
+### 5.9 PDF Preview — Interactive Layout & Inline Editing
+
+Implementation: [`frontend/app/workspace/meetings/[id]/pdf-preview/page.tsx`](frontend/app/workspace/meetings/[id]/pdf-preview/page.tsx), [`meeting_service/utils/pdfGenerator.js`](meeting_service/utils/pdfGenerator.js), [`meeting_service/controllers/meetingController.js`](meeting_service/controllers/meetingController.js).
+
+A full-bleed route (`/workspace/meetings/[id]/pdf-preview`, linked from the **Materials** tab) that renders the meeting's agenda / supplementary agenda / resolution / resolution-status document as a live paper preview with layout controls. `layout.tsx` and `WorkspaceLayoutWrapper.tsx` detect the `/pdf-preview` suffix and drop the meeting sidebar/chrome for this page.
+
+- **Layout controls** — page size, orientation, per-side margins (mm), whole-document scale, and line-height — are serialised into the `GET /api/meetings/:id/pdf/:type` query string. Server-side validation/clamping and cache isolation are described in [§3.4](#34-pdf-generation--typography-engine).
+- The on-screen preview mirrors the server layout via a matching `@page` rule and a CSS `zoom` on the rendered surface, so what the user sees tracks the eventual PDF.
+- **Inline editing**: agenda `content`, `resolution`, meeting `description`, and `conclusion` cells are editable in place (reusing `RichTextEditor`), gated by the same `lib/meetingAccess` helpers (`canEditAgenda`, `canEditResolution`, `canEditDescription`, `canEditConclusion`, …) as the main workspace. Saves `PATCH` through the normal agenda/meeting endpoints and revalidate the SWR cache.
+- `agendaNumberStyle: 'inline'` matches the preview's 3-column on-screen layout: the body opens with a bold, non-editable `<prefix-rest><serial>:` run instead of a separate "প্রস্তাব নং <n>" heading line.
+
+---
+
+### 5.10 Archived Agenda — Snapshot View
+
+Implementation: [`frontend/components/meetings/ArchivedAgendaView.tsx`](frontend/components/meetings/ArchivedAgendaView.tsx), wired as the `archived-agenda` case in [`frontend/app/workspace/meetings/[id]/page.tsx`](frontend/app/workspace/meetings/[id]/page.tsx) with a sidebar entry (Archive icon) in `layout.tsx`.
+
+A dedicated workspace view for browsing agenda snapshots that were archived off the live agenda list, with restore and delete actions inline — the same operations previously reachable only through `ArchivedAgendasModal`.
 
 ## 6. Development, Maintenance & Troubleshooting
 

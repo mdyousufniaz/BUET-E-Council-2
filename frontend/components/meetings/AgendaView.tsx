@@ -389,6 +389,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
           <RichTextEditor
             content={newContent}
             onChange={setNewContent}
+            onSave={() => { if (!isSaving && newContent) handleSaveNew(); }}
             className="p-4 min-h-[380px]"
           />
 
@@ -697,6 +698,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                           key={editingId}
                           content={editContent}
                           onChange={setEditContent}
+                          onSave={() => { if (!isSaving) handleSave(); }}
                           className="p-4 min-h-[380px]"
                         />
 

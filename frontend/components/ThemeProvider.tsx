@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       attribute="class"
       defaultTheme="maroon"
       enableSystem={false}
-      themes={["maroon", "blue", "monochrome", "dark"]}
+      themes={["maroon", "blue", "monochrome", "forest", "purple", "amber", "slate", "sage", "sepia", "teal", "indigo", "emerald", "dark"]}
     >
       {children}
     </NextThemesProvider>

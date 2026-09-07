@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams, useParams } from "next/navigation";
-import { FileText, Users, FileCheck, Info, FileBarChart, LayoutList, Layers, History, Mail, ShieldCheck, PenTool } from "lucide-react";
+import { useSearchParams, useParams, usePathname } from "next/navigation";
+import { FileText, Users, FileCheck, Info, FileBarChart, LayoutList, Layers, History, Mail, ShieldCheck, PenTool, Archive } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "../../../../lib/api";
 import SidebarToggleButton from "../../../../components/SidebarToggleButton";
@@ -17,6 +17,7 @@ const navigation = [
   { name: 'Invitees', view: 'invitees', icon: Users },
   { name: 'Agenda', view: 'agenda', icon: LayoutList },
   { name: 'Supplementary Agenda', view: 'suppli-agenda', icon: Layers },
+  { name: 'Archived Agenda', view: 'archived-agenda', icon: Archive },
   { name: 'Resolution', view: 'resolution', icon: FileCheck },
   { name: 'Conclusion', view: 'conclusion', icon: FileText },
   { name: 'Materials', view: 'materials', icon: FileBarChart },
@@ -31,8 +32,12 @@ export default function MeetingWorkspaceLayout({
 }) {
   const params = useParams();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const currentView = searchParams.get('view') || 'info';
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // The PDF Preview route is its own full-bleed page — no meeting sidebar/chrome.
+  const isFullBleed = pathname?.endsWith('/pdf-preview');
 
   const { data: response, mutate } = useSWR(`/meetings/${params.id}`, fetcher);
   const { data: rolesRes } = useSWR('/auth/roles', fetcher);
@@ -75,6 +80,10 @@ export default function MeetingWorkspaceLayout({
     }
   } else if (isAdmin) {
     navItems = [...navItems, { name: 'History', view: 'history', icon: History }];
+  }
+
+  if (isFullBleed) {
+    return <div className="flex-1 w-full h-full overflow-hidden">{children}</div>;
   }
 
   return (
