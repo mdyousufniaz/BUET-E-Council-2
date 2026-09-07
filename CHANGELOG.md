@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-06 — PDF Preview, Colourful Themes, Archived Agenda & Markdown Table Fix
+
+### New Features
+
+**Interactive PDF Preview page (`frontend/app/workspace/meetings/[id]/pdf-preview/page.tsx`, `pdfGenerator.js`, `meetingController.js`)**
+- New full-bleed route under the meeting workspace (linked from the Materials tab) that renders the agenda / supplementary agenda / resolution / resolution-status document with a live paper preview.
+- **Per-request page-layout overrides**: page size (A3/A4/A5/Letter/Legal/Tabloid), orientation, individual margins (mm), whole-document scale (0.7–1.6×), optional global line-height, and an `inline` vs `heading` agenda-number style. All values are validated and clamped server-side in `normalizePdfLayout()`.
+- Custom layouts get their own PDF cache slot and fingerprint dimension, so they never overwrite the canonical default-layout PDF used by email attachments and status sync. Only the default-layout PDF is mirrored to the meeting filesystem.
+- Inline cell editing of agenda content / resolution / description / conclusion directly from the preview, gated by the same `meetingAccess` permission helpers as the main workspace.
+
+**Colourful themes (`globals.css`, `ThemeProvider.tsx`, `ThemeToggle.tsx`)**
+- Added 3 vibrant two-hue themes aimed at an educational-office setting: **Teal Horizon** (teal `#0d9488` + coral), **Indigo Scholar** (indigo `#4f46e5` + gold), **Emerald Meadow** (emerald `#059669` + sky blue). Theme count is now 13.
+- Theme picker list is capped at `60vh` with `overflow-y-auto` so every theme (including the last, Midnight Dark) stays reachable; the scrollbar is themed via the existing global `::-webkit-scrollbar` rules.
+
+**Archived Agenda view (`frontend/components/meetings/ArchivedAgendaView.tsx`)**
+- New `archived-agenda` workspace view + sidebar nav entry (Archive icon) for browsing, restoring, and deleting archived agenda snapshots without opening the modal.
+
+**Editor `Ctrl`/`Cmd`+`S` save hook (`RichTextEditor.tsx`)**
+- `RichTextEditor` accepts an `onSave` callback, fired on `Ctrl`/`Cmd`+`S` from anywhere in the editing panel (content area, toolbar, or a nearby field) via a window-level listener, without re-instantiating the editor.
+
+### Bug Fixes
+
+**Markdown tables not converting in PDFs (`pdfGenerator.js` → `convertMarkdownTablesToHtml`)**
+- A header pre-processing loop exploded every multi-column header row into separate one-cell lines, leaking the first cell out as a stray paragraph and dropping the rest of the header — so a normal `| Name | Role |` table rendered as broken. Removed the loop.
+- Detection hardened: entity-encoded pipes (`&#124;`, `&vert;`), non-breaking / exotic spaces, autocorrected en/em-dash separator rows, and single-dash separators (`| - | - |`) now parse. Prose containing a stray `|` still stays prose.
+- Generated tables now carry self-contained cell borders + `word-wrap` (the agenda stylesheet's `th, td { border: none }` was leaving them gridless).
+
+---
+
 ## 2026-09-06 — Word-Style Page Layout Tab, Table Design Tools & Editor Fixes
 
 ### New Features
