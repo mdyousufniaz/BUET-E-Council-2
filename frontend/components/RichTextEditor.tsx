@@ -679,6 +679,47 @@ const handleTableTabNavigationWithView = (view: any, shiftKey: boolean): boolean
   return true;
 };
 
+// Clear every explicit column width in the table that holds the current
+// selection so the columns fall back to an even split across the full editor
+// width. Run this straight after a column is added or removed: prosemirror-tables
+// copies the neighbouring column's pixel width onto a newly inserted column
+// (which pushes the table wider than the page) and, after a delete, leaves a
+// fixed-width table narrower than the page. Wiping the widths lets the
+// `table-layout: fixed; width: 100%` rule redistribute the space evenly again.
+// Manual drag-resizes afterwards still write per-column widths as normal.
+const normalizeTableColumns = (editor: any): void => {
+  if (!editor?.isActive?.('table')) return;
+  const { state, view } = editor;
+  const $from = state.selection.$from;
+
+  let tableNode: any = null;
+  let tableContentStart = -1;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === 'table') {
+      tableNode = node;
+      tableContentStart = $from.start(d); // first position inside the table
+      break;
+    }
+  }
+  if (!tableNode) return;
+
+  const tr = state.tr;
+  let changed = false;
+  tableNode.descendants((node: any, pos: number) => {
+    if (
+      (node.type.name === 'tableCell' || node.type.name === 'tableHeader') &&
+      node.attrs.colwidth != null
+    ) {
+      tr.setNodeMarkup(tableContentStart + pos, undefined, { ...node.attrs, colwidth: null });
+      changed = true;
+    }
+    return true;
+  });
+
+  if (changed) view.dispatch(tr);
+};
+
 const handleTableShiftEnterNavigation = (view: any): boolean => {
   const { state } = view;
   const pos = state.selection.$from;
@@ -1606,6 +1647,78 @@ const LayoutPopover = ({
       {children}
     </div>,
     document.body
+  );
+};
+
+const LINE_HEIGHT_PRESETS = ["1.0", "1.15", "1.5", "2.0"];
+
+// Line-spacing control: a preset dropdown + a free-text box for custom values.
+// The box keeps a LOCAL draft while focused and only pushes a value to the
+// editor once it is complete and > 0 — and it never calls editor.focus(), which
+// would steal focus mid-entry and make multi-character values ("0.5") impossible
+// to type.
+const LineSpacingControl = ({ editor }: { editor: any }) => {
+  const curLH: string = editor.getAttributes('paragraph').lineHeight || '';
+  const isCustomLH = !!curLH && !LINE_HEIGHT_PRESETS.includes(curLH);
+
+  const [draft, setDraft] = useState(curLH);
+  const [focused, setFocused] = useState(false);
+
+  // Re-sync the box with the current selection whenever the user isn't editing it.
+  useEffect(() => {
+    if (!focused) setDraft(curLH);
+  }, [curLH, focused]);
+
+  const applyLH = (val: string) => {
+    if (!val) editor.chain().unsetLineHeight().run();
+    else editor.chain().setLineHeight(val).run();
+  };
+
+  return (
+    <div className="flex items-center gap-0.5">
+      <div className="w-20">
+        <CustomSelect
+          value={curLH}
+          onChange={(val) => {
+            if (val === "__custom__") return;
+            setDraft(val);
+            if (!val) editor.chain().focus().unsetLineHeight().run();
+            else editor.chain().focus().setLineHeight(val).run();
+          }}
+          options={[
+            { value: "", label: "Spacing" },
+            { value: "1.0", label: "1.0 Single" },
+            { value: "1.15", label: "1.15 Normal" },
+            { value: "1.5", label: "1.5 Medium" },
+            { value: "2.0", label: "2.0 Double" },
+            ...(isCustomLH ? [{ value: curLH, label: `${curLH} Custom` }] : []),
+          ]}
+        />
+      </div>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={focused ? draft : curLH}
+        onFocus={() => { setFocused(true); setDraft(curLH); }}
+        onBlur={() => {
+          setFocused(false);
+          const v = draft.trim();
+          if (!v || v.endsWith('.')) { applyLH(v.replace(/\.$/, '')); }
+        }}
+        onChange={(e) => {
+          const val = e.target.value.trim();
+          if (val && !/^\d*\.?\d*$/.test(val)) return;
+          setDraft(val);
+          if (!val) { applyLH(''); return; }
+          // Hold partial entries ("0", "0.") locally so the box keeps focus;
+          // commit once it's a complete positive number.
+          if (!val.endsWith('.') && parseFloat(val) > 0) applyLH(val);
+        }}
+        title="Custom line spacing (any value, e.g. 1.3 or 0.5)"
+        placeholder="1.3"
+        className="w-12 px-1 py-1 text-xs text-center border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
   );
 };
 
@@ -2912,49 +3025,7 @@ const MenuBar = ({
                     </button>
                   </div>
 
-                  {(() => {
-                    const curLH = editor.getAttributes('paragraph').lineHeight || '';
-                    const presets = ["1.0", "1.15", "1.5", "2.0"];
-                    const isCustomLH = !!curLH && !presets.includes(curLH);
-                    return (
-                      <div className="flex items-center gap-0.5">
-                        <div className="w-20">
-                          <CustomSelect
-                            value={curLH}
-                            onChange={(val) => {
-                              if (val === "__custom__") return;
-                              if (!val) editor.chain().focus().unsetLineHeight().run();
-                              else editor.chain().focus().setLineHeight(val).run();
-                            }}
-                            options={[
-                              { value: "", label: "Spacing" },
-                              { value: "1.0", label: "1.0 Single" },
-                              { value: "1.15", label: "1.15 Normal" },
-                              { value: "1.5", label: "1.5 Medium" },
-                              { value: "2.0", label: "2.0 Double" },
-                              ...(isCustomLH ? [{ value: curLH, label: `${curLH} Custom` }] : []),
-                            ]}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={curLH}
-                          onChange={(e) => {
-                            const val = e.target.value.trim();
-                            if (!val) {
-                              editor.chain().focus().unsetLineHeight().run();
-                            } else if (/^\d*\.?\d*$/.test(val)) {
-                              editor.chain().focus().setLineHeight(val).run();
-                            }
-                          }}
-                          title="Custom line spacing (any value, e.g. 1.3)"
-                          placeholder="1.3"
-                          className="w-12 px-1 py-1 text-xs text-center border border-border rounded bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                      </div>
-                    );
-                  })()}
+                  <LineSpacingControl editor={editor} />
 
                   {/* Shading / Background Color */}
                   <div className="relative">
@@ -3549,9 +3620,9 @@ const MenuBar = ({
               <>
                 <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
                   <div className="flex items-center gap-1 my-auto">
-                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnBefore().run(); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Left</button>
-                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnAfter().run(); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Right</button>
-                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().deleteColumn().run(); }} className="px-2 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-medium cursor-pointer">Del Col</button>
+                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnBefore().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Left</button>
+                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnAfter().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Right</button>
+                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().deleteColumn().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-medium cursor-pointer">Del Col</button>
                   </div>
                   <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Columns</span>
                 </div>
@@ -3719,6 +3790,7 @@ const MenuBar = ({
                           toast.success("Split merged cell into individual cells");
                         } else {
                           editor.chain().focus().addColumnAfter().run();
+                          normalizeTableColumns(editor);
                           toast.success("Divided cell into two by adding a column");
                         }
                       }}
@@ -5038,7 +5110,7 @@ export default function RichTextEditor({
           class: 'text-primary underline cursor-pointer',
         },
       }),
-      CustomTable.configure({ resizable: true, View: CustomTableView }),
+      CustomTable.configure({ resizable: true, lastColumnResizable: false, View: CustomTableView }),
       TableRowResizing,
       TableCellListResequence,
       TableRow,

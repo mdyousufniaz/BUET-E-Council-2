@@ -341,15 +341,16 @@ export default function PdfPreviewPage() {
   // prints black regardless of the on-screen theme.
   const printCss = `
     /* Keep the on-screen preview closer to the generated PDF: match its 14px
-       body text, and stop rich-text tables authored in the editor from being
-       stretched to the full page width by Tailwind's prose reset (the PDF now
-       shrinks them to fit their content -- see styleRichTextHtml in
-       pdfGenerator.js). */
+       body text, and render rich-text tables the way both the editor and the
+       PDF now do -- full page width with evenly-split, fixed-layout columns
+       (see styleRichTextHtml in pdfGenerator.js and .meeting-table in
+       globals.css). Manual column widths still come through in the generated
+       PDF via the injected <colgroup>. */
     #pdf-print-root { font-size: 14px; }
     #pdf-print-root .prose :where(table):not(.preview-grid) {
-      width: auto;
+      width: 100%;
       max-width: 100%;
-      table-layout: auto;
+      table-layout: fixed;
     }
     #pdf-print-root .prose :where(table):not(.preview-grid) :where(td, th) {
       overflow-wrap: break-word;
@@ -456,7 +457,7 @@ export default function PdfPreviewPage() {
         {categoryHeaderRow(ag, 3)}
         <tr className="align-top">
           <td className="border border-border px-2 py-1.5 text-center font-bold w-[14%]">
-            {`প্রস্তাব নং ${serial}`}
+            প্রস্তাব নং
           </td>
           <td className="border border-border px-2 py-1.5 text-center whitespace-nowrap font-bold w-[10%]">
             {ac || " "}
@@ -761,8 +762,13 @@ export default function PdfPreviewPage() {
                       <Fragment key={ag.id}>
                         {categoryHeaderRow(ag, 4)}
                         <tr className="align-top">
-                          <td className="border border-border px-2 py-1.5 text-center font-bold">
-                            {`প্রস্তাব নং ${serialFor(ag)}`}
+                          <td className="border border-border px-2 py-1.5 text-center font-bold whitespace-nowrap">
+                            {(() => {
+                              const clean = stripTags(ag.content || "");
+                              const bibidha = !ag.is_suppli && (ag.agenda_serial === 0 || clean.startsWith("বিবিধ"));
+                              if (bibidha) return "বিবিধ :";
+                              return `${ac ? ac + " " : ""}${rest}${serialFor(ag)}`;
+                            })()}
                           </td>
                           <td className="border border-border px-3 py-1.5">
                             {roHtml(ag.content, "(empty)")}

@@ -244,14 +244,18 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         injectStyle(match, { 'font-family': 'monospace', 'font-size': '12px', 'background': '#f4f4f4', 'padding': '8px', 'border': '1px solid #ddd', 'white-space': 'pre-wrap' })
     );
 
-    // Tables — reproduce the width the author gave the table in the editor
-    // instead of stretching every table to the full page width.
-    //   - cells carry `colwidth` (from the editor's column-resize handles):
-    //     emit a <colgroup> + fixed layout at the summed pixel width, so a
-    //     table the author narrowed stays narrow, and text wraps between words
-    //     rather than being force-broken mid-word.
-    //   - no colwidth: let the table shrink to fit its content (auto layout),
-    //     capped at the page width; `data-align` then positions it.
+    // Tables — mirror exactly what the editor shows. The editor renders every
+    // table with `table-layout: fixed; width: 100%` (see globals.css), so by
+    // default a table spans the full page with evenly-split columns, and adding
+    // or removing a column just re-divides that same width. Drag-resizing a
+    // column writes a `colwidth` onto the cells of that column only.
+    //   - no colwidth anywhere: full page width, even columns.
+    //   - every column has a colwidth: the author sized the whole table, so
+    //     honour the summed pixel width (a narrowed table stays narrow), capped
+    //     at the page width — this is prosemirror-tables' own "fixed width" case.
+    //   - some columns sized, others not: pin the sized ones and let the rest
+    //     share the remaining page width — same as the editor mid-resize.
+    // `data-align` then positions a sub-page-width table on the page.
     // markdown-generated tables (from convertMarkdownTablesToHtml) already carry
     // their own inline sizing incl. `border-collapse`, so they are left alone.
     str = str.replace(/<table(\s[^>]*)?>([\s\S]*?)<\/table>/gi, (fullMatch, rawAttrs, inner) => {
@@ -261,27 +265,39 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         const align = (attrs.match(/data-align="(left|center|right)"/i) || [])[1] || 'left';
         const marginByAlign = { left: '12px 0', center: '12px auto', right: '12px 0 12px auto' }[align];
 
+        // Walk the first row cell-by-cell so column order (and colspans) is kept,
+        // recording a pixel width or null for every column.
         const firstRow = inner.match(/<tr[\s\S]*?<\/tr>/i);
-        const widths = [];
+        const colWidths = [];
         if (firstRow) {
-            const cellRe = /<t[dh]\b[^>]*\bcolwidth="([^"]+)"[^>]*>/gi;
+            const cellRe = /<(t[dh])\b([^>]*)>/gi;
             let cm;
             while ((cm = cellRe.exec(firstRow[0]))) {
-                cm[1].split(',').forEach((w) => {
-                    const n = parseInt(w, 10);
-                    if (Number.isFinite(n) && n > 0) widths.push(n);
-                });
+                const cellAttrs = cm[2] || '';
+                const colspan = parseInt((cellAttrs.match(/\bcolspan="(\d+)"/i) || [])[1] || '1', 10) || 1;
+                const cwMatch = cellAttrs.match(/\bcolwidth="([^"]+)"/i);
+                const parts = cwMatch ? cwMatch[1].split(',').map((w) => parseInt(w, 10)) : [];
+                for (let i = 0; i < colspan; i++) {
+                    const n = parts[i];
+                    colWidths.push(Number.isFinite(n) && n > 0 ? n : null);
+                }
             }
         }
 
+        const anyWidth = colWidths.some((w) => w != null);
+        const allWidth = colWidths.length > 0 && colWidths.every((w) => w != null);
+
         let colgroup = '';
         let sizing;
-        if (widths.length) {
-            const total = widths.reduce((a, b) => a + b, 0);
-            colgroup = `<colgroup>${widths.map((w) => `<col style="width:${w}px;" />`).join('')}</colgroup>`;
+        if (allWidth) {
+            const total = colWidths.reduce((a, b) => a + b, 0);
+            colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${w}px;" />`).join('')}</colgroup>`;
             sizing = { 'table-layout': 'fixed', 'width': `${total}px`, 'max-width': '100%' };
+        } else if (anyWidth) {
+            colgroup = `<colgroup>${colWidths.map((w) => (w != null ? `<col style="width:${w}px;" />` : '<col />')).join('')}</colgroup>`;
+            sizing = { 'table-layout': 'fixed', 'width': '100%' };
         } else {
-            sizing = { 'table-layout': 'auto', 'width': 'auto', 'max-width': '100%' };
+            sizing = { 'table-layout': 'fixed', 'width': '100%' };
         }
 
         const openTag = injectStyle(`<table${attrs}>`, {
@@ -500,7 +516,7 @@ const renderPdf = async (html, layout) => {
 // existing caches are invalidated.
 // ---------------------------------------------------------------------------
 const CACHE_PREFIX = 'generated-pdfs';
-const PDF_TEMPLATE_VERSION = 'v50';
+const PDF_TEMPLATE_VERSION = 'v51';
 
 const pdfCacheKey = (meetingId, type) => `${CACHE_PREFIX}/${meetingId}/${type}.pdf`;
 
@@ -821,7 +837,12 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
         const renderSection = (title, items, isOthers = false, isLeadership = false) => {
             if (!items || items.length === 0) return '';
-            let html = `<div class="presentee-section" style="margin-bottom: 15px; page-break-inside: avoid;">`;
+            // No page-break-inside: avoid here — a department group should fill the
+            // rest of the current column and continue in the next one, not jump
+            // wholesale to the next column and leave a gap. The section title
+            // (break-after: avoid) still stays with its first member, and each
+            // member row stays intact.
+            let html = `<div class="presentee-section" style="margin-bottom: 15px;">`;
             if (title) {
                 html += `<div class="section-title" style="font-weight: bold; margin-bottom: 5px; text-decoration: underline;"><u>${title}</u></div>`;
             }
@@ -1117,7 +1138,9 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                         const isOnlyBibidhaTitle = isBibidha && !strippedText;
                         const bibidhaSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + toBanglaDigits(mainAgendaCount + 1, serialWidth);
                         const fullSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + agSerialStr;
-                        const titleStr = isBibidha ? `বিবিধ :` : `প্রস্তাব নং ${fullSerial}`;
+                        // The table header cell already reads "প্রস্তাব নং"; the row cell
+                        // shows only the A/C + number (e.g. "এ ২১০৬০১").
+                        const titleStr = isBibidha ? `বিবিধ :` : fullSerial;
 
                         const validAnnexures = (Array.isArray(ag.annexures) ? ag.annexures : [])
                             .filter(an => !an.is_excluded_in_resolution)
@@ -1208,16 +1231,10 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                 }
 
                 // 'inline' agenda-number style (PDF Preview page): the body opens
-                // with a bold "<prefix-rest><serial>:" run instead of a separate
-                // heading line. `prefixRest` is agenda_prefix minus its first
-                // whitespace token (that token is the A/C part).
+                // with a bold "প্রস্তাব নং <A/C> <serial>:" run instead of a
+                // separate heading line — the same full label the 'heading'
+                // style prints, so nothing is lost by choosing inline.
                 const inlineNum = pdfLayout.agendaNumberStyle === 'inline';
-                const prefixRest = (() => {
-                    const raw = String(meeting.agenda_prefix || '').trim();
-                    if (!raw) return '';
-                    const t = raw.split(/\s+/);
-                    return t.length <= 1 ? raw : t.slice(1).join(' ');
-                })();
                 const injectInlinePrefix = (rawHtml, prefix) => {
                     if (!prefix) return rawHtml;
                     const bold = `<b>${prefix}</b> `;
@@ -1279,7 +1296,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     const catHeader = categoryHeaderMap.get(ag.id);
 
                     const inlinePrefix = inlineNum
-                        ? (isBibidha ? 'বিবিধ:' : `${prefixRest}${agSerialStr}:`)
+                        ? (isBibidha ? 'বিবিধ:' : `প্রস্তাব নং ${fullSerial}:`)
                         : '';
                     const bodyHtml = inlineNum ? injectInlinePrefix(contentHtml || '', inlinePrefix) : contentHtml;
 
