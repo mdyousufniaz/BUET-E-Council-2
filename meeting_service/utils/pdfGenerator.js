@@ -1855,7 +1855,9 @@ function generateDefaultBody(noticeType, isSyndicate, isImmediate, dateStr, date
         switch (noticeType) {
             case 'invitation':
                 return `<p>আগামী ${dateStr} তারিখ ${dayName} বিকাল ৩:০০ ঘটিকায় সিন্ডিকেটের ${serialNo} সভা উপাচার্য মহোদয়ের অফিস কক্ষে অনুষ্ঠিত হবে। উক্ত সিন্ডিকেট সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো। সরাসরি উক্ত সিন্ডিকেট সভায় যোগদান করা সম্ভব না হলে ভার্চুয়াল প্ল্যাটফর্মে অংশগ্রহণ করা যাবে।</p>
-                <p>এতদসংক্রান্ত আলোচ্যসূচী ও প্রয়োজনীয় তথ্যাদি (সভার আলোচ্যসূচীর ওয়েব লিংক, Zoom Meeting এর ওয়েব লিংক, ID ও Password) শীঘ্রই e-mail এর মাধ্যমে প্রেরণ করা হবে।</p>`;
+                <p>এতদসংক্রান্ত আলোচ্যসূচী ও প্রয়োজনীয় তথ্যাদি (সভার আলোচ্যসূচীর ওয়েব লিংক, Zoom Meeting এর ওয়েব লিংক, ID ও Password) শীঘ্রই e-mail এর মাধ্যমে প্রেরণ করা হবে।</p>
+                <p class="web-link">• web link for meeting:</p>
+                <p>${meetingUrl}</p>`;
             case 'agenda':
                 return `<p>আগামী ${dateStr} তারিখ ${dayName} বিকাল ৩:০০ ঘটিকায় সিন্ডিকেটের ${serialNo} সভা সরাসরি মাননীয় উপাচার্য মহোদয়ের অফিসে ও ভার্চুয়াল (Hybrid) প্ল্যাটফর্মে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক, Zoom Meeting এর ওয়েব লিংক, ID ও Password নিম্নে প্রেরণ করা হলো।</p>
                 <p class="web-link">• ${meetingUrlLabel}</p>
@@ -1887,7 +1889,9 @@ function generateDefaultBody(noticeType, isSyndicate, isImmediate, dateStr, date
         } else {
             switch (noticeType) {
                 case 'invitation':
-                    return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p>`;
+                    return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p>
+                    <p class="web-link">• web link for meeting:</p>
+                    <p>${meetingUrl}</p>`;
                 case 'agenda':
                     return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক নিম্নে প্রেরণ করা হলো।</p>
                     <p class="web-link">• ${meetingUrlLabel}</p>

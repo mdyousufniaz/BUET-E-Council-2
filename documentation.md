@@ -607,7 +607,7 @@ export const DEPARTMENT_MERGE_RULES = [
 | `POST` | `/api/meetings/:id/complete` | Finalize and complete meeting |
 | `GET` | `/api/meetings/:id/pdf/:type` | Download rendered PDF (`agenda`, `suppli-agenda`, `resolution`, `resolution-status`, `attendance`). Optional page-layout query params (`pageSize`, `orientation`, `marginTop/Right/Bottom/Left`, `scale`, `lineHeight`, `agendaNumberStyle`) from the PDF Preview page — see §3.4 |
 | `POST` | `/api/meetings/:id/send-email` | Send agenda booklet via email |
-| `POST` | `/api/meetings/:id/send-notice` | Send meeting notice email to selected invitees (draft/ongoing only) |
+| `POST` | `/api/meetings/:id/send-notice` | Send meeting notice email to selected invitees (draft/ongoing only; rejected for immediate meetings) |
 | `POST` | `/api/meetings/:id/send-agenda-email` | Send agenda email with PDF attached to selected invitees (ongoing only) |
 | `POST` | `/api/meetings/:id/send-resolution-email` | Send resolution email with PDF attached to selected invitees (completed only) |
 | `GET` | `/api/meetings/:id/email-drafts` | Fetch saved email drafts (`{ notice, agenda, resolution }`, one slot per type) |
@@ -756,6 +756,8 @@ Each email type is only available at a specific meeting lifecycle stage:
 | **Send Agenda** | `status === 'ongoing'` only | `requireEmailSender` + controller checks `status !== 'ongoing'` | Enabled: ongoing. Disabled: draft, past/completed. |
 | **Send Resolution** | `is_completed === true` or `status === 'past'` | `requireCompletedMeetingEmailSender` (requires `is_completed`) | Enabled: completed/past. Disabled: draft, ongoing. |
 
+Immediate meetings (`is_regular === false`) have no notice section — the Email tab shows only the Agenda and Resolution cards. The backend enforces this: `sendNoticeEmail` and notice-mode draft saves return `400` for immediate meetings.
+
 #### Thumb-Up Rule (All-Sent Disable)
 
 A button is also disabled when **all** invitees with email addresses have already received that email type. The UI shows an "All notified" / "All sent" badge and greys out the button:
@@ -808,7 +810,7 @@ The Notice Document sub-tab provides a form-based interface for generating notic
 
 #### Key Features
 
-1. **Auto-Prefill**: Notice body is automatically generated based on meeting type, notice type, and meeting date. Serial numbers are displayed in Bangla digits with "নং" suffix (e.g., `১ নং সভা`).
+1. **Auto-Prefill**: Notice body is automatically generated based on meeting type, notice type, and meeting date. Serial numbers are displayed in Bangla digits with "নং" suffix (e.g., `১ নং সভা`). The invitation prefill (like agenda/resolution) now includes a `• web link for meeting:` line with the meeting URL; the backend empty-body fallback (`generateDefaultBody`) carries the same link.
 
 2. **Signature Management**: Signatures are stored permanently in `system_settings` table and auto-reflected in the UI when updated via the signature settings modal.
 
