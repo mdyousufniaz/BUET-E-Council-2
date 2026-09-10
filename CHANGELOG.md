@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-10 — Print Each Resolution on Separate Page Option
+
+### New Features
+
+**Separate-page resolution PDF generation (`MaterialsView.tsx`, `pdfGenerator.js`, `meetingController.js`, `pdf-preview/page.tsx`)**
+- Added an option in **Meeting Materials** (`MaterialsView.tsx`) to generate and download the Resolution PDF with each resolution printed on a separate page via the **PDF (Separate Page per Resolution)** button.
+- Added `separatePages` layout override parameter in `pdfGenerator.js` (`DEFAULT_PDF_LAYOUT`, `normalizePdfLayout`, `buildMeetingHtml`).
+- When `separatePages` is active for resolution documents, each resolution item (and its category header, if present) is rendered with `page-break-before: always; break-before: page;` so Page 1 retains the cover header, description, and attendance list, and each resolution begins on its own sheet.
+- Integrated the `separatePages` toggle into the interactive **PDF Preview** route (`/workspace/meetings/[id]/pdf-preview`) for live paper preview and download.
+- Bumped `PDF_TEMPLATE_VERSION` to `v57` for clean cache isolation.
+
+---
+
 ## 2026-09-09 — বিবিধ Numbering, Immediate Syndicate Meetings & Full-Width PDF Tables
 
 ### Changes

@@ -414,7 +414,8 @@ const DEFAULT_PDF_LAYOUT = {
     // 'heading' => classic bold "প্রস্তাব নং <n>" line above an indented body.
     // 'inline'  => body starts with a bold, non-editable "<prefix><n>:" run
     //              (matches the PDF Preview page's 3-column layout).
-    agendaNumberStyle: 'heading'
+    agendaNumberStyle: 'heading',
+    separatePages: false
 };
 
 const clampNum = (val, min, max, fallback) => {
@@ -450,8 +451,9 @@ const normalizePdfLayout = (raw) => {
     const agendaNumberStyle = String(raw.agendaNumberStyle || '').toLowerCase() === 'inline'
         ? 'inline'
         : 'heading';
+    const separatePages = raw.separatePages === true || String(raw.separatePages || '').toLowerCase() === 'true' || raw.separatePages === '1' || raw.separatePages === 1;
 
-    const layout = { pageSize, orientation, margin, scale, lineHeight, agendaNumberStyle };
+    const layout = { pageSize, orientation, margin, scale, lineHeight, agendaNumberStyle, separatePages };
     const isCustom = JSON.stringify(layout) !== JSON.stringify(DEFAULT_PDF_LAYOUT);
     return { layout, isCustom };
 };
@@ -521,7 +523,7 @@ const renderPdf = async (html, layout) => {
 // existing caches are invalidated.
 // ---------------------------------------------------------------------------
 const CACHE_PREFIX = 'generated-pdfs';
-const PDF_TEMPLATE_VERSION = 'v56';
+const PDF_TEMPLATE_VERSION = 'v57';
 
 const pdfCacheKey = (meetingId, type) => `${CACHE_PREFIX}/${meetingId}/${type}.pdf`;
 
@@ -1327,17 +1329,23 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     const bodyHtml = inlinePrefix ? injectInlinePrefix(contentHtml || '', inlinePrefix) : contentHtml;
                     const hangingNum = inlineNum && !isBibidha && !!bodyHtml;
 
+                    const pageBreakStyle = (isResolution && pdfLayout.separatePages)
+                        ? 'page-break-before: always; break-before: page;'
+                        : '';
+
                     return `
-                    ${catHeader ? `<div class="category-header" style="font-weight: bold; font-size: 15px; margin-top: 25px; margin-bottom: 15px;"><b>${catHeader}</b></div>` : ''}
-                    <div class="agenda-block" style="margin-bottom: 30px;">
-                        ${(inlineNum && !isBibidha) ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
-                        ${hangingNum
-                          ? `<div class="agenda-content" style="display: flex; align-items: baseline; margin: 0 0 12px 0; text-align: left; font-size: 14px; line-height: 1.6;"><div style="flex: 0 0 auto; white-space: nowrap; font-weight: bold;"><b>${inlineLabel}</b>&nbsp;</div><div style="flex: 1 1 auto; min-width: 0;">${styleRichTextHtml(bodyHtml, false)}</div></div>`
-                          : (bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : '')}
-                        ${isResolution ? `
-                        <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px;"><b>সিদ্ধান্ত:</b></div>
-                        <div class="agenda-resolution" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
-                        ` : ''}
+                    <div class="resolution-item" style="${pageBreakStyle}">
+                        ${catHeader ? `<div class="category-header" style="font-weight: bold; font-size: 15px; margin-top: 25px; margin-bottom: 15px;"><b>${catHeader}</b></div>` : ''}
+                        <div class="agenda-block" style="margin-bottom: 30px;">
+                            ${(inlineNum && !isBibidha) ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
+                            ${hangingNum
+                              ? `<div class="agenda-content" style="display: flex; align-items: baseline; margin: 0 0 12px 0; text-align: left; font-size: 14px; line-height: 1.6;"><div style="flex: 0 0 auto; white-space: nowrap; font-weight: bold;"><b>${inlineLabel}</b>&nbsp;</div><div style="flex: 1 1 auto; min-width: 0;">${styleRichTextHtml(bodyHtml, false)}</div></div>`
+                              : (bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : '')}
+                            ${isResolution ? `
+                            <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px;"><b>সিদ্ধান্ত:</b></div>
+                            <div class="agenda-resolution" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
+                            ` : ''}
+                        </div>
                     </div>
                     `;
                 }).join('');
