@@ -720,34 +720,6 @@ const normalizeTableColumns = (editor: any): void => {
   if (changed) view.dispatch(tr);
 };
 
-// A table wider than this many columns can't fit an A4 page: every column drops
-// below its minimum readable width and the last ones get clipped out of the PDF.
-// Enforced on every "add column" path (toolbar buttons, split-cell, insert
-// dialog). Bump it only if the page layout gets wider (landscape / bigger page).
-const MAX_TABLE_COLUMNS = 10;
-
-// Column count of the table that currently holds the selection (0 if not in one).
-const currentTableColumnCount = (editor: any): number => {
-  if (!editor?.isActive?.('table')) return 0;
-  const $from = editor.state.selection.$from;
-  for (let d = $from.depth; d > 0; d--) {
-    const node = $from.node(d);
-    if (node.type.name === 'table') {
-      try { return TableMap.get(node).width; } catch { return 0; }
-    }
-  }
-  return 0;
-};
-
-// Gate an "add column" action: false (with a toast) once the table is at the cap.
-const canAddTableColumn = (editor: any): boolean => {
-  if (currentTableColumnCount(editor) >= MAX_TABLE_COLUMNS) {
-    toast.error(`A table can have at most ${MAX_TABLE_COLUMNS} columns — more would be clipped in the PDF.`);
-    return false;
-  }
-  return true;
-};
-
 const handleTableShiftEnterNavigation = (view: any): boolean => {
   const { state } = view;
   const pos = state.selection.$from;
@@ -3648,8 +3620,8 @@ const MenuBar = ({
               <>
                 <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
                   <div className="flex items-center gap-1 my-auto">
-                    <button type="button" onClick={() => { ensureTableFocus(); if (!canAddTableColumn(editor)) return; editor.chain().focus().addColumnBefore().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Left</button>
-                    <button type="button" onClick={() => { ensureTableFocus(); if (!canAddTableColumn(editor)) return; editor.chain().focus().addColumnAfter().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Right</button>
+                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnBefore().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Left</button>
+                    <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().addColumnAfter().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground text-xs font-medium cursor-pointer">+Col Right</button>
                     <button type="button" onClick={() => { ensureTableFocus(); editor.chain().focus().deleteColumn().run(); normalizeTableColumns(editor); }} className="px-2 py-1 rounded bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-medium cursor-pointer">Del Col</button>
                   </div>
                   <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Columns</span>
@@ -3816,7 +3788,7 @@ const MenuBar = ({
                         if (editor.can().splitCell()) {
                           editor.chain().focus().splitCell().run();
                           toast.success("Split merged cell into individual cells");
-                        } else if (canAddTableColumn(editor)) {
+                        } else {
                           editor.chain().focus().addColumnAfter().run();
                           normalizeTableColumns(editor);
                           toast.success("Divided cell into two by adding a column");
@@ -4409,7 +4381,7 @@ const MenuBar = ({
                 >
                   {Array.from({ length: 10 }).map((_, r) => (
                     <div key={r} className="flex gap-1.5">
-                      {Array.from({ length: Math.min(10, MAX_TABLE_COLUMNS) }).map((_, c) => {
+                      {Array.from({ length: 10 }).map((_, c) => {
                         const isHighlighted = r < (hoverRows || customRows) && c < (hoverCols || customCols);
                         return (
                           <button
@@ -4455,7 +4427,7 @@ const MenuBar = ({
               <button
                 type="button"
                 onClick={() => {
-                  editor.chain().focus().insertTable({ rows: customRows, cols: Math.min(customCols, MAX_TABLE_COLUMNS), withHeaderRow: true }).updateAttributes('table', { 'data-border': tableBorderOption }).run();
+                  editor.chain().focus().insertTable({ rows: customRows, cols: customCols, withHeaderRow: true }).updateAttributes('table', { 'data-border': tableBorderOption }).run();
                   setIsTableModalOpen(false);
                   toast.success(`Inserted ${customRows}×${customCols} table`);
                 }}
