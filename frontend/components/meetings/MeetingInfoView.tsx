@@ -378,8 +378,7 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
                     value={formData.type}
                     onChange={(val) => setFormData({
                       ...formData,
-                      type: val,
-                      is_regular: val === "syndicate" ? true : formData.is_regular
+                      type: val
                     })}
                   />
                 )}
@@ -408,9 +407,9 @@ export default function MeetingInfoView({ meeting, mutate }: { meeting: any, mut
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">Meeting Criteria</label>
-                {readOnly || formData.type === "syndicate" ? (
+                {readOnly ? (
                   <div className="w-full px-3 py-2 bg-input/20 border border-input rounded-md text-sm opacity-50 cursor-not-allowed">
-                    Regular
+                    {formData.is_regular ? "Regular" : "Immediate"}
                   </div>
                 ) : (
                   <CustomSelect 

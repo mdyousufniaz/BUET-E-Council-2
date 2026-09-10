@@ -64,6 +64,15 @@ function splitPrefix(prefix?: string | null): { ac: string; rest: string } {
 
 const stripTags = (html: string) => (html || "").replace(/<[^>]*>/g, "").trim();
 
+// Leading "বিবিধ :" title (optionally followed by its serial number). Only
+// digits are stripped after "বিবিধ" — never a following word — so imported
+// আলোচ্যসূচি text is left intact. Keep in sync with pdfGenerator.js.
+const BIBIDHA_TITLE_RE = /^\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*/i;
+const isBibidhaAgenda = (ag: any) =>
+  !!ag && !ag.is_suppli && (ag.agenda_serial === 0 || stripTags(ag.content || "").startsWith("বিবিধ"));
+// Text a bibidha item carries beyond its "বিবিধ :" title (e.g. from a JSON import).
+const bibidhaBodyText = (ag: any) => stripTags(ag?.content || "").replace(BIBIDHA_TITLE_RE, "").trim();
+
 function statusText(ag: any): string {
   const explicit = ag.execution_status ? stripTags(ag.execution_status) : "";
   if (explicit) return ag.execution_status;
@@ -261,6 +270,55 @@ export default function PdfPreviewPage() {
           ? "সম্পূরক আলোচ্যসূচি"
           : "আলোচ্যসূচী";
 
+  // Heading block, computed exactly like meeting_service/utils/pdfGenerator.js
+  // (buildMeetingHtml) so the "edit" view matches the generated PDF.
+  const heading = (() => {
+    const formatMeetingSerial = (rawTitle: string) =>
+      !rawTitle
+        ? ""
+        : toBanglaDigits(
+            String(rawTitle)
+              .trim()
+              .replace(/^(meeting\s*|councel\s*|council\s*)/i, "")
+              .replace(/^(\d+)(st|nd|rd|th)$/i, "$1")
+              .trim(),
+          );
+
+    const d = meeting.meeting_date ? new Date(meeting.meeting_date) : null;
+    const dateShort = d
+      ? `${toBanglaDigits(d.getDate(), 2)}-${toBanglaDigits(String(d.getMonth() + 1).padStart(2, "0"), 2)}-${toBanglaDigits(d.getFullYear())}`
+      : "";
+    const meetingDate = d
+      ? toBanglaDigits(d.toLocaleDateString("bn-BD", { year: "numeric", month: "long", day: "numeric" }))
+      : "";
+    const serialNo = formatMeetingSerial(meeting.title || "Untitled");
+    const serialNoDigits = serialNo.replace(/[^\d০-৯]/g, "");
+    const formattedSerial = serialNoDigits ? toBanglaDigits(serialNoDigits, 2) : toBanglaDigits(serialNo, 2);
+    const meetingSerialLabel =
+      serialNo.includes("সভা") || serialNo.includes("কাউন্সিল") ? serialNo : `${serialNo}তম সভার`;
+    const typeStr = (meeting.type || "").toLowerCase();
+    const isSyndicate = typeStr === "syndicate" || typeStr.includes("syndicate");
+    const councilLabel = isSyndicate ? "সিন্ডিকেটের" : "একাডেমিক কাউন্সিলের";
+    const dateVerb = docType === "resolution" || docType === "resolution-status" ? "অনুষ্ঠিত" : "অনুষ্ঠিতব্য";
+
+    if (docType === "suppli-agenda") {
+      return {
+        university: false,
+        subtitle: `${meetingDate} তারিখে অনুষ্ঠিতব্য ${councilLabel} ${serialNo}তম সভার সাপ্লিমেন্টারী আলোচ্যসূচী।`,
+      };
+    }
+    if (isEmergency) {
+      return {
+        university: true,
+        subtitle: `${dateShort} তারিখে অনুষ্ঠিতব্য ${councilLabel} ${formattedSerial}তম জরুরী (Immediate) সভার ${docLabel}`,
+      };
+    }
+    return {
+      university: true,
+      subtitle: `${meetingDate} তারিখে ${dateVerb} ${meetingSerialLabel} ${docLabel}`,
+    };
+  })();
+
   // ---- Actions -----------------------------------------------------
   const startEdit = (ag: any, field: EditField) => {
     if (field === "description" || field === "conclusion") {
@@ -379,7 +437,12 @@ export default function PdfPreviewPage() {
       : field === "content"
         ? ag.content
         : ag.resolution;
-    const editable = isMeetingField ? canEditMeetingField(field) : canEdit;
+    // An empty bibidha item (just the "বিবিধ :" title, no imported text) has
+    // nothing to edit in the আলোচ্যসূচি column — no edit affordance at all.
+    // Once it carries real text it becomes editable like any other row.
+    const contentLocked =
+      !isMeetingField && field === "content" && isBibidhaAgenda(ag) && !bibidhaBodyText(ag);
+    const editable = isMeetingField ? canEditMeetingField(field) : (canEdit && !contentLocked);
     const bold = field === "resolution";
 
     if (isEditingThis) {
@@ -452,18 +515,20 @@ export default function PdfPreviewPage() {
 
   const agendaRow = (ag: any) => {
     const serial = serialFor(ag);
+    const clean = stripTags(ag.content || "");
+    const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || clean.startsWith("বিবিধ"));
     return (
       <Fragment key={ag.id}>
         {categoryHeaderRow(ag, 3)}
         <tr className="align-top">
-          <td className="border border-border px-2 py-1.5 text-center font-bold w-[14%]">
-            প্রস্তাব নং
+          <td className="border border-border px-2 py-1.5 text-center font-bold w-[14%] whitespace-nowrap">
+            {isBibidha ? `বিবিধ : ${ac ? ac + " " : ""}${rest}${serial}` : "প্রস্তাব নং"}
           </td>
           <td className="border border-border px-2 py-1.5 text-center whitespace-nowrap font-bold w-[10%]">
-            {ac || " "}
+            {isBibidha ? " " : ac || " "}
           </td>
           <td className="border border-border px-3 py-1.5">
-            {renderCell(ag, "content", `${rest}${serial}:`)}
+            {renderCell(ag, "content", isBibidha ? undefined : `${rest}${serial}:`)}
           </td>
         </tr>
       </Fragment>
@@ -481,6 +546,14 @@ export default function PdfPreviewPage() {
       </div>
     );
   }
+
+  // Resolution & resolution-status omit a bibidha item that has neither a
+  // recorded সিদ্ধান্ত nor any imported আলোচ্যসূচি text — matching the generated
+  // PDF (filterOutEmptyBibidha in pdfGenerator.js). The agenda PDF still lists
+  // an empty বিবিধ (as "বিবিধ : <serial>").
+  const resolutionAgendas = allAgendas.filter(
+    (ag: any) => !isBibidhaAgenda(ag) || !!stripTags(ag.resolution || "") || !!bibidhaBodyText(ag),
+  );
 
   const activeAgendas =
     docType === "suppli-agenda" ? suppliAgendas : docType === "agenda" ? mainAgendas : allAgendas;
@@ -705,11 +778,12 @@ export default function PdfPreviewPage() {
               fontFamily: "'Kalpurush', 'PrimaryFont', serif",
             }}
           >
-            {/* Document title block — bold, mirrors the generated PDF headings */}
+            {/* Document title block — computed identically to the generated PDF. */}
             <div className="text-center font-bold mb-5 leading-snug">
-              <div className="text-lg">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
-              {meetingHeading && <div className="mt-1 underline">{meetingHeading}</div>}
-              <div className="mt-1">{docLabel}</div>
+              {heading.university && (
+                <div className="text-lg mb-2.5">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
+              )}
+              <div className="underline">{heading.subtitle}</div>
             </div>
 
             {docType === "resolution" ? (
@@ -720,7 +794,7 @@ export default function PdfPreviewPage() {
                       {renderCell(null, "description")}
                     </td>
                   </tr>
-                  {allAgendas.map((ag) => (
+                  {resolutionAgendas.map((ag) => (
                     <Fragment key={ag.id}>
                       {agendaRow(ag)}
                       <tr className="align-top">
@@ -751,14 +825,14 @@ export default function PdfPreviewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allAgendas.length === 0 ? (
+                  {resolutionAgendas.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="p-6 text-center text-black/40 italic">
                         No agenda items.
                       </td>
                     </tr>
                   ) : (
-                    allAgendas.map((ag) => (
+                    resolutionAgendas.map((ag) => (
                       <Fragment key={ag.id}>
                         {categoryHeaderRow(ag, 4)}
                         <tr className="align-top">
@@ -766,7 +840,7 @@ export default function PdfPreviewPage() {
                             {(() => {
                               const clean = stripTags(ag.content || "");
                               const bibidha = !ag.is_suppli && (ag.agenda_serial === 0 || clean.startsWith("বিবিধ"));
-                              if (bibidha) return "বিবিধ :";
+                              if (bibidha) return `বিবিধ : ${ac ? ac + " " : ""}${rest}${serialFor(ag)}`;
                               return `${ac ? ac + " " : ""}${rest}${serialFor(ag)}`;
                             })()}
                           </td>

@@ -37,7 +37,8 @@ function getNoticeTypeOptions(meetingType: string, isRegular: boolean) {
     { value: "agenda", label: "Agenda" },
     { value: "resolution", label: "Resolution" }
   ];
-  if (meetingType === "academic" && !isRegular) {
+  if (!isRegular) {
+    // Immediate meetings (academic or syndicate) have no invitation notice.
     return allTypes.filter(t => t.value !== "invitation");
   }
   return allTypes;
@@ -66,6 +67,20 @@ function generatePrefillBody(
   const serialNo = (toBanglaDigits(serialNumber) || "Untitled") + " নং";
   const meetingUrl = `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:9001'}/meetings/${meetingId}`;
 
+  // Immediate meetings share one wording for academic & syndicate — only the
+  // council name differs.
+  if (isImmediate) {
+    const council = isSyndicate ? "সিন্ডিকেটের" : "একাডেমিক কাউন্সিলের";
+    switch (noticeType) {
+      case "agenda":
+        return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত ${council} ${serialNo} জরুরী (Immediate) সভার আলোচ্যসূচী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
+      case "resolution":
+        return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত ${council} ${serialNo} জরুরী (Immediate) সভার কার্যবিবরণী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
+      default:
+        return "";
+    }
+  }
+
   if (isSyndicate) {
     switch (noticeType) {
       case "invitation":
@@ -78,26 +93,15 @@ function generatePrefillBody(
         return "";
     }
   } else {
-    if (isImmediate) {
-      switch (noticeType) {
-        case "agenda":
-          return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} জরুরী (Immediate) সভার আলোচ্যসূচী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
-        case "resolution":
-          return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} জরুরী (Immediate) সভার কার্যবিবরণী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
-        default:
-          return "";
-      }
-    } else {
-      switch (noticeType) {
-        case "invitation":
-          return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p><p><b>• web link for meeting:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
-        case "agenda":
-          return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক নিম্নে প্রেরণ করা হলো।</p><p><b>• Web link for Agenda and Annexure:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
-        case "resolution":
-          return `<p>গত ${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} সভার কার্যবিবরণী নিম্নোক্ত ওয়েব লিংক-এর মাধ্যমে প্রেরণ করা হলো:</p><p><b>• Web link for Resolution and Annexure:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
-        default:
-          return "";
-      }
+    switch (noticeType) {
+      case "invitation":
+        return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p><p><b>• web link for meeting:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
+      case "agenda":
+        return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক নিম্নে প্রেরণ করা হলো।</p><p><b>• Web link for Agenda and Annexure:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
+      case "resolution":
+        return `<p>গত ${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} সভার কার্যবিবরণী নিম্নোক্ত ওয়েব লিংক-এর মাধ্যমে প্রেরণ করা হলো:</p><p><b>• Web link for Resolution and Annexure:</b></p><p><a href="${meetingUrl}">${meetingUrl}</a></p>`;
+      default:
+        return "";
     }
   }
 }

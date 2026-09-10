@@ -17,52 +17,80 @@ const setAgendaTags = async (agendaId, tagIds) => {
     }
 };
 
+const isBibidhaContent = (content) => {
+    if (!content) return false;
+    return content.replace(/<[^>]*>/g, '').trim().startsWith('বিবিধ');
+};
+
+// Runs on every GET /agendas. Two concurrent requests used to be able to both
+// see "no bibidha row" and both INSERT one (there is no unique constraint),
+// leaving a meeting with a duplicated "বিবিধ :" item. Serialise the
+// check-and-insert on a per-meeting, transaction-scoped advisory lock, and
+// clean up any duplicates an earlier race already produced.
 const ensureBibidhaAgenda = async (meetingId) => {
     if (!meetingId) return;
 
-    const meetingRes = await db.query('SELECT is_regular FROM meetings WHERE id = $1', [meetingId]);
-    if (meetingRes.rows.length === 0) return;
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`bibidha:${meetingId}`]);
 
-    if (meetingRes.rows[0].is_regular === false) {
-        await db.query(
-            "DELETE FROM agenda WHERE meeting_id = $1 AND is_suppli = false AND (content = 'বিবিধ :' OR content = 'বিবিধ' OR TRIM(content) = 'বিবিধ :')",
+        const meetingRes = await client.query('SELECT is_regular FROM meetings WHERE id = $1', [meetingId]);
+        if (meetingRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return;
+        }
+
+        if (meetingRes.rows[0].is_regular === false) {
+            await client.query(
+                "DELETE FROM agenda WHERE meeting_id = $1 AND is_suppli = false AND (content = 'বিবিধ :' OR content = 'বিবিধ' OR TRIM(content) = 'বিবিধ :')",
+                [meetingId]
+            );
+            await client.query('COMMIT');
+            return;
+        }
+
+        const res = await client.query(
+            'SELECT id, agenda_serial, content FROM agenda WHERE meeting_id = $1 AND is_suppli = false AND (is_archived = false OR is_archived IS NULL) ORDER BY agenda_serial ASC, created_at ASC',
             [meetingId]
         );
-        return;
-    }
+        const mainAgendas = res.rows;
 
-    const res = await db.query(
-        'SELECT id, agenda_serial, content FROM agenda WHERE meeting_id = $1 AND is_suppli = false AND (is_archived = false OR is_archived IS NULL) ORDER BY agenda_serial ASC',
-        [meetingId]
-    );
-    const mainAgendas = res.rows;
-    let bibidhaIndex = mainAgendas.findIndex(a => {
-        if (!a.content) return false;
-        const clean = a.content.replace(/<[^>]*>/g, '').trim();
-        return clean.startsWith('বিবিধ');
-    });
+        // Drop any duplicate "বিবিধ :" rows a past race left behind — keep the first.
+        const bibidhaRows = mainAgendas.filter(a => isBibidhaContent(a.content));
+        if (bibidhaRows.length > 1) {
+            const dupeIds = bibidhaRows.slice(1).map(a => a.id);
+            await client.query('DELETE FROM agenda WHERE id = ANY($1::uuid[])', [dupeIds]);
+            const dupeSet = new Set(dupeIds);
+            for (let i = mainAgendas.length - 1; i >= 0; i--) {
+                if (dupeSet.has(mainAgendas[i].id)) mainAgendas.splice(i, 1);
+            }
+        }
 
-    if (bibidhaIndex === -1) {
-        const nextSerial = mainAgendas.length + 1;
-        await db.query(
-            'INSERT INTO agenda (meeting_id, agenda_serial, content, is_suppli) VALUES ($1, $2, $3, false)',
-            [meetingId, nextSerial, 'বিবিধ :']
-        );
-    } else {
-        const bibidha = mainAgendas[bibidhaIndex];
-        const lastSerial = mainAgendas.length;
+        const bibidhaIndex = mainAgendas.findIndex(a => isBibidhaContent(a.content));
 
-        if (bibidha.agenda_serial !== lastSerial || bibidhaIndex !== mainAgendas.length - 1) {
-            mainAgendas.splice(bibidhaIndex, 1);
+        if (bibidhaIndex === -1) {
+            await client.query(
+                'INSERT INTO agenda (meeting_id, agenda_serial, content, is_suppli) VALUES ($1, $2, $3, false)',
+                [meetingId, mainAgendas.length + 1, 'বিবিধ :']
+            );
+        } else if (bibidhaIndex !== mainAgendas.length - 1 || mainAgendas[bibidhaIndex].agenda_serial !== mainAgendas.length) {
+            const [bibidha] = mainAgendas.splice(bibidhaIndex, 1);
             mainAgendas.push(bibidha);
             for (let i = 0; i < mainAgendas.length; i++) {
-                const serial = i + 1;
-                await db.query(
+                await client.query(
                     'UPDATE agenda SET agenda_serial = $1 WHERE id = $2',
-                    [serial, mainAgendas[i].id]
+                    [i + 1, mainAgendas[i].id]
                 );
             }
         }
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+    } finally {
+        client.release();
     }
 };
 

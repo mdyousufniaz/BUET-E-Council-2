@@ -67,7 +67,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   // In-place creation state
   const [createAtIndex, setCreateAtIndex] = useState<number | null>(null);
   const [createIsSuppli, setCreateIsSuppli] = useState<boolean>(isSuppliView);
-  const [newContent, setNewContent] = useState(isSuppliView ? "<p>.</p>" : "");
+  const [newContent, setNewContent] = useState("");
   const [newTagIds, setNewTagIds] = useState<string[]>([]);
   const [newCategoryId, setNewCategoryId] = useState<string>("");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -95,7 +95,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
     setCreateAtIndex(null);
     setEditingId(null);
     setCreateIsSuppli(isSuppliView);
-    setNewContent(isSuppliView ? "<p>.</p>" : "");
+    setNewContent("");
     setNewTagIds([]);
     setNewCategoryId("");
   }, [type, isSuppliView]);
@@ -144,7 +144,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
   const handleStartCreate = (atIndex: number) => {
     setCreateAtIndex(atIndex);
     setCreateIsSuppli(isSuppliView);
-    setNewContent(isSuppliView ? "<p>.</p>" : "");
+    setNewContent("");
     setNewTagIds([]);
     setNewCategoryId("");
     setEditingId(null);
@@ -538,7 +538,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               const isBibidha = !isSuppliView && (agenda.agenda_serial === 0 || cleanText.startsWith('বিবিধ'));
               if (!isBibidha) return null;
               let displayContent = agenda.content || '';
-              displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+              displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
               const strippedText = displayContent.replace(/<[^>]*>/g, '').trim();
               const isOnlyBibidhaTitle = isBibidha && !strippedText;
 
@@ -546,7 +546,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                 <div key={agenda.id} className="bg-card border border-border/80 bg-muted/20 p-6 rounded-lg relative group shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="font-semibold text-lg text-primary flex items-center gap-2 flex-wrap">
-                      {isOnlyBibidhaTitle ? `বিবিধ : ${bibidhaSerial}` : `বিবিধ :`}
+                      {`বিবিধ : ${bibidhaSerial}`}
                     </h3>
                     <div className="flex items-center gap-2">
                       {!readOnly && !isBibidha && (
@@ -588,7 +588,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
               const isBibidha = !isSuppliView && (agenda.agenda_serial === 0 || cleanText.startsWith('বিবিধ'));
               let displayContent = agenda.content || '';
               if (isBibidha) {
-                displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
               } else {
                 // Anchored to the start, and a "-" only ends the serial when it is
                 // NOT followed by more digits, so a leading year range like
@@ -615,7 +615,7 @@ export default function AgendaView({ meeting, type }: { meeting: any, type: stri
                       <div className="space-y-1">
                         <h3 className="font-semibold text-lg text-primary flex items-center gap-2 flex-wrap">
                           {isBibidha
-                            ? (isOnlyBibidhaTitle ? `বিবিধ : ${bibidhaSerial}` : `বিবিধ :`)
+                            ? `বিবিধ : ${bibidhaSerial}`
                             : `প্রস্তাব নং ${(meeting.agenda_prefix || '') + (isSuppliView ? toBanglaDigits(mainAgendaCount + (agenda.agenda_serial || index + 1), serialWidth) : toBanglaDigits(agenda.agenda_serial || index + 1, serialWidth))}`}
                         </h3>
                         {agenda.category_name && !isBibidha && (

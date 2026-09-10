@@ -244,18 +244,18 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         injectStyle(match, { 'font-family': 'monospace', 'font-size': '12px', 'background': '#f4f4f4', 'padding': '8px', 'border': '1px solid #ddd', 'white-space': 'pre-wrap' })
     );
 
-    // Tables — mirror exactly what the editor shows. The editor renders every
-    // table with `table-layout: fixed; width: 100%` (see globals.css), so by
-    // default a table spans the full page with evenly-split columns, and adding
-    // or removing a column just re-divides that same width. Drag-resizing a
+    // Tables — always full printable-page width so nothing is ever clipped at
+    // the right page edge. The editor renders every table with
+    // `table-layout: fixed; width: 100%` (see globals.css); the PDF does the
+    // same and only carries over the *relative* column widths. Drag-resizing a
     // column writes a `colwidth` onto the cells of that column only.
-    //   - no colwidth anywhere: full page width, even columns.
-    //   - every column has a colwidth: the author sized the whole table, so
-    //     honour the summed pixel width (a narrowed table stays narrow), capped
-    //     at the page width — this is prosemirror-tables' own "fixed width" case.
-    //   - some columns sized, others not: pin the sized ones and let the rest
-    //     share the remaining page width — same as the editor mid-resize.
-    // `data-align` then positions a sub-page-width table on the page.
+    //   - no colwidth anywhere: even columns.
+    //   - every column has a colwidth: keep those proportions (emitted as
+    //     percentages of their sum) but still fill the page width.
+    //   - some columns sized, others not: pin the sized ones (px) and let the
+    //     rest share the remaining width — same as the editor mid-resize.
+    // A very wide table therefore wraps its cell text instead of overflowing;
+    // it can still grow to any height, breaking onto the next page as needed.
     // markdown-generated tables (from convertMarkdownTablesToHtml) already carry
     // their own inline sizing incl. `border-collapse`, so they are left alone.
     str = str.replace(/<table(\s[^>]*)?>([\s\S]*?)<\/table>/gi, (fullMatch, rawAttrs, inner) => {
@@ -288,21 +288,26 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         const allWidth = colWidths.length > 0 && colWidths.every((w) => w != null);
 
         let colgroup = '';
-        let sizing;
+        // Always lay the table out at 100% of the printable page width so it can
+        // never be clipped at the right page edge — however wide it was drawn in
+        // the editor. Column *proportions* are preserved: author pixel widths are
+        // emitted as percentages of their own sum, and unsized columns share
+        // whatever is left. The table still grows downward freely, flowing onto
+        // the next page when it runs past the bottom.
         if (allWidth) {
-            const total = colWidths.reduce((a, b) => a + b, 0);
-            colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${w}px;" />`).join('')}</colgroup>`;
-            sizing = { 'table-layout': 'fixed', 'width': `${total}px`, 'max-width': '100%' };
+            const total = colWidths.reduce((a, b) => a + b, 0) || colWidths.length;
+            colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${(w / total * 100).toFixed(4)}%;" />`).join('')}</colgroup>`;
         } else if (anyWidth) {
             colgroup = `<colgroup>${colWidths.map((w) => (w != null ? `<col style="width:${w}px;" />` : '<col />')).join('')}</colgroup>`;
-            sizing = { 'table-layout': 'fixed', 'width': '100%' };
-        } else {
-            sizing = { 'table-layout': 'fixed', 'width': '100%' };
         }
+        // min-width:0 clears any authored `min-width:<sum>px` (prosemirror-tables
+        // writes one) that would otherwise push the table past the page edge.
+        const sizing = { 'table-layout': 'fixed', 'width': '100%', 'max-width': '100%', 'min-width': '0' };
 
         const openTag = injectStyle(`<table${attrs}>`, {
             'border-collapse': 'collapse',
             'margin': marginByAlign,
+            'page-break-inside': 'auto',
             ...sizing,
         });
         return openTag + colgroup + inner + '</table>';
@@ -516,7 +521,7 @@ const renderPdf = async (html, layout) => {
 // existing caches are invalidated.
 // ---------------------------------------------------------------------------
 const CACHE_PREFIX = 'generated-pdfs';
-const PDF_TEMPLATE_VERSION = 'v51';
+const PDF_TEMPLATE_VERSION = 'v56';
 
 const pdfCacheKey = (meetingId, type) => `${CACHE_PREFIX}/${meetingId}/${type}.pdf`;
 
@@ -872,7 +877,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
         const serialNo = formatMeetingSerial(meeting.title || 'Untitled');
         const serialNoDigits = serialNo.replace(/[^\d০-৯]/g, '');
         const formattedSerial = serialNoDigits ? toBanglaDigits(serialNoDigits, 2) : toBanglaDigits(serialNo, 2);
-        const meetingSerialLabel = (serialNo.includes('সভা') || serialNo.includes('কাউন্সিল')) ? serialNo : `${serialNo}নং সভার`;
+        const meetingSerialLabel = (serialNo.includes('সভা') || serialNo.includes('কাউন্সিল')) ? serialNo : `${serialNo}তম সভার`;
 
         // Agenda (pre-meeting notice) and resolution (post-meeting minutes) are
         // different documents, not the same content with an extra line: they
@@ -895,7 +900,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
             const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || cleanContent.startsWith('বিবিধ'));
             let displayContent = ag.content || '';
             if (isBibidha) {
-                displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
             }
             const isOnlyBibidhaTitle = isBibidha && !displayContent.replace(/<[^>]*>/g, '').trim();
             if (isResolution && isBibidha && isOnlyBibidhaTitle && !ag.resolution) {
@@ -1017,7 +1022,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
             <div class="text-center sub-title" style="text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">${meetingDate} তারিখে অনুষ্ঠিতব্য ${councilLabel} ${serialNo}তম সভার সাপ্লিমেন্টারী আলোচ্যসূচী।</div>
             ` : (isImmediate ? `
             <div class="text-center header-title" style="text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 10px;">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
-            <div class="text-center sub-title" style="text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">${dateShort} তারিখে অনুষ্ঠিতব্য ${formattedSerial} নং জরুরী (Immediate) সভার ${docLabel}</div>
+            <div class="text-center sub-title" style="text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">${dateShort} তারিখে অনুষ্ঠিতব্য ${councilLabel} ${formattedSerial}তম জরুরী (Immediate) সভার ${docLabel}</div>
             ` : `
             <div class="text-center header-title" style="text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 10px;">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়, ঢাকা</div>
             <div class="text-center sub-title" style="text-align: center; font-size: 16px; font-weight: bold; text-decoration: underline; margin-bottom: 20px;">${meetingDate} তারিখে ${dateVerb} ${meetingSerialLabel} ${docLabel}</div>
@@ -1049,7 +1054,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                         const isBibidha = ag.agenda_serial === 0 || clean.startsWith('বিবিধ');
                         if (isBibidha) {
                             const hasResolution = ag.resolution && ag.resolution.replace(/<[^>]*>/g, '').trim().length > 0;
-                            const strippedText = clean.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*/i, '').trim();
+                            const strippedText = clean.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*/i, '').trim();
                             const hasContent = strippedText.length > 0;
                             return hasResolution || hasContent;
                         }
@@ -1134,13 +1139,14 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
                         const cleanContent = (ag.content || '').replace(/<[^>]*>/g, '').trim();
                         const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || cleanContent.startsWith('বিবিধ'));
-                        const strippedText = cleanContent.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*/i, '').trim();
+                        const strippedText = cleanContent.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*/i, '').trim();
                         const isOnlyBibidhaTitle = isBibidha && !strippedText;
                         const bibidhaSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + toBanglaDigits(mainAgendaCount + 1, serialWidth);
                         const fullSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + agSerialStr;
                         // The table header cell already reads "প্রস্তাব নং"; the row cell
-                        // shows only the A/C + number (e.g. "এ ২১০৬০১").
-                        const titleStr = isBibidha ? `বিবিধ :` : fullSerial;
+                        // shows only the A/C + number (e.g. "এ ২১০৬০১"). বিবিধ keeps
+                        // its "বিবিধ : <serial>" label, matching the agenda PDF.
+                        const titleStr = isBibidha ? `বিবিধ : ${bibidhaSerial}` : fullSerial;
 
                         const validAnnexures = (Array.isArray(ag.annexures) ? ag.annexures : [])
                             .filter(an => !an.is_excluded_in_resolution)
@@ -1154,7 +1160,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
                         let contentHtml = isOnlyBibidhaTitle ? '' : convertMarkdownTablesToHtml(ag.content || '');
                         if (isBibidha) {
-                            contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                            contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                         } else if (contentHtml) {
                             contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                             // Anchored + "-" not a terminator before more digits, so a leading
@@ -1230,10 +1236,14 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
                     </table>`;
                 }
 
-                // 'inline' agenda-number style (PDF Preview page): the body opens
-                // with a bold "প্রস্তাব নং <A/C> <serial>:" run instead of a
-                // separate heading line — the same full label the 'heading'
-                // style prints, so nothing is lost by choosing inline.
+                // 'inline' agenda-number style (PDF Preview page): instead of a
+                // separate heading line, the number leads the body as a bold
+                // "প্রস্তাব নং <A/C> <serial>:" run — the same full label the
+                // 'heading' style prints, so nothing is lost by choosing inline.
+                // For a main proposal this is laid out as a hanging indent (see
+                // hangingNum below): "প্রস্তাব নং <A/C>" is a flush-left column
+                // and "<serial>:" + body flow in a second column, so wrapped
+                // lines align under the serial. Bibidha keeps a plain inline run.
                 const inlineNum = pdfLayout.agendaNumberStyle === 'inline';
                 const injectInlinePrefix = (rawHtml, prefix) => {
                     if (!prefix) return rawHtml;
@@ -1253,12 +1263,15 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
                     const cleanContent = (ag.content || '').replace(/<[^>]*>/g, '').trim();
                     const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || cleanContent.startsWith('বিবিধ'));
-                    const strippedText = cleanContent.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*/i, '').trim();
+                    const strippedText = cleanContent.replace(/^\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*/i, '').trim();
                     const isOnlyBibidhaTitle = isBibidha && !strippedText;
                     const bibidhaSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + toBanglaDigits(mainAgendaCount + 1, serialWidth);
                     const fullSerial = (meeting.agenda_prefix ? toBanglaDigits(meeting.agenda_prefix) : '') + agSerialStr;
-                    const showBibidhaSerial = !isResolution && !cacheVariant && isOnlyBibidhaTitle;
-                    const titleStr = isBibidha ? (showBibidhaSerial ? `বিবিধ : ${bibidhaSerial}` : `বিবিধ :`) : `প্রস্তাব নং ${fullSerial}`;
+                    // বিবিধ is always labelled with the serial it would take
+                    // (mainAgendaCount + 1 — where supplementary numbering starts),
+                    // the same in the agenda and resolution PDFs. An empty বিবিধ
+                    // (no body, no সিদ্ধান্ত) is dropped upstream by filterOutEmptyBibidha.
+                    const titleStr = isBibidha ? `বিবিধ : ${bibidhaSerial}` : `প্রস্তাব নং ${fullSerial}`;
 
                     const validAnnexures = (Array.isArray(ag.annexures) ? ag.annexures : [])
                         .filter(an => isResolution ? !an.is_excluded_in_resolution : (an.annexure_type !== 'resolution'))
@@ -1273,7 +1286,7 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
                     let contentHtml = isOnlyBibidhaTitle ? '' : convertMarkdownTablesToHtml(ag.content || '');
                     if (isBibidha) {
-                        contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                        contentHtml = contentHtml.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                     } else if (contentHtml) {
                         contentHtml = contentHtml.replace(/^(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*প্রস্তাব(?:না)?\s*নং\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]+\s*)*[০-৯\d\s\/\-]*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                         // Anchored to the start, and a "-" only terminates the serial when
@@ -1295,16 +1308,32 @@ const buildMeetingHtml = async (meetingId, isResolution, cacheVariant, layout, l
 
                     const catHeader = categoryHeaderMap.get(ag.id);
 
-                    const inlinePrefix = inlineNum
-                        ? (isBibidha ? 'বিবিধ:' : `প্রস্তাব নং ${fullSerial}:`)
-                        : '';
-                    const bodyHtml = inlineNum ? injectInlinePrefix(contentHtml || '', inlinePrefix) : contentHtml;
+                    // 'inline' number style: "প্রস্তাব নং <A/C>" is a flush-left
+                    // label; the serial + colon lead the body on the same line;
+                    // and every wrapped line of the body then aligns directly
+                    // under the serial. A two-column flex box (label | body) gives
+                    // that hanging indent exactly, whatever width the label
+                    // renders at. Bibidha is not a numbered proposal — it always
+                    // gets the plain flush-left "বিবিধ : <A/C> <serial>" heading
+                    // line (same as 'heading' style), never the hanging indent.
+                    const acToken = String(meeting.agenda_prefix || '').trim().split(/\s+/)[0] || '';
+                    const acBangla = toBanglaDigits(acToken);
+                    const serialOnly = acBangla && fullSerial.startsWith(acBangla)
+                        ? fullSerial.slice(acBangla.length).replace(/^\s+/, '')
+                        : fullSerial;
+                    const inlineLabel = `প্রস্তাব নং${acBangla ? ' ' + acBangla : ''}`;
+
+                    const inlinePrefix = (inlineNum && !isBibidha) ? `${serialOnly}:` : '';
+                    const bodyHtml = inlinePrefix ? injectInlinePrefix(contentHtml || '', inlinePrefix) : contentHtml;
+                    const hangingNum = inlineNum && !isBibidha && !!bodyHtml;
 
                     return `
                     ${catHeader ? `<div class="category-header" style="font-weight: bold; font-size: 15px; margin-top: 25px; margin-bottom: 15px;"><b>${catHeader}</b></div>` : ''}
                     <div class="agenda-block" style="margin-bottom: 30px;">
-                        ${inlineNum ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
-                        ${bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : ''}
+                        ${(inlineNum && !isBibidha) ? '' : `<div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-bottom: 8px;"><b>${titleStr}</b></div>`}
+                        ${hangingNum
+                          ? `<div class="agenda-content" style="display: flex; align-items: baseline; margin: 0 0 12px 0; text-align: left; font-size: 14px; line-height: 1.6;"><div style="flex: 0 0 auto; white-space: nowrap; font-weight: bold;"><b>${inlineLabel}</b>&nbsp;</div><div style="flex: 1 1 auto; min-width: 0;">${styleRichTextHtml(bodyHtml, false)}</div></div>`
+                          : (bodyHtml ? `<div class="agenda-content" style="${inlineNum ? '' : 'margin-left: 30px; '}text-align: left; font-size: 14px; line-height: 1.6; margin-bottom: 12px;">${styleRichTextHtml(bodyHtml, !inlineNum)}</div>` : '')}
                         ${isResolution ? `
                         <div class="agenda-title" style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px;"><b>সিদ্ধান্ত:</b></div>
                         <div class="agenda-resolution" style="margin-left: 30px; text-align: left; font-size: 14px; line-height: 1.6; font-weight: bold; margin-bottom: 12px;"><b>${styleRichTextHtml(convertMarkdownTablesToHtml(ag.resolution || ''), true)}</b></div>
@@ -1554,7 +1583,7 @@ const buildAttendanceHtml = async (meetingId, groupFilter = null) => {
         };
 
         const serialNo = formatMeetingSerial(meeting.title || 'Untitled');
-        const attendanceSubTitle = (serialNo.includes('সভা') || serialNo.includes('কাউন্সিল')) ? serialNo : `${serialNo}নং সভার উপস্থিতি পত্র`;
+        const attendanceSubTitle = (serialNo.includes('সভা') || serialNo.includes('কাউন্সিল')) ? serialNo : `${serialNo}তম সভার উপস্থিতি পত্র`;
 
         const renderTableSection = (title, items) => {
             if (!items || items.length === 0) return '';
@@ -1933,6 +1962,20 @@ function generateDefaultBody(noticeType, isSyndicate, isImmediate, dateStr, date
     const meetingUrlLabel = isSyndicate ? 'Web link for Agenda and Annexure:' : 'Web link for Agenda and Annexure:';
     const resolutionUrlLabel = 'Web link for Resolution:';
 
+    // Immediate meetings share one wording for academic & syndicate — only the
+    // council name differs.
+    if (isImmediate) {
+        const council = isSyndicate ? 'সিন্ডিকেটের' : 'একাডেমিক কাউন্সিলের';
+        switch (noticeType) {
+            case 'agenda':
+                return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত ${council} ${serialNo} জরুরী (Immediate) সভার আলোচ্যসূচী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
+            case 'resolution':
+                return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত ${council} ${serialNo} জরুরী (Immediate) সভার কার্যবিবরণী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
+            default:
+                return '';
+        }
+    }
+
     if (isSyndicate) {
         switch (noticeType) {
             case 'invitation':
@@ -1958,33 +2001,22 @@ function generateDefaultBody(noticeType, isSyndicate, isImmediate, dateStr, date
                 return '';
         }
     } else {
-        // Academic
-        if (isImmediate) {
-            switch (noticeType) {
-                case 'agenda':
-                    return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} জরুরী (Immediate) সভার আলোচ্যসূচী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
-                case 'resolution':
-                    return `<p>${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} জরুরী (Immediate) সভার কার্যবিবরণী ই-মেইলের মাধ্যমে প্রেরণ করা হলো।</p>`;
-                default:
-                    return '';
-            }
-        } else {
-            switch (noticeType) {
-                case 'invitation':
-                    return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p>
-                    <p class="web-link">• web link for meeting:</p>
-                    <p>${meetingUrl}</p>`;
-                case 'agenda':
-                    return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক নিম্নে প্রেরণ করা হলো।</p>
-                    <p class="web-link">• ${meetingUrlLabel}</p>
-                    <p>${meetingUrl}</p>`;
-                case 'resolution':
-                    return `<p>গত ${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} সভার কার্যবিবরণী নিম্নোক্ত ওয়েব লিংক-এর মাধ্যমে প্রেরণ করা হলো:</p>
-                    <p class="web-link">• Web link for Resolution and Annexure:</p>
-                    <p>${meetingUrl}</p>`;
-                default:
-                    return '';
-            }
+        // Academic (regular — immediate handled above)
+        switch (noticeType) {
+            case 'invitation':
+                return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভায় অংশগ্রহণ করার জন্য বিনীতভাবে অনুরোধ করা হলো।</p>
+                <p class="web-link">• web link for meeting:</p>
+                <p>${meetingUrl}</p>`;
+            case 'agenda':
+                return `<p>আগামী ${dateStr} তারিখ ${dayName} একাডেমিক কাউন্সিলের ${serialNo} সভা কাউন্সিল ভবনে অনুষ্ঠিত হবে। উক্ত সভার আলোচ্যসূচীর ওয়েব লিংক নিম্নে প্রেরণ করা হলো।</p>
+                <p class="web-link">• ${meetingUrlLabel}</p>
+                <p>${meetingUrl}</p>`;
+            case 'resolution':
+                return `<p>গত ${dateShort} তারিখে কাউন্সিল ভবনে অনুষ্ঠিত একাডেমিক কাউন্সিলের ${serialNo} সভার কার্যবিবরণী নিম্নোক্ত ওয়েব লিংক-এর মাধ্যমে প্রেরণ করা হলো:</p>
+                <p class="web-link">• Web link for Resolution and Annexure:</p>
+                <p>${meetingUrl}</p>`;
+            default:
+                return '';
         }
     }
 }

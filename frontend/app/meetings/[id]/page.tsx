@@ -32,7 +32,7 @@ function AgendaItem({ agenda, agendaPrefix, meetingStatus, highlightId, highligh
   const isBibidha = !agenda.is_suppli && cleanContent.startsWith('বিবিধ');
   let displayContent = agenda.content || '';
   if (isBibidha) {
-    displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+    displayContent = displayContent.replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
   } else {
     // Anchored, and "-" only ends the serial when NOT followed by more digits, so
     // a leading year range ("2026-2027 …") survives (matches backend stripProposalPrefix).
@@ -384,7 +384,7 @@ export default function PublicMeetingView() {
                   const clean = (ag.content || '').replace(/<[^>]*>/g, '').trim();
                   const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || clean.startsWith('বিবিধ'));
                   if (isBibidha) {
-                    const displayContent = (ag.content || '').replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[ঀ-৥ৰ-৿\w]*\s*[০-৯\d]*)?\s*[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
+                    const displayContent = (ag.content || '').replace(/(<p[^>]*>)?\s*(?:<strong[^>]*>)?\s*বিবিধ\s*[:.\-]?\s*(?:[০-৯\d]+\s*)?[:.\-]?\s*(?:<\/strong>)?\s*/i, '$1');
                     const strippedText = displayContent.replace(/<[^>]*>/g, '').trim();
                     const hasRes = ag.resolution && ag.resolution.replace(/<[^>]*>/g, '').trim().length > 0;
                     if (!strippedText && !hasRes) return false;

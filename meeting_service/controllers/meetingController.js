@@ -250,8 +250,8 @@ const createMeeting = async (req, res, next) => {
             return next(new CustomError('Title (serial), date, and type are required', 400));
         }
 
-        // Syndicate meetings must always be regular (not emergency)
-        const effectiveIsRegular = type === 'syndicate' ? true : (is_regular !== undefined ? is_regular : true);
+        // Both academic and syndicate meetings can be Regular or Immediate.
+        const effectiveIsRegular = is_regular !== undefined ? is_regular : true;
 
         const result = await db.query(
             `INSERT INTO meetings (title, meeting_title, meeting_date, type, status, is_regular, created_by)
@@ -302,11 +302,7 @@ const updateMeeting = async (req, res, next) => {
 
         await client.query('BEGIN');
 
-        // Syndicate meetings must always be regular (not emergency)
-        const effectiveType = type || meeting.type;
-        if (effectiveType === 'syndicate') {
-            is_regular = true;
-        }
+        // Both academic and syndicate meetings can be Regular or Immediate.
 
         if (is_suppli_visible_to_viewers !== undefined && is_suppli_visible_to_viewers !== null && !isUserDeputyOrAbove) {
             await client.query('ROLLBACK');

@@ -217,8 +217,7 @@ export default function ManageMeetingsPage() {
                   value={newMeeting.type}
                   onChange={(val) => setNewMeeting({
                     ...newMeeting,
-                    type: val,
-                    is_regular: val === "syndicate" ? true : newMeeting.is_regular
+                    type: val
                   })}
                 />
               </div>
@@ -226,7 +225,7 @@ export default function ManageMeetingsPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium">Meeting Criteria</label>
                 <SearchableSelect
-                  options={newMeeting.type === "syndicate" ? [{ value: "true", label: "Regular" }] : criteriaOptions}
+                  options={criteriaOptions}
                   value={String(newMeeting.is_regular)}
                   onChange={(val) => setNewMeeting({ ...newMeeting, is_regular: val === "true" })}
                 />
