@@ -806,7 +806,9 @@ The Notice Document sub-tab provides a form-based interface for generating notic
 | **Invitation** | `academic-invitation` | `syndicate-invitation` |
 | **Agenda** | `academic-agenda` | `syndicate-agenda` |
 | **Resolution** | `academic-resolution` | `syndicate-resolution` |
-| **Immediate** | `academic-immediate` | N/A (syndicate never immediate) |
+| **Immediate** | `academic-immediate` | `syndicate-immediate` |
+
+Both academic and syndicate meetings can be **Regular or Immediate** (`is_regular`). Immediate meetings of either type have no invitation notice, and their agenda / resolution prefill shares one wording that differs only by council name (`সিন্ডিকেটের` vs `একাডেমিক কাউন্সিলের`).
 
 #### Key Features
 

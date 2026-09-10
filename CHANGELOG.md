@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-09-09 — বিবিধ Numbering, Immediate Syndicate Meetings & Full-Width PDF Tables
+
+### Changes
+
+**বিবিধ labelled with its serial everywhere (`pdfGenerator.js`, `frontend/app/workspace/meetings/[id]/pdf-preview/page.tsx`, `AgendaView.tsx`, `ResolutionView.tsx`, `frontend/app/meetings/[id]/page.tsx`)**
+- The বিবিধ ("miscellaneous") item is now labelled `বিবিধ : <serial>` — the serial it would take, `mainAgendaCount + 1` — in every view and every generated document: agenda, resolution, resolution-status, and both on-screen previews. The resolution documents previously printed a bare `বিবিধ :`.
+- An empty বিবিধ (no imported আলোচ্যসূচি text and no recorded সিদ্ধান্ত) still appears **only in the agenda PDF**; it stays omitted from the resolution and resolution-status documents.
+- The বিবিধ-title stripping regex was narrowed to `বিবিধ [separator] [digits]` across the frontend and `pdfGenerator.js`, so a word that merely follows "বিবিধ" is never eaten.
+
+**Duplicate বিবিধ rows prevented (`agendaController.js` → `ensureBibidhaAgenda`, `db/migrations/2026_09_dedupe_bibidha_agenda.sql`)**
+- `ensureBibidhaAgenda()` runs on every `GET /agendas`. Two concurrent requests could both see "no বিবিধ row" and both `INSERT` one (there is no unique constraint), leaving a meeting with a duplicated `বিবিধ :` item. The check-and-insert is now serialised on a per-meeting, transaction-scoped `pg_advisory_xact_lock`, and any duplicates an earlier race produced are cleaned up on load.
+- One-off migration deletes existing duplicate বিবিধ rows, keeping the earliest-created one per meeting.
+
+**Immediate syndicate meetings (`meetingController.js`, `frontend/app/workspace/meetings/page.tsx`, `MeetingInfoView.tsx`, `NoticeView.tsx`, `pdfGenerator.js`)**
+- Syndicate meetings can now be **Regular or Immediate**. `createMeeting` / `updateMeeting` no longer force `is_regular = true` for `type === 'syndicate'`, and the meeting-type selectors in the manage-meetings form and `MeetingInfoView` expose both options.
+- Notice prefill: Immediate meetings (academic **and** syndicate) share one body wording that differs only by council name (`সিন্ডিকেটের` vs `একাডেমিক কাউন্সিলের`); Immediate meetings still have no invitation notice.
+
+**Full-width rich-text tables in PDFs (`pdfGenerator.js` → `styleRichTextHtml`)**
+- Every rich-text table is laid out at `width: 100%; max-width: 100%; table-layout: fixed; min-width: 0`, so a table drawn wider than the page in the editor can no longer be clipped at the right page edge. Author column widths are preserved as *proportions* (emitted as percentages of their sum); `min-width: 0` clears any `min-width` prosemirror-tables writes onto the table.
+- `page-break-inside: auto` lets a tall table flow onto the next page.
+
+---
+
 ## 2026-09-06 — PDF Preview, Colourful Themes, Archived Agenda & Markdown Table Fix
 
 ### New Features
