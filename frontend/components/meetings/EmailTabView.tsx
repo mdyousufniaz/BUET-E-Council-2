@@ -32,6 +32,8 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
   const isOngoing = meeting.status === "ongoing";
   const isDraft = meeting.status === "draft";
   const isCompleted = meeting.is_completed === true;
+  // Immediate meetings have no notice section — only agenda + resolution.
+  const isImmediate = meeting.is_regular === false;
 
   const [activeTab, setActiveTab] = useState<"email" | "document">("email");
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -155,7 +157,8 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Send Meeting Notice Card — enabled only when draft */}
+            {/* Send Meeting Notice Card — regular meetings only, enabled only when draft */}
+            {!isImmediate && (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="p-6">
                 <div className="flex items-start justify-between">
@@ -208,6 +211,7 @@ export default function EmailTabView({ meeting, mutate }: EmailTabViewProps) {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Send Meeting Agenda Card — enabled only when ongoing */}
             <div className="bg-card border border-border rounded-lg overflow-hidden">

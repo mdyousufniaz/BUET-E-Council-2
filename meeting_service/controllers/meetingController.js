@@ -1845,6 +1845,11 @@ const sendNoticeEmail = async (req, res, next) => {
             return next(new CustomError('Notice cannot be sent for completed meetings', 400));
         }
 
+        // Immediate meetings have no notice section (agenda + resolution only)
+        if (meeting.is_regular === false) {
+            return next(new CustomError('Notice cannot be sent for immediate meetings', 400));
+        }
+
         // Filter out invitees who have already received the notice
         const inviteesResult = await db.query(
             `SELECT id, name, email, designation, notice_mail_sent FROM invitees WHERE meeting_id = $1 AND id = ANY($2::uuid[])`,
@@ -2271,8 +2276,12 @@ const upsertEmailDraft = async (req, res, next) => {
     try {
         const { id, mode } = req.params;
         if (!DRAFT_MODES.includes(mode)) return next(new CustomError('Invalid draft mode', 400));
-        const meetingRes = await db.query('SELECT id FROM meetings WHERE id = $1', [id]);
+        const meetingRes = await db.query('SELECT id, is_regular FROM meetings WHERE id = $1', [id]);
         if (meetingRes.rows.length === 0) return next(new CustomError('Meeting not found', 404));
+        // Immediate meetings have no notice section (agenda + resolution only)
+        if (mode === 'notice' && meetingRes.rows[0].is_regular === false) {
+            return next(new CustomError('Notice drafts are not allowed for immediate meetings', 400));
+        }
 
         const { invitee_ids, from, subject, body, attach_pdf, attachments } = req.body || {};
         // Keep only ids that still belong to this meeting (drops stale/foreign ids).
