@@ -1495,6 +1495,93 @@ const generateMeetingDocx = async (meetingId, isResolution, cacheVariant) => {
     }
 };
 
+// Single agenda+resolution document: university header (20px, centered) +
+// agenda no with content and its resolution (14px). No tags, annexures,
+// presentees or signatures — exactly one agenda/resolution pair per document.
+const buildSingleResolutionHtml = async (meetingId, agendaId) => {
+    const agRes = await pool.query(
+        `SELECT a.id, a.agenda_serial, a.content, a.resolution, a.is_suppli,
+                m.agenda_prefix
+         FROM agenda a JOIN meetings m ON m.id = a.meeting_id
+         WHERE a.id = $2 AND a.meeting_id = $1 AND (a.is_archived = false OR a.is_archived IS NULL)`,
+        [meetingId, agendaId]
+    );
+    if (agRes.rows.length === 0) {
+        const err = new Error('Agenda not found');
+        err.statusCode = 404;
+        throw err;
+    }
+    const ag = agRes.rows[0];
+    if (!ag.resolution || !String(ag.resolution).replace(/<[^>]*>/g, '').trim()) {
+        const err = new Error('No resolution saved for this agenda');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    // Same serial math as the full document: suppli items offset by main count.
+    const allRes = await pool.query(
+        `SELECT is_suppli, content FROM agenda
+         WHERE meeting_id = $1 AND (is_archived = false OR is_archived IS NULL)`,
+        [meetingId]
+    );
+    const mainCount = allRes.rows.filter(
+        r => !r.is_suppli && !(r.content || '').replace(/<[^>]*>/g, '').trim().startsWith('বিবিধ')
+    ).length;
+
+    const cleanContent = (ag.content || '').replace(/<[^>]*>/g, '').trim();
+    const isBibidha = !ag.is_suppli && (ag.agenda_serial === 0 || cleanContent.startsWith('বিবিধ'));
+    const serialNum = ag.is_suppli ? mainCount + (ag.agenda_serial || 0) : (ag.agenda_serial || 0);
+    const fullSerial = (ag.agenda_prefix ? toBanglaDigits(ag.agenda_prefix) : '') + toBanglaDigits(serialNum);
+    const titleStr = isBibidha ? 'বিবিধ :' : `প্রস্তাব নং ${fullSerial}`;
+
+    const fontBase64 = FONT_BASE64;
+    const fontFace = fontBase64 ? `@font-face { font-family: 'PrimaryFont'; src: url(${fontBase64}) format('truetype'); }` : '';
+    const contentHtml = styleRichTextHtml(convertMarkdownTablesToHtml(ag.content || ''), true);
+    const resolutionHtml = styleRichTextHtml(convertMarkdownTablesToHtml(stripResolutionPrefix(ag.resolution || '')), true);
+
+    return `<!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                ${fontFace}
+                body { font-family: 'PrimaryFont', sans-serif; font-size: 14px; line-height: 1.6; margin: 0; padding: 0; }
+                p { margin: 0 0 10px 0; }
+            </style>
+        </head>
+        <body>
+            <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px; font-family: 'PrimaryFont', sans-serif;">বাংলাদেশ প্রকৌশল বিশ্ববিদ্যালয়,ঢাকা</div>
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; font-family: 'PrimaryFont', sans-serif;">${titleStr}</div>
+            <div style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; margin-bottom: 12px; font-family: 'PrimaryFont', sans-serif;">${contentHtml}</div>
+            <div style="font-weight: bold; font-size: 14px; margin-top: 15px; margin-bottom: 8px; font-family: 'PrimaryFont', sans-serif;">সিদ্ধান্ত:</div>
+            <div style="margin-left: 30px; text-align: justify; font-size: 14px; line-height: 1.6; font-weight: bold; font-family: 'PrimaryFont', sans-serif;">${resolutionHtml}</div>
+        </body>
+        </html>`;
+};
+
+const generateSingleResolutionPdf = async (meetingId, agendaId) => {
+    const html = await buildSingleResolutionHtml(meetingId, agendaId);
+    const { layout } = normalizePdfLayout(undefined);
+    return renderPdf(html, layout);
+};
+
+const generateSingleResolutionDocx = async (meetingId, agendaId) => {
+    const html = await buildSingleResolutionHtml(meetingId, agendaId);
+    const cleanDocxHtml = prepareHtmlForDocx(html);
+    return HTMLtoDOCX(cleanDocxHtml, null, {
+        table: { row: { cantSplit: true } },
+        footer: true,
+        pageNumber: true,
+        font: 'Kalpurush',
+        fontSize: 24,
+        margins: {
+            top: 1440,
+            right: 1440,
+            bottom: 1440,
+            left: 1440
+        }
+    });
+};
+
 const buildAttendanceHtml = async (meetingId, groupFilter = null) => {
     try {
         const meetingQuery = `SELECT title FROM meetings WHERE id = $1`;
@@ -2085,6 +2172,8 @@ function renderNoticeMembers(presentees) {
 module.exports = {
     generatePdf,
     generateMeetingDocx,
+    generateSingleResolutionPdf,
+    generateSingleResolutionDocx,
     generateAttendanceSheet,
     generateAttendanceDocxSheet,
     generateNoticePdf,

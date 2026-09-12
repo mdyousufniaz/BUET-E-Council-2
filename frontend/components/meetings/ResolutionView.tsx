@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Edit3, FileText, FileCheck, Plus, Trash2 } from "lucide-react";
+import { Edit3, FileText, FileCheck, Plus, Trash2, Eye, Download, X, Loader2 } from "lucide-react";
 import RichTextEditor from "../RichTextEditor";
 import AnnexureList from "./AnnexureList";
 import RevisionHistory from "./RevisionHistory";
@@ -69,6 +69,10 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [executionContent, setExecutionContent] = useState("");
   const [isSavingExecution, setIsSavingExecution] = useState(false);
+  const [previewAgenda, setPreviewAgenda] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const handleAddNewTag = async (name: string) => {
     try {
@@ -112,6 +116,72 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
         toast.error("Failed to delete resolution");
       }
     });
+  };
+
+  // Single agenda+resolution pair document (one PDF per pair).
+  const fetchSinglePdfUrl = async (agendaId: string) => {
+    const res = await api.get(`/meetings/${meeting.id}/pdf/resolution`, {
+      params: { agenda_id: agendaId },
+      responseType: "blob",
+    });
+    return URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+  };
+
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewAgenda(null);
+  };
+
+  const openPreview = async (agenda: any) => {
+    setPreviewLoadingId(agenda.id);
+    try {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      const url = await fetchSinglePdfUrl(agenda.id);
+      setPreviewUrl(url);
+      setPreviewAgenda(agenda);
+    } catch (err) {
+      toast.error("Failed to load print preview");
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
+
+  const singleFileName = (agenda: any) => {
+    const clean = (agenda.content || '').replace(/<[^>]*>/g, '').trim();
+    const bib = !agenda.is_suppli && (agenda.agenda_serial === 0 || clean.startsWith('বিবিধ'));
+    const serial = bib
+      ? 'bibidha'
+      : (agenda.is_suppli ? `suppli${agenda.agenda_serial || 0}` : `ag${agenda.agenda_serial || 0}`);
+    return `Resolution-${serial}-${meeting.title || 'meeting'}.pdf`;
+  };
+
+  const downloadSingle = async (agenda: any) => {
+    setDownloadingId(agenda.id);
+    try {
+      const url = await fetchSinglePdfUrl(agenda.id);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", singleFileName(agenda));
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      toast.error("Failed to download document");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const downloadPreview = () => {
+    if (!previewUrl || !previewAgenda) return;
+    const link = document.createElement("a");
+    link.href = previewUrl;
+    link.setAttribute("download", singleFileName(previewAgenda));
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
   };
 
   // Default display text per status (PDF renders the saved text as-is).
@@ -318,11 +388,39 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
 
                 {/* Top Section (Read-Only Agenda) */}
                 <div className="mb-6">
-                  <h3 className="font-semibold text-base text-primary mb-2">
-                    {isBibidha
-                      ? (isOnlyBibidhaTitle ? `বিবিধ : ${bibidhaSerial}` : `বিবিধ :`)
-                      : `প্রস্তাব নং ${(meeting.agenda_prefix || '') + displaySerial}`}
-                  </h3>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="font-semibold text-base text-primary">
+                      {isBibidha
+                        ? (isOnlyBibidhaTitle ? `বিবিধ : ${bibidhaSerial}` : `বিবিধ :`)
+                        : `প্রস্তাব নং ${(meeting.agenda_prefix || '') + displaySerial}`}
+                    </h3>
+                    {agenda.resolution && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => openPreview(agenda)}
+                          disabled={previewLoadingId === agenda.id}
+                          title="Print preview"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-input bg-background hover:bg-muted disabled:opacity-50 transition-colors"
+                        >
+                          {previewLoadingId === agenda.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Eye className="w-3.5 h-3.5" />}
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => downloadSingle(agenda)}
+                          disabled={downloadingId === agenda.id}
+                          title="Download"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-input bg-background hover:bg-muted disabled:opacity-50 transition-colors"
+                        >
+                          {downloadingId === agenda.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Download className="w-3.5 h-3.5" />}
+                          Download
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {agenda.tags && agenda.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {agenda.tags.map((tag: any) => (
@@ -520,6 +618,55 @@ export default function ResolutionView({ meeting }: { meeting: any }) {
             </div>
           );
         })
+      )}
+
+      {/* Single-agendum print preview */}
+      {previewAgenda && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card w-full max-w-4xl h-[85vh] rounded-lg shadow-xl border border-border flex flex-col">
+            <div className="p-4 border-b border-border flex justify-between items-center shrink-0">
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <Eye className="w-4 h-4 text-primary" />
+                Print Preview — {(() => {
+                  const clean = (previewAgenda.content || '').replace(/<[^>]*>/g, '').trim();
+                  const bib = !previewAgenda.is_suppli && (previewAgenda.agenda_serial === 0 || clean.startsWith('বিবিধ'));
+                  if (bib) return 'বিবিধ';
+                  const serial = previewAgenda.is_suppli
+                    ? toBanglaDigits(mainAgendaCount + (previewAgenda.agenda_serial || 0), serialWidth)
+                    : toBanglaDigits(previewAgenda.agenda_serial || 0, serialWidth);
+                  return `প্রস্তাব নং ${(meeting.agenda_prefix || '') + serial}`;
+                })()}
+              </h2>
+              <button onClick={closePreview} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              {previewUrl ? (
+                <iframe src={previewUrl} className="w-full h-full rounded-b-lg" title="Print preview" />
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading preview...
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-border shrink-0 flex justify-end gap-2">
+              <button
+                onClick={closePreview}
+                className="px-4 py-2 text-sm bg-muted text-muted-foreground rounded-md hover:bg-muted/80"
+              >
+                Close
+              </button>
+              <button
+                onClick={downloadPreview}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 hover:opacity-90"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <TemplateDrawer

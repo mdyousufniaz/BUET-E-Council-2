@@ -2,7 +2,7 @@ const CustomError = require('../errors/CustomError');
 const db = require('../db');
 const bcrypt = require('bcryptjs');
 const axios = require('axios');
-const { generatePdf: generateMeetingPdf, generateMeetingDocx, generateAttendanceSheet, generateAttendanceDocxSheet } = require('../utils/pdfGenerator');
+const { generatePdf: generateMeetingPdf, generateMeetingDocx, generateAttendanceSheet, generateAttendanceDocxSheet, generateSingleResolutionPdf, generateSingleResolutionDocx } = require('../utils/pdfGenerator');
 const storageService = require('../utils/storageService');
 const meetingFileSystem = require('../utils/meetingFileSystem');
 const { sendMail } = require('../utils/mailer');
@@ -1471,7 +1471,20 @@ const generatePdf = async (req, res, next) => {
         } else if (type === 'suppli-agenda' || type === 'suppli_agenda') {
             pdfBuffer = await generateMeetingPdf(id, false, 'suppli-agenda', layout);
         } else if (type === 'resolution') {
-            pdfBuffer = await generateMeetingPdf(id, true, undefined, layout);
+            if (q.agenda_id) {
+                // Single agenda+resolution pair document.
+                const agCheck = await db.query(
+                    'SELECT agenda_serial, resolution FROM agenda WHERE id = $1 AND meeting_id = $2 AND (is_archived = false OR is_archived IS NULL)',
+                    [q.agenda_id, id]
+                );
+                if (agCheck.rows.length === 0) return next(new CustomError('Agenda not found', 404));
+                if (!agCheck.rows[0].resolution || !String(agCheck.rows[0].resolution).replace(/<[^>]*>/g, '').trim()) {
+                    return next(new CustomError('No resolution saved for this agenda', 400));
+                }
+                pdfBuffer = await generateSingleResolutionPdf(id, q.agenda_id);
+            } else {
+                pdfBuffer = await generateMeetingPdf(id, true, undefined, layout);
+            }
         } else if (type === 'attendance') {
             pdfBuffer = await generateAttendanceSheet(id, group || null);
         } else if (type === 'resolution-status') {
@@ -1484,9 +1497,10 @@ const generatePdf = async (req, res, next) => {
         const sanitize = (str) => str.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
         const isSeparatePages = q.separatePages === 'true' || q.separatePages === true || q.separatePages === '1';
         const sepSuffix = (type === 'resolution' && isSeparatePages) ? '-separate-pages' : '';
+        const singleSuffix = (type === 'resolution' && q.agenda_id) ? `-ag${sanitize(String(q.agenda_id)).slice(0, 8)}` : '';
         const filename = group
             ? `attendance-${sanitize(group)}-${id}.pdf`
-            : `${type}${sepSuffix}-${id}.pdf`;
+            : `${type}${sepSuffix}${singleSuffix}-${id}.pdf`;
 
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
@@ -1524,7 +1538,21 @@ const generateDocx = async (req, res, next) => {
         } else if (type === 'suppli-agenda' || type === 'suppli_agenda') {
             docxBuffer = await generateMeetingDocx(id, false, 'suppli-agenda');
         } else if (type === 'resolution') {
-            docxBuffer = await generateMeetingDocx(id, true);
+            const agendaId = req.query.agenda_id;
+            if (agendaId) {
+                // Single agenda+resolution pair document.
+                const agCheck = await db.query(
+                    'SELECT agenda_serial, resolution FROM agenda WHERE id = $1 AND meeting_id = $2 AND (is_archived = false OR is_archived IS NULL)',
+                    [agendaId, id]
+                );
+                if (agCheck.rows.length === 0) return next(new CustomError('Agenda not found', 404));
+                if (!agCheck.rows[0].resolution || !String(agCheck.rows[0].resolution).replace(/<[^>]*>/g, '').trim()) {
+                    return next(new CustomError('No resolution saved for this agenda', 400));
+                }
+                docxBuffer = await generateSingleResolutionDocx(id, agendaId);
+            } else {
+                docxBuffer = await generateMeetingDocx(id, true);
+            }
         } else if (type === 'attendance') {
             docxBuffer = await generateAttendanceDocxSheet(id, group || null);
         } else if (type === 'resolution-status') {
@@ -1534,9 +1562,10 @@ const generateDocx = async (req, res, next) => {
         }
 
         const sanitize = (str) => str.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+        const singleSuffix = (type === 'resolution' && req.query.agenda_id) ? `-ag${sanitize(String(req.query.agenda_id)).slice(0, 8)}` : '';
         const filename = group
             ? `${type}-${sanitize(group)}-${id}.docx`
-            : `${type}-${id}.docx`;
+            : `${type}${singleSuffix}-${id}.docx`;
 
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');

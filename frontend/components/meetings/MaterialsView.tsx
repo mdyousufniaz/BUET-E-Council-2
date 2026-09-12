@@ -2,10 +2,11 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2, LayoutTemplate, Layers } from "lucide-react";
-import api, { getTabSessionToken } from "../../lib/api";
+import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2, LayoutTemplate, Layers, ListChecks, X } from "lucide-react";
+import api, { getTabSessionToken, fetcher } from "../../lib/api";
+import { toBanglaDigits } from "../../lib/banglaNumerals";
 import { toast } from "sonner";
-import { useSWRConfig } from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { useAuth } from "../../hooks/useAuth";
 import { canOperateMeeting } from "../../lib/meetingAccess";
 import AttendanceSheetOptionsModal from "./AttendanceSheetOptionsModal";
@@ -22,6 +23,77 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
   const { mutate } = useSWRConfig();
   const readOnly = !canEdit;
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [isIndividualOpen, setIsIndividualOpen] = useState(false);
+  const [individualIds, setIndividualIds] = useState<string[]>([]);
+  const [individualFormat, setIndividualFormat] = useState<'pdf' | 'docx'>('pdf');
+  const [individualBusy, setIndividualBusy] = useState(false);
+
+  // Agendas with a saved resolution — candidates for individual documents.
+  const { data: agendasRes } = useSWR(
+    isIndividualOpen ? `/agendas?meeting_id=${meeting.id}` : null,
+    fetcher
+  );
+  const allAgendas: any[] = [...(agendasRes?.data || [])].sort((a: any, b: any) => {
+    if (a.is_suppli === b.is_suppli) return (a.agenda_serial || 0) - (b.agenda_serial || 0);
+    return a.is_suppli ? 1 : -1;
+  });
+  const resolvableAgendas = allAgendas.filter(
+    (a: any) => a.resolution && String(a.resolution).replace(/<[^>]*>/g, '').trim()
+  );
+  const individualMainCount = allAgendas.filter((a: any) => {
+    if (a.is_suppli) return false;
+    return !(a.content || '').replace(/<[^>]*>/g, '').trim().startsWith('বিবিধ');
+  }).length;
+  // Prefix + serial fully in Bangla digits (raw serials are latin digits).
+  const individualSerial = (a: any) =>
+    toBanglaDigits(`${meeting.agenda_prefix || ''}${a.is_suppli ? individualMainCount + (a.agenda_serial || 0) : (a.agenda_serial || 0)}`);
+  const individualPretext = (a: any) => {
+    const clean = (a.content || '').replace(/<[^>]*>/g, '').trim()
+      .replace(/^(বিবিধ|প্রস্তাব(?:না)?)\s*নং[^:.\-]*[:.\-]?\s*/i, '').trim();
+    return clean.length > 70 ? clean.slice(0, 70) + '…' : clean;
+  };
+
+  const toggleIndividual = (id: string) => {
+    setIndividualIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleIndividualAll = () => {
+    setIndividualIds((prev) =>
+      prev.length === resolvableAgendas.length ? [] : resolvableAgendas.map((a: any) => a.id)
+    );
+  };
+
+  const handleGenerateIndividual = async () => {
+    if (individualIds.length === 0 || individualBusy) return;
+    const ext = individualFormat === 'docx' ? 'docx' : 'pdf';
+    setIndividualBusy(true);
+    let ok = 0;
+    try {
+      for (const agendaId of individualIds) {
+        const agenda = resolvableAgendas.find((a: any) => a.id === agendaId);
+        try {
+          const response = await api.get(`/meetings/${meeting.id}/${individualFormat}/resolution`, {
+            params: { agenda_id: agendaId },
+            responseType: 'blob'
+          });
+          const url = window.URL.createObjectURL(new Blob([response.data]));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `Resolution-${agenda ? individualSerial(agenda) : agendaId}-${meeting.title}.${ext}`);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode?.removeChild(link);
+          ok++;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (err) {
+          toast.error(`Failed to generate ${ext.toUpperCase()} for agenda ${agenda ? individualSerial(agenda) : ''}.`);
+        }
+      }
+      if (ok > 0) toast.success(`Generated ${ok} individual resolution ${ext.toUpperCase()} file(s)`);
+    } finally {
+      setIndividualBusy(false);
+    }
+  };
 
   const handleGenerate = async (
     type: string,
@@ -260,12 +332,12 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
                 </button>
               </div>
               <button
-                onClick={() => handleGenerate('resolution', 'Resolution_Separate_Pages', 'pdf', { separatePages: true })}
+                onClick={() => { setIndividualIds([]); setIndividualFormat('pdf'); setIsIndividualOpen(true); }}
                 disabled={!!generating}
                 className="w-full flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                title="Print each resolution on a separate page"
+                title="Select agendas and download each resolution as a separate document"
               >
-                {generating === 'resolution-pdf-separate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                <Layers className="w-3.5 h-3.5" />
                 PDF (Separate Page per Resolution)
               </button>
             </div>
@@ -461,6 +533,108 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
         meeting={meeting}
         onGenerate={handleGenerateAttendance}
       />
+
+      {/* Individual resolutions: select agendas, pick PDF/Word, print each */}
+      {isIndividualOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card w-full max-w-2xl max-h-[85vh] rounded-lg shadow-xl border border-border flex flex-col">
+            <div className="p-5 border-b border-border flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <ListChecks className="w-5 h-5 text-primary" />
+                  Individual Resolutions
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Select agendas to print each resolution as a separate document</p>
+              </div>
+              <button onClick={() => setIsIndividualOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-5 pt-4 shrink-0 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-input"
+                  checked={resolvableAgendas.length > 0 && individualIds.length === resolvableAgendas.length}
+                  ref={(input) => { if (input) input.indeterminate = individualIds.length > 0 && individualIds.length < resolvableAgendas.length; }}
+                  onChange={toggleIndividualAll}
+                  disabled={resolvableAgendas.length === 0}
+                />
+                Select All ({resolvableAgendas.length})
+              </label>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-muted-foreground text-xs font-medium">Format:</span>
+                {(['pdf', 'docx'] as const).map((f) => (
+                  <label key={f} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="individual-format"
+                      className="w-4 h-4 border-input text-primary"
+                      checked={individualFormat === f}
+                      onChange={() => setIndividualFormat(f)}
+                    />
+                    <span className="text-sm font-medium">{f === 'pdf' ? 'PDF' : 'Word (.docx)'}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {resolvableAgendas.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No agendas with a saved resolution found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {resolvableAgendas.map((a: any) => (
+                    <label
+                      key={a.id}
+                      className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 mt-0.5 rounded border-input shrink-0"
+                        checked={individualIds.includes(a.id)}
+                        onChange={() => toggleIndividual(a.id)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-primary">প্রস্তাব নং {individualSerial(a)}</div>
+                        <div className="text-xs text-muted-foreground truncate">{individualPretext(a) || '…'}</div>
+                      </div>
+                      {individualIds.includes(a.id) && (
+                        <FileCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-border shrink-0 flex justify-between items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                {individualIds.length === 0
+                  ? "Select at least one agenda"
+                  : `${individualIds.length} agenda(s) selected`}
+              </span>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsIndividualOpen(false)}
+                  className="px-4 py-2 text-sm bg-muted text-muted-foreground rounded-md hover:bg-muted/80"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateIndividual}
+                  disabled={individualIds.length === 0 || individualBusy}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {individualBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {individualBusy ? "Generating..." : individualIds.length > 1 ? "Download All" : "Download"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
