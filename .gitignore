@@ -78,3 +78,5 @@ certs/
 *.pem
 *.crt
 *.key
+
+seed
