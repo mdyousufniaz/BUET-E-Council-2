@@ -171,7 +171,9 @@ services:
         condition: service_healthy # FIX: Wait until the API is accepting requests
 
   minio:
-    image: minio/minio
+    # NOTE: MinIO removed its official images from Docker Hub (minio/minio
+    # no longer resolves) — pull from Quay instead.
+    image: quay.io/minio/minio
     # Not published to the host: the app only ever talks to MinIO over the
     # internal compose network (meeting_service reads/writes with its own
     # credentials; nginx proxies /storage/ to meeting_service's authenticated
@@ -190,7 +192,7 @@ services:
       retries: 3
 
   createbuckets:
-    image: minio/mc
+    image: quay.io/minio/mc
     depends_on:
       minio:
         condition: service_healthy
