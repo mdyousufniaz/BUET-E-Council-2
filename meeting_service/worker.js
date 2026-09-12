@@ -16,9 +16,9 @@ const connection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
 const MIN_FREE_MEMORY_MB = parseInt(process.env.MIN_FREE_MEMORY_MB || '400', 10);
 // os.loadavg() is an absolute run-queue length, not a percentage, so it has
 // to be normalized against core count to mean anything portable across
-// differently-sized machines/containers - 0.85 here means "85% of this
-// container's CPU allotment busy on average over the last minute".
-const MAX_NORMALIZED_LOAD = parseFloat(process.env.MAX_NORMALIZED_LOAD || '0.85');
+// differently-sized machines/containers. Default relaxed to 1.2 to prevent
+// false throttling under Docker container overhead while still backing off under extreme load.
+const MAX_NORMALIZED_LOAD = parseFloat(process.env.MAX_NORMALIZED_LOAD || '1.2');
 const RETRY_DELAY_MS = parseInt(process.env.EMBEDDING_RETRY_DELAY_MS || '10000', 10);
 
 // os.freemem()/os.totalmem() report the *host's* memory, which is meaningless

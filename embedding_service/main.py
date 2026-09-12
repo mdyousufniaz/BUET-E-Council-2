@@ -65,9 +65,10 @@ def embed(payload: EmbedRequest):
 
     # Compute batch embeddings for cache misses or long documents
     if uncached_texts:
+        batch_size = int(os.environ.get("EMBED_BATCH_SIZE", "4"))
         vectors = model.encode(
             uncached_texts,
-            batch_size=16,
+            batch_size=batch_size,
             convert_to_numpy=True,
             normalize_embeddings=True,
         )
