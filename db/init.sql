@@ -463,8 +463,13 @@ CREATE INDEX idx_agenda_entities_trgm ON agenda_entities USING GIN (
 
 -- Full-text search over agenda/resolution plain-text mirrors.
 CREATE INDEX idx_agenda_content_tsv ON agenda USING GIN (content_tsv);
-
 CREATE INDEX idx_agenda_resolution_tsv ON agenda USING GIN (resolution_tsv);
+
+-- Trigram indexes for content and resolution lexical matching
+CREATE INDEX IF NOT EXISTS idx_agenda_content_plain_trgm ON agenda USING GIN (content_plain gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_agenda_resolution_plain_trgm ON agenda USING GIN (resolution_plain gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_agenda_content_trgm ON agenda USING GIN (content gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_agenda_resolution_trgm ON agenda USING GIN (resolution gin_trgm_ops);
 
 -- Trigram indexes for fuzzy/substring entity matching (department, office,
 -- member search). Kept live against these tables directly, so entity
