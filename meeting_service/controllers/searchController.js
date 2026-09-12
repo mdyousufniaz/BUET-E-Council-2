@@ -148,17 +148,21 @@ const search = async (req, res, next) => {
         // 4. Single-Pass PostgreSQL Hybrid Query
         const searchQuery = `
             WITH vector_candidates AS (
-                SELECT c.agenda_id, 'agenda' AS chunk_type, (1 - (c.embedding <=> $1::vector)) AS dense_score
-                FROM agenda_chunks c
-                WHERE $1::vector IS NOT NULL
-                ORDER BY c.embedding <=> $1::vector ASC
-                LIMIT 100
+                (
+                    SELECT c.agenda_id, 'agenda' AS chunk_type, (1 - (c.embedding <=> $1::vector)) AS dense_score
+                    FROM agenda_chunks c
+                    WHERE $1::vector IS NOT NULL
+                    ORDER BY c.embedding <=> $1::vector ASC
+                    LIMIT 100
+                )
                 UNION ALL
-                SELECT rc.agenda_id, 'resolution' AS chunk_type, (1 - (rc.embedding <=> $1::vector)) AS dense_score
-                FROM resolution_chunks rc
-                WHERE $1::vector IS NOT NULL AND $8::text = 'both'
-                ORDER BY rc.embedding <=> $1::vector ASC
-                LIMIT 100
+                (
+                    SELECT rc.agenda_id, 'resolution' AS chunk_type, (1 - (rc.embedding <=> $1::vector)) AS dense_score
+                    FROM resolution_chunks rc
+                    WHERE $1::vector IS NOT NULL AND $8::text = 'both'
+                    ORDER BY rc.embedding <=> $1::vector ASC
+                    LIMIT 100
+                )
             ),
             best_vector AS (
                 SELECT agenda_id, MAX(dense_score) AS dense_score,
@@ -171,7 +175,9 @@ const search = async (req, res, next) => {
                     a.id AS agenda_id,
                     a.meeting_id,
                     a.content,
+                    a.content_plain,
                     a.resolution,
+                    a.resolution_plain,
                     m.title,
                     m.meeting_title,
                     m.type,
@@ -247,7 +253,7 @@ const search = async (req, res, next) => {
                 -- Snippet generation with highlighted keyword matches
                 ts_headline(
                     'simple',
-                    COALESCE(NULLIF(regexp_replace(CASE WHEN matched_in = 'resolution' THEN coalesce(resolution, '') ELSE coalesce(content, '') END, '<[^>]+>', ' ', 'g'), ''), ' '),
+                    COALESCE(NULLIF(CASE WHEN matched_in = 'resolution' THEN coalesce(resolution_plain, regexp_replace(coalesce(resolution, ''), '<[^>]+>', ' ', 'g')) ELSE coalesce(content_plain, regexp_replace(coalesce(content, ''), '<[^>]+>', ' ', 'g')) END, ''), ' '),
                     plainto_tsquery('simple', $2),
                     'StartSel=<mark>, StopSel=</mark>, MaxWords=35, MinWords=15'
                 ) AS snippet
