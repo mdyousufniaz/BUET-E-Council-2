@@ -244,14 +244,18 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         injectStyle(match, { 'font-family': 'monospace', 'font-size': '12px', 'background': '#f4f4f4', 'padding': '8px', 'border': '1px solid #ddd', 'white-space': 'pre-wrap' })
     );
 
-    // Tables — always full printable-page width so nothing is ever clipped at
-    // the right page edge. The editor renders every table with
-    // `table-layout: fixed; width: 100%` (see globals.css); the PDF does the
-    // same and only carries over the *relative* column widths. Drag-resizing a
-    // column writes a `colwidth` onto the cells of that column only.
+    // Tables. Default (no `data-width-mode`, or "full") stretches the table to
+    // the full printable page width so nothing is ever clipped at the right
+    // page edge — the editor's legacy always-stretch behavior. A table the
+    // author explicitly marked `data-width-mode="auto"` (RichTextEditor's
+    // "Keep Table at Original Size" control) instead keeps its own authored
+    // width in the PDF too. Either way, drag-resizing a column writes a
+    // `colwidth` onto the cells of that column only:
     //   - no colwidth anywhere: even columns.
-    //   - every column has a colwidth: keep those proportions (emitted as
-    //     percentages of their sum) but still fill the page width.
+    //   - every column has a colwidth: keep those proportions ("full" emits
+    //     them as percentages of their sum so the table still fills the page;
+    //     "auto" emits the exact pixel widths so the table's overall width is
+    //     just their sum).
     //   - some columns sized, others not: pin the sized ones (px) and let the
     //     rest share the remaining width — same as the editor mid-resize.
     // A very wide table therefore wraps its cell text instead of overflowing;
@@ -264,6 +268,7 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
 
         const align = (attrs.match(/data-align="(left|center|right)"/i) || [])[1] || 'left';
         const marginByAlign = { left: '12px 0', center: '12px auto', right: '12px 0 12px auto' }[align];
+        const isAutoWidth = /data-width-mode="auto"/i.test(attrs);
 
         // Walk the first row cell-by-cell so column order (and colspans) is kept,
         // recording a pixel width or null for every column.
@@ -288,21 +293,27 @@ function styleRichTextHtml(htmlContent, isIndented = false) {
         const allWidth = colWidths.length > 0 && colWidths.every((w) => w != null);
 
         let colgroup = '';
-        // Always lay the table out at 100% of the printable page width so it can
-        // never be clipped at the right page edge — however wide it was drawn in
-        // the editor. Column *proportions* are preserved: author pixel widths are
-        // emitted as percentages of their own sum, and unsized columns share
-        // whatever is left. The table still grows downward freely, flowing onto
-        // the next page when it runs past the bottom.
         if (allWidth) {
-            const total = colWidths.reduce((a, b) => a + b, 0) || colWidths.length;
-            colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${(w / total * 100).toFixed(4)}%;" />`).join('')}</colgroup>`;
+            if (isAutoWidth) {
+                // Keep the authored pixel widths exactly — the table's overall
+                // width ends up being just their sum, not stretched to the page.
+                colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${w}px;" />`).join('')}</colgroup>`;
+            } else {
+                // Always lay the table out at 100% of the printable page width so
+                // it can never be clipped at the right page edge — however wide it
+                // was drawn in the editor. Column *proportions* are preserved:
+                // author pixel widths are emitted as percentages of their own sum.
+                const total = colWidths.reduce((a, b) => a + b, 0) || colWidths.length;
+                colgroup = `<colgroup>${colWidths.map((w) => `<col style="width:${(w / total * 100).toFixed(4)}%;" />`).join('')}</colgroup>`;
+            }
         } else if (anyWidth) {
             colgroup = `<colgroup>${colWidths.map((w) => (w != null ? `<col style="width:${w}px;" />` : '<col />')).join('')}</colgroup>`;
         }
         // min-width:0 clears any authored `min-width:<sum>px` (prosemirror-tables
         // writes one) that would otherwise push the table past the page edge.
-        const sizing = { 'table-layout': 'fixed', 'width': '100%', 'max-width': '100%', 'min-width': '0' };
+        const sizing = isAutoWidth
+            ? { 'table-layout': 'fixed', 'width': 'auto', 'max-width': '100%', 'min-width': '0' }
+            : { 'table-layout': 'fixed', 'width': '100%', 'max-width': '100%', 'min-width': '0' };
 
         const openTag = injectStyle(`<table${attrs}>`, {
             'border-collapse': 'collapse',
