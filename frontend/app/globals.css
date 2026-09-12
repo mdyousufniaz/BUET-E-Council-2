@@ -880,6 +880,19 @@ div[data-type="column-item"]>* {
   margin-right: 0;
 }
 
+/* Table width mode (Word: Table Properties > Preferred Width). Default
+   ("full", or the attribute absent on older content) keeps the legacy
+   always-stretch-to-page behavior above. "auto" opts a table out of that
+   stretch so it sits at its own natural/authored width (the sum of its
+   column widths) instead of always filling the page. table-layout stays
+   fixed so authored/resized column widths are still honored exactly. */
+.ProseMirror table[data-width-mode="auto"],
+.prose table[data-width-mode="auto"],
+.meeting-table[data-width-mode="auto"] {
+  width: auto;
+  max-width: 100%;
+}
+
 /* ── Theme-Matched Table Header Styling ── */
 .ProseMirror table th,
 .prose table th,

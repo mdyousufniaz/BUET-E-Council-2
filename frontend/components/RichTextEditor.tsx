@@ -433,10 +433,12 @@ export class CustomTableView extends TableView {
       const borderStyle = node.attrs['data-border'] || 'full';
       const tableStyle = node.attrs['data-table-style'] || 'none';
       const align = node.attrs['data-align'] || 'left';
+      const widthMode = node.attrs['data-width-mode'] || 'full';
       this.table.setAttribute('data-border', borderStyle);
       this.table.setAttribute('data-table-style', tableStyle);
       this.table.setAttribute('data-align', align);
-      this.table.className = `meeting-table border-${borderStyle} table-style-${tableStyle} table-align-${align}`;
+      this.table.setAttribute('data-width-mode', widthMode);
+      this.table.className = `meeting-table border-${borderStyle} table-style-${tableStyle} table-align-${align} table-width-${widthMode}`;
     }
     return result;
   }
@@ -496,6 +498,21 @@ export const CustomTable = Table.extend({
           return {
             'data-align': align,
             class: `table-align-${align}`,
+          };
+        },
+      },
+      // 'full' (default, unchanged legacy behaviour) stretches the table to
+      // the full printable page width, redistributing columns to fill it.
+      // 'auto' keeps the table at its own natural/authored width (sum of the
+      // column widths) so it never grows past what the user actually sized.
+      'data-width-mode': {
+        default: 'full',
+        parseHTML: element => element.getAttribute('data-width-mode') || 'full',
+        renderHTML: attributes => {
+          const widthMode = attributes['data-width-mode'] || 'full';
+          return {
+            'data-width-mode': widthMode,
+            class: `table-width-${widthMode}`,
           };
         },
       },
@@ -1990,6 +2007,31 @@ const MenuBar = ({
       const tableNode = editor.state.doc.nodeAt(tablePos);
       if (tableNode) {
         tr.setNodeMarkup(tablePos, undefined, { ...tableNode.attrs, 'data-align': align });
+        editor.view.dispatch(tr);
+      }
+    }
+    return true;
+  };
+
+  // 'full' stretches the table to fill the page width (old always-on
+  // behaviour); 'auto' leaves it at its own natural/authored size.
+  const applyTableWidthMode = (widthMode: 'full' | 'auto') => {
+    if (!editor) return false;
+    editor.chain().focus().updateAttributes('table', { 'data-width-mode': widthMode }).run();
+    const { selection } = editor.state;
+    let tablePos: number | null = null;
+    for (let d = selection.$from.depth; d > 0; d--) {
+      const node = selection.$from.node(d);
+      if (node.type.name === 'table') {
+        tablePos = selection.$from.before(d);
+        break;
+      }
+    }
+    if (tablePos !== null) {
+      const tr = editor.state.tr;
+      const tableNode = editor.state.doc.nodeAt(tablePos);
+      if (tableNode) {
+        tr.setNodeMarkup(tablePos, undefined, { ...tableNode.attrs, 'data-width-mode': widthMode });
         editor.view.dispatch(tr);
       }
     }
@@ -4093,6 +4135,29 @@ const MenuBar = ({
                   <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Table Align</span>
                 </div>
 
+                {/* TABLE WIDTH: stretch to full page vs keep original size */}
+                <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
+                  <div className="flex items-center gap-0.5 my-auto">
+                    <button
+                      type="button"
+                      onClick={() => { applyTableWidthMode('full'); toast.success("Table stretched to full page width"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Stretch Table to Full Page Width"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { applyTableWidthMode('auto'); toast.success("Table kept at its original size"); }}
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground cursor-pointer"
+                      title="Keep Table at Original Size"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-[9px] font-bold text-muted-foreground/80 tracking-wider uppercase mt-auto">Table Width</span>
+                </div>
+
                 {/* DRAW TABLE */}
                 <div className="word-group-box p-1.5 flex flex-col justify-between items-center">
                   <button
@@ -5130,6 +5195,19 @@ export default function RichTextEditor({
         class: `prose prose-sm dark:prose-invert max-w-none focus:outline-none h-full ${className} ${showParagraphMarks ? 'show-paragraph-marks' : ''}`,
       },
       handlePaste: (view, event) => {
+        // Word/Docs/browsers always put BOTH text/html and text/plain on the
+        // clipboard for a rich paste (a pasted table included). Running the
+        // whole-clipboard Bijoy heuristic against the plain-text half here
+        // used to replace the *entire* selection with one converted plain
+        // text node — discarding table structure and any other formatting,
+        // and on a false-positive (e.g. a table's cell text with few vowels)
+        // silently turning ordinary English into Bangla-looking gibberish.
+        // Only handle the plain-text case here (paste from Notepad, or a
+        // Bijoy-typed line pasted directly); rich pastes fall through to the
+        // default HTML handling below, which runs transformPastedHTML
+        // instead — that converts Bijoy text node-by-node so real tables and
+        // real English text are left completely alone.
+        if (event.clipboardData?.getData('text/html')) return false;
         const pastedText = event.clipboardData?.getData('text/plain');
         if (pastedText && isBijoyText(pastedText)) {
           const converted = convertBijoyToUnicode(pastedText);
@@ -5139,6 +5217,7 @@ export default function RichTextEditor({
         }
         return false;
       },
+      transformPastedHTML: (html) => convertHtmlBijoyToUnicode(html),
       handleKeyDown: (view, event) => {
         if (event.key === 'Tab') {
           const pos = view.state.selection.$from;
