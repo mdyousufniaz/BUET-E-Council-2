@@ -1440,7 +1440,7 @@ const generatePdf = async (req, res, next) => {
         // leave generation on its historical A4 / 20mm defaults. All values are
         // validated & clamped inside pdfGenerator.normalizePdfLayout().
         const q = req.query;
-        const hasLayout = ['pageSize', 'orientation', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'scale', 'lineHeight', 'agendaNumberStyle']
+        const hasLayout = ['pageSize', 'orientation', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'scale', 'lineHeight', 'agendaNumberStyle', 'separatePages']
             .some((k) => q[k] !== undefined && q[k] !== '');
         const layout = hasLayout ? {
             pageSize: q.pageSize,
@@ -1448,7 +1448,8 @@ const generatePdf = async (req, res, next) => {
             margin: { top: q.marginTop, right: q.marginRight, bottom: q.marginBottom, left: q.marginLeft },
             scale: q.scale,
             lineHeight: q.lineHeight,
-            agendaNumberStyle: q.agendaNumberStyle
+            agendaNumberStyle: q.agendaNumberStyle,
+            separatePages: q.separatePages === 'true' || q.separatePages === true || q.separatePages === '1' || q.separatePages === 1
         } : undefined;
 
         const meetingCheck = await db.query('SELECT id, status, type FROM meetings WHERE id = $1', [id]);
@@ -1481,9 +1482,11 @@ const generatePdf = async (req, res, next) => {
 
         // Sanitize filename: strip non-ASCII chars for Content-Disposition header
         const sanitize = (str) => str.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+        const isSeparatePages = q.separatePages === 'true' || q.separatePages === true || q.separatePages === '1';
+        const sepSuffix = (type === 'resolution' && isSeparatePages) ? '-separate-pages' : '';
         const filename = group
             ? `attendance-${sanitize(group)}-${id}.pdf`
-            : `attendance-${id}.pdf`;
+            : `${type}${sepSuffix}-${id}.pdf`;
 
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         res.setHeader('Pragma', 'no-cache');

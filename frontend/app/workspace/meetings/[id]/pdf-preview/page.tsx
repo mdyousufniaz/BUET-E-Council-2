@@ -127,6 +127,7 @@ export default function PdfPreviewPage() {
   const [margins, setMargins] = useState({ top: 20, right: 20, bottom: 20, left: 20 });
   const [scalePct, setScalePct] = useState(100);
   const [lineHeight, setLineHeight] = useState<number | "">("");
+  const [separatePages, setSeparatePages] = useState(false);
 
   const layoutQuery = useMemo(() => {
     const qs = new URLSearchParams({
@@ -142,8 +143,9 @@ export default function PdfPreviewPage() {
       agendaNumberStyle: "inline",
     });
     if (lineHeight !== "") qs.set("lineHeight", String(lineHeight));
+    if (docType === "resolution" && separatePages) qs.set("separatePages", "true");
     return qs.toString();
-  }, [pageSize, orientation, margins, scalePct, lineHeight]);
+  }, [pageSize, orientation, margins, scalePct, lineHeight, docType, separatePages]);
 
   // Render the actual PDF for the "pdf" preview mode. Debounced so dragging the
   // layout sliders doesn't fire a request per keystroke.
@@ -376,7 +378,10 @@ export default function PdfPreviewPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `${type}-${meeting?.title || id}.pdf`);
+      const downloadFilename = (type === "resolution" && separatePages)
+        ? `resolution-separate-pages-${meeting?.title || id}.pdf`
+        : `${type}-${meeting?.title || id}.pdf`;
+      link.setAttribute("download", downloadFilename);
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
@@ -726,6 +731,18 @@ export default function PdfPreviewPage() {
               className="w-16 bg-input/20 border border-input rounded px-1.5 py-1"
             />
           </label>
+
+          {docType === "resolution" && (
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs select-none ml-1">
+              <input
+                type="checkbox"
+                checked={separatePages}
+                onChange={(e) => setSeparatePages(e.target.checked)}
+                className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5"
+              />
+              <span className="text-muted-foreground whitespace-nowrap">Separate page per resolution</span>
+            </label>
+          )}
         </div>
       </div>
 

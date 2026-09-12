@@ -490,6 +490,7 @@ Agenda / resolution / conclusion bodies may contain pipe-style Markdown tables (
 | `scale` | `scale` | 0.7–1.6 | 1 |
 | `lineHeight` | `lineHeight` | 1–3, or empty for the template default | null |
 | `agendaNumberStyle` | `agendaNumberStyle` | `heading` (bold "প্রস্তাব নং <n>" line) or `inline` (bold `<prefix><n>:` run opening the body) | heading |
+| `separatePages` | `separatePages` | `true`, `false` — for resolution PDFs, prints each resolution item starting on a new page | false |
 
 A non-default layout is hashed into its own PDF cache key (`<type>--l<sha1>`) and added as a `layout` dimension of the content fingerprint, so it never clobbers the canonical default-layout PDF; custom-layout variants are cache-only and are **not** mirrored to the meeting filesystem.
 

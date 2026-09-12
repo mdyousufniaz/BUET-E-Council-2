@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2, LayoutTemplate } from "lucide-react";
+import { FileText, FileCheck, Users, Loader2, Upload, Download, Eye, Trash2, LayoutTemplate, Layers } from "lucide-react";
 import api, { getTabSessionToken } from "../../lib/api";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
@@ -23,12 +23,18 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
   const readOnly = !canEdit;
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
 
-  const handleGenerate = async (type: string, filename: string, format: 'pdf' | 'docx' = 'pdf') => {
-    const key = `${type}-${format}`;
+  const handleGenerate = async (
+    type: string,
+    filename: string,
+    format: 'pdf' | 'docx' = 'pdf',
+    params?: Record<string, any>
+  ) => {
+    const key = `${type}-${format}${params?.separatePages ? '-separate' : ''}`;
     setGenerating(key);
     try {
       const ext = format === 'docx' ? 'docx' : 'pdf';
       const response = await api.get(`/meetings/${meeting.id}/${format}/${type}`, {
+        params,
         responseType: 'blob'
       });
       
@@ -233,22 +239,34 @@ export default function MaterialsView({ meeting }: { meeting: any }) {
                 <p className="text-xs text-muted-foreground">Final approved resolutions</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="space-y-2 mt-1">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleGenerate('resolution', 'Resolution', 'pdf')}
+                  disabled={!!generating}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 py-2 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                  title="Generate standard continuous PDF"
+                >
+                  {generating === 'resolution-pdf' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileCheck className="w-3.5 h-3.5" />}
+                  PDF
+                </button>
+                <button
+                  onClick={() => handleGenerate('resolution', 'Resolution', 'docx')}
+                  disabled={!!generating}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  {generating === 'resolution-docx' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  Word (.docx)
+                </button>
+              </div>
               <button
-                onClick={() => handleGenerate('resolution', 'Resolution', 'pdf')}
+                onClick={() => handleGenerate('resolution', 'Resolution_Separate_Pages', 'pdf', { separatePages: true })}
                 disabled={!!generating}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 py-2 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                title="Print each resolution on a separate page"
               >
-                {generating === 'resolution-pdf' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileCheck className="w-3.5 h-3.5" />}
-                PDF
-              </button>
-              <button
-                onClick={() => handleGenerate('resolution', 'Resolution', 'docx')}
-                disabled={!!generating}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 px-3 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {generating === 'resolution-docx' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                Word (.docx)
+                {generating === 'resolution-pdf-separate' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                PDF (Separate Page per Resolution)
               </button>
             </div>
           </div>
